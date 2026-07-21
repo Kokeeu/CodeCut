@@ -4,6 +4,7 @@ import FilePool from './components/FilePool.jsx';
 import VideoPreview from './components/VideoPreview.jsx';
 import ClipTrack from './components/ClipTrack.jsx';
 import ClipTrim from './components/ClipTrim.jsx';
+import CardMetadata from './components/CardMetadata.jsx';
 import ExportButton from './components/ExportButton.jsx';
 import ProjectSummary from './components/ProjectSummary.jsx';
 
@@ -14,6 +15,12 @@ function nextId(prefix) {
 }
 
 const DEFAULT_TRANSITION = { type: 'none', durationSec: 0 };
+const DEFAULT_TRANSFORM = { x: 0, y: 0, scale: 1 };
+const DEFAULT_META = {
+  blur: 30,
+  blurEnabled: true,
+  texts: [],
+};
 
 export default function App() {
   const [files, setFiles] = useState([]);
@@ -22,6 +29,8 @@ export default function App() {
   const [activeClipId, setActiveClipId] = useState(null);
   const [currentOffset, setCurrentOffset] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [meta, setMeta] = useState(DEFAULT_META);
+  const [selectedTextId, setSelectedTextId] = useState(null);
   const previewRef = useRef(null);
 
   const fileById = useMemo(() => {
@@ -58,7 +67,7 @@ export default function App() {
     if (clips.length === 0) {
       const first = newFiles.find((f) => f.duration > 0);
       if (first) {
-        const clip = { id: nextId('clip'), fileId: first.id, sourceStart: 0, sourceEnd: first.duration };
+        const clip = { id: nextId('clip'), fileId: first.id, sourceStart: 0, sourceEnd: first.duration, transform: { ...DEFAULT_TRANSFORM } };
         setClips([clip]);
         setActiveClipId(clip.id);
       }
@@ -68,7 +77,7 @@ export default function App() {
   const handleAddClip = useCallback((fileId) => {
     const f = fileById[fileId];
     if (!f || !f.duration) return;
-    const clip = { id: nextId('clip'), fileId, sourceStart: 0, sourceEnd: f.duration };
+    const clip = { id: nextId('clip'), fileId, sourceStart: 0, sourceEnd: f.duration, transform: { ...DEFAULT_TRANSFORM } };
     setClips((prev) => [...prev, clip]);
     setTransitions((prev) => [...prev, { ...DEFAULT_TRANSITION }]);
     setActiveClipId(clip.id);
@@ -102,6 +111,31 @@ export default function App() {
     );
   }, [activeClipId]);
 
+  const handleTransformChange = useCallback((transform) => {
+    setClips((prev) =>
+      prev.map((c) => (c.id === activeClipId ? { ...c, transform } : c))
+    );
+  }, [activeClipId]);
+
+  const handleAddText = useCallback(() => {
+    const id = nextId('text');
+    const t = { id, text: 'New text', x: 290, y: 920, size: 60, font: 'inter', color: '#ffffff' };
+    setMeta((m) => ({ ...m, texts: [...(m.texts || []), t] }));
+    setSelectedTextId(id);
+  }, []);
+
+  const handleUpdateText = useCallback((id, partial) => {
+    setMeta((m) => ({
+      ...m,
+      texts: (m.texts || []).map((t) => (t.id === id ? { ...t, ...partial } : t)),
+    }));
+  }, []);
+
+  const handleDeleteText = useCallback((id) => {
+    setMeta((m) => ({ ...m, texts: (m.texts || []).filter((t) => t.id !== id) }));
+    setSelectedTextId((sel) => (sel === id ? null : sel));
+  }, []);
+
   const handleSplit = useCallback(() => {
     if (!activeClip) return;
     const clipDur = activeClip.sourceEnd - activeClip.sourceStart;
@@ -115,6 +149,7 @@ export default function App() {
       fileId: activeClip.fileId,
       sourceStart: cut,
       sourceEnd: activeClip.sourceEnd,
+      transform: { ...(activeClip.transform || DEFAULT_TRANSFORM) },
     };
     const next = [...clips];
     next.splice(idx, 1, clipA, clipB);
@@ -231,6 +266,11 @@ export default function App() {
                 onTimeUpdate={setCurrentOffset}
                 onClipEnded={handleClipEnded}
                 onPlayStateChange={setIsPlaying}
+                meta={meta}
+                onTransformChange={handleTransformChange}
+                selectedTextId={selectedTextId}
+                onSelectText={setSelectedTextId}
+                onUpdateText={handleUpdateText}
               />
               <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
                 <button
@@ -268,6 +308,16 @@ export default function App() {
                 <FilePool files={files} onAddClip={handleAddClip} onFilesAdded={handleFilesAdded} />
               </div>
 
+              <CardMetadata
+                meta={meta}
+                onMetaChange={setMeta}
+                selectedTextId={selectedTextId}
+                onSelectText={setSelectedTextId}
+                onAddText={handleAddText}
+                onUpdateText={handleUpdateText}
+                onDeleteText={handleDeleteText}
+              />
+
               <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800">
                 <h2 className="text-sm font-semibold text-slate-200 mb-3">Trim active clip</h2>
                 {activeClip && activeFile ? (
@@ -287,7 +337,7 @@ export default function App() {
                 <h2 className="text-sm font-semibold text-slate-200 mb-3">Export</h2>
                 <ProjectSummary files={files} clips={clips} totalDuration={totalDuration} />
                 <div className="mt-3">
-                  <ExportButton files={files} clips={clips} transitions={transitions} />
+                  <ExportButton files={files} clips={clips} transitions={transitions} meta={meta} />
                 </div>
               </div>
             </section>

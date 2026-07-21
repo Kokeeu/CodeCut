@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export default function ExportButton({ files, clips, transitions }) {
+export default function ExportButton({ files, clips, transitions, meta }) {
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState(null);
 
@@ -25,6 +25,7 @@ export default function ExportButton({ files, clips, transitions }) {
         sourceStart: c.sourceStart,
         sourceEnd: c.sourceEnd,
         duration: c.sourceEnd - c.sourceStart,
+        transform: c.transform || { x: 0, y: 0, scale: 1 },
       }));
 
       const transitionsMap = {};
@@ -40,6 +41,7 @@ export default function ExportButton({ files, clips, transitions }) {
 
       form.append('clips', JSON.stringify(clipsPayload));
       form.append('transitions', JSON.stringify(transitionsMap));
+      form.append('meta', JSON.stringify(meta || {}));
 
       setStatus('processing');
       const res = await fetch('/api/trim', { method: 'POST', body: form });

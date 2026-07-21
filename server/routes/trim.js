@@ -26,6 +26,12 @@ function safeUnlinkAll(paths) {
   paths.forEach((p) => safeUnlink(p));
 }
 
+const DEFAULT_META = {
+  blur: 30,
+  blurEnabled: true,
+  texts: [],
+};
+
 router.post('/', upload.array('videos', MAX_FILES), async (req, res) => {
   const files = req.files || [];
   if (files.length === 0) {
@@ -34,14 +40,14 @@ router.post('/', upload.array('videos', MAX_FILES), async (req, res) => {
 
   let clips;
   let transitions = {};
+  let meta = { ...DEFAULT_META };
   try {
     clips = JSON.parse(req.body.clips || '[]');
-    if (req.body.transitions) {
-      transitions = JSON.parse(req.body.transitions);
-    }
+    if (req.body.transitions) transitions = JSON.parse(req.body.transitions);
+    if (req.body.meta) meta = { ...meta, ...JSON.parse(req.body.meta) };
   } catch (e) {
     safeUnlinkAll(files.map((f) => f.path));
-    return res.status(400).json({ error: 'Invalid JSON in clips or transitions.' });
+    return res.status(400).json({ error: 'Invalid JSON in clips, transitions or meta.' });
   }
 
   const validationError = validateClips(clips);
@@ -71,6 +77,7 @@ router.post('/', upload.array('videos', MAX_FILES), async (req, res) => {
       inputPaths,
       clips: normalizedClips,
       transitions,
+      meta,
       outputPath,
     });
   } catch (err) {
