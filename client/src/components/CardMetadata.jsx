@@ -12,16 +12,71 @@ export const FONT_CSS = {
   arial: "Arial, sans-serif",
 };
 
+function DualRangeSlider({ min, max, step, valueStart, valueEnd, onChange }) {
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+  const onStartChange = (v) => {
+    const s = clamp(Number(v), 0, valueEnd - step);
+    onChange(s, valueEnd);
+  };
+
+  const onEndChange = (v) => {
+    const e = clamp(Number(v), valueStart + step, max);
+    onChange(valueStart, e);
+  };
+
+  const startPct = max > 0 ? (valueStart / max) * 100 : 0;
+  const endPct = max > 0 ? (valueEnd / max) * 100 : 100;
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="relative h-6 flex items-center">
+        <div className="absolute left-0 right-0 h-1 rounded bg-slate-700" />
+        <div
+          className="absolute h-1 rounded bg-indigo-500"
+          style={{ left: `${startPct}%`, width: `${Math.max(0, endPct - startPct)}%` }}
+        />
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={valueStart}
+          onChange={(e) => onStartChange(e.target.value)}
+          className="absolute w-full h-6 appearance-none bg-transparent pointer-events-none z-20
+                     [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-indigo-400 [&::-webkit-slider-thumb]:shadow [&::-webkit-slider-thumb]:cursor-pointer"
+        />
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={valueEnd}
+          onChange={(e) => onEndChange(e.target.value)}
+          className="absolute w-full h-6 appearance-none bg-transparent pointer-events-none z-30
+                     [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-indigo-400 [&::-webkit-slider-thumb]:shadow [&::-webkit-slider-thumb]:cursor-pointer"
+        />
+      </div>
+      <div className="flex justify-between text-[9px] font-mono text-slate-500">
+        <span>{valueStart.toFixed(1)}s</span>
+        <span>{valueEnd.toFixed(1)}s</span>
+      </div>
+    </div>
+  );
+}
+
 export default function CardMetadata({
   meta,
   onMetaChange,
+  activeClip,
   selectedTextId,
   onSelectText,
   onAddText,
   onUpdateText,
   onDeleteText,
 }) {
-  const texts = meta.texts || [];
+  const texts = activeClip?.texts || [];
+  const clipDuration = activeClip ? Math.max(0, activeClip.sourceEnd - activeClip.sourceStart) : 0;
   const setBlur = (k, v) => onMetaChange({ ...meta, [k]: v });
 
   return (
@@ -55,90 +110,111 @@ export default function CardMetadata({
         )}
       </div>
 
-      <button
-        onClick={onAddText}
-        className="w-full px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium mb-3"
-      >
-        + Add text
-      </button>
-
-      {texts.length === 0 && (
-        <p className="text-[11px] text-slate-500 text-center pb-1">
-          No texts yet. Add one and drag it on the preview.
+      {!activeClip ? (
+        <p className="text-[11px] text-slate-500 text-center py-4">
+          Select a clip to add text.
         </p>
-      )}
+      ) : (
+        <>
+          <button
+            onClick={onAddText}
+            className="w-full px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium mb-3"
+          >
+            + Add text
+          </button>
 
-      <div className="flex flex-col gap-2 max-h-72 overflow-y-auto">
-        {texts.map((t, idx) => {
-          const selected = t.id === selectedTextId;
-          return (
-            <div
-              key={t.id}
-              onClick={() => onSelectText(t.id)}
-              className={[
-                'p-2 rounded-lg border cursor-pointer transition-colors',
-                selected
-                  ? 'border-indigo-400 bg-indigo-500/10'
-                  : 'border-slate-700 bg-slate-800/50 hover:border-slate-500',
-              ].join(' ')}
-            >
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] font-mono text-slate-500">Text #{idx + 1}</span>
-                <button
-                  onClick={(e) => { e.stopPropagation(); onDeleteText(t.id); }}
-                  className="w-5 h-5 rounded bg-slate-700 hover:bg-red-600 text-[11px] leading-none text-slate-200"
-                  title="Delete text"
+          {texts.length === 0 && (
+            <p className="text-[11px] text-slate-500 text-center pb-1">
+              No texts in this clip. Add one and drag it on the preview.
+            </p>
+          )}
+
+          <div className="flex flex-col gap-2 max-h-72 overflow-y-auto">
+            {texts.map((t, idx) => {
+              const selected = t.id === selectedTextId;
+              const startOff = Number(t.startOffset) || 0;
+              const endOff = Number(t.endOffset) || clipDuration;
+              return (
+                <div
+                  key={t.id}
+                  onClick={() => onSelectText(t.id)}
+                  className={[
+                    'p-2 rounded-lg border cursor-pointer transition-colors',
+                    selected
+                      ? 'border-indigo-400 bg-indigo-500/10'
+                      : 'border-slate-700 bg-slate-800/50 hover:border-slate-500',
+                  ].join(' ')}
                 >
-                  ×
-                </button>
-              </div>
-              <input
-                value={t.text}
-                onChange={(e) => onUpdateText(t.id, { text: e.target.value })}
-                onClick={(e) => e.stopPropagation()}
-                placeholder="Text content"
-                maxLength={100}
-                className="w-full px-2 py-1 rounded-md bg-slate-900 border border-slate-700 text-xs text-slate-200 focus:border-indigo-400 focus:outline-none mb-1.5"
-              />
-              <div className="grid grid-cols-2 gap-1.5 mb-1.5">
-                <select
-                  value={t.font || 'inter'}
-                  onChange={(e) => onUpdateText(t.id, { font: e.target.value })}
-                  onClick={(e) => e.stopPropagation()}
-                  className="px-1.5 py-1 rounded-md bg-slate-900 border border-slate-700 text-[11px] text-slate-200 focus:border-indigo-400 focus:outline-none"
-                >
-                  {FONT_OPTIONS.map((f) => (
-                    <option key={f.value} value={f.value}>{f.label}</option>
-                  ))}
-                </select>
-                <div className="flex items-center gap-1.5">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] font-mono text-slate-500">Text #{idx + 1}</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onDeleteText(t.id); }}
+                      className="w-5 h-5 rounded bg-slate-700 hover:bg-red-600 text-[11px] leading-none text-slate-200"
+                      title="Delete text"
+                    >
+                      ×
+                    </button>
+                  </div>
                   <input
-                    type="color"
-                    value={t.color || '#ffffff'}
-                    onChange={(e) => onUpdateText(t.id, { color: e.target.value })}
+                    value={t.text}
+                    onChange={(e) => onUpdateText(t.id, { text: e.target.value })}
                     onClick={(e) => e.stopPropagation()}
-                    className="w-6 h-6 rounded border border-slate-700 bg-slate-900 cursor-pointer"
+                    placeholder="Text content"
+                    maxLength={100}
+                    className="w-full px-2 py-1 rounded-md bg-slate-900 border border-slate-700 text-xs text-slate-200 focus:border-indigo-400 focus:outline-none mb-1.5"
                   />
-                  <span className="text-[9px] font-mono text-slate-500 truncate">{t.color || '#ffffff'}</span>
+                  <div className="grid grid-cols-2 gap-1.5 mb-1.5">
+                    <select
+                      value={t.font || 'inter'}
+                      onChange={(e) => onUpdateText(t.id, { font: e.target.value })}
+                      onClick={(e) => e.stopPropagation()}
+                      className="px-1.5 py-1 rounded-md bg-slate-900 border border-slate-700 text-[11px] text-slate-200 focus:border-indigo-400 focus:outline-none"
+                    >
+                      {FONT_OPTIONS.map((f) => (
+                        <option key={f.value} value={f.value}>{f.label}</option>
+                      ))}
+                    </select>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="color"
+                        value={t.color || '#ffffff'}
+                        onChange={(e) => onUpdateText(t.id, { color: e.target.value })}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-6 h-6 rounded border border-slate-700 bg-slate-900 cursor-pointer"
+                      />
+                      <span className="text-[9px] font-mono text-slate-500 truncate">{t.color || '#ffffff'}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 mb-1.5" onClick={(e) => e.stopPropagation()}>
+                    <span className="text-[9px] text-slate-500 shrink-0">size</span>
+                    <input
+                      type="range"
+                      min="12"
+                      max="200"
+                      step="1"
+                      value={t.size || 60}
+                      onChange={(e) => onUpdateText(t.id, { size: Number(e.target.value) })}
+                      className="flex-1 accent-indigo-500 h-1"
+                    />
+                    <span className="text-[9px] font-mono text-slate-400 w-7 text-right">{Math.round(t.size || 60)}</span>
+                  </div>
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <label className="block text-[9px] text-slate-500 mb-0.5">Time range</label>
+                    <DualRangeSlider
+                      min={0}
+                      max={clipDuration}
+                      step={0.1}
+                      valueStart={startOff}
+                      valueEnd={endOff}
+                      onChange={(s, e) => onUpdateText(t.id, { startOffset: s, endOffset: e })}
+                    />
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                <span className="text-[9px] text-slate-500">size</span>
-                <input
-                  type="range"
-                  min="12"
-                  max="200"
-                  step="1"
-                  value={t.size || 60}
-                  onChange={(e) => onUpdateText(t.id, { size: Number(e.target.value) })}
-                  className="flex-1 accent-indigo-500 h-1"
-                />
-                <span className="text-[9px] font-mono text-slate-400 w-7 text-right">{Math.round(t.size || 60)}</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+              );
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }

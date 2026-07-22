@@ -26,6 +26,7 @@ export default function ExportButton({ files, clips, transitions, meta }) {
         sourceEnd: c.sourceEnd,
         duration: c.sourceEnd - c.sourceStart,
         transform: c.transform || { x: 0, y: 0, scale: 1 },
+        texts: c.texts || [],
       }));
 
       const transitionsMap = {};

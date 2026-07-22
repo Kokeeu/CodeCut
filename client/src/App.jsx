@@ -16,11 +16,7 @@ function nextId(prefix) {
 
 const DEFAULT_TRANSITION = { type: 'none', durationSec: 0 };
 const DEFAULT_TRANSFORM = { x: 0, y: 0, scale: 1 };
-const DEFAULT_META = {
-  blur: 30,
-  blurEnabled: true,
-  texts: [],
-};
+const DEFAULT_META = { blur: 30, blurEnabled: true };
 
 export default function App() {
   const [files, setFiles] = useState([]);
@@ -45,6 +41,11 @@ export default function App() {
   );
   const activeFile = activeClip ? fileById[activeClip.fileId] : null;
 
+  const activeClipDuration = useMemo(() => {
+    if (!activeClip) return 0;
+    return Math.max(0, activeClip.sourceEnd - activeClip.sourceStart);
+  }, [activeClip]);
+
   const totalDuration = useMemo(() => {
     let total = clips.reduce((s, c) => s + (c.sourceEnd - c.sourceStart), 0);
     transitions.forEach((t) => {
@@ -67,7 +68,7 @@ export default function App() {
     if (clips.length === 0) {
       const first = newFiles.find((f) => f.duration > 0);
       if (first) {
-        const clip = { id: nextId('clip'), fileId: first.id, sourceStart: 0, sourceEnd: first.duration, transform: { ...DEFAULT_TRANSFORM } };
+        const clip = { id: nextId('clip'), fileId: first.id, sourceStart: 0, sourceEnd: first.duration, transform: { ...DEFAULT_TRANSFORM }, texts: [] };
         setClips([clip]);
         setActiveClipId(clip.id);
       }
@@ -77,7 +78,7 @@ export default function App() {
   const handleAddClip = useCallback((fileId) => {
     const f = fileById[fileId];
     if (!f || !f.duration) return;
-    const clip = { id: nextId('clip'), fileId, sourceStart: 0, sourceEnd: f.duration, transform: { ...DEFAULT_TRANSFORM } };
+    const clip = { id: nextId('clip'), fileId, sourceStart: 0, sourceEnd: f.duration, transform: { ...DEFAULT_TRANSFORM }, texts: [] };
     setClips((prev) => [...prev, clip]);
     setTransitions((prev) => [...prev, { ...DEFAULT_TRANSITION }]);
     setActiveClipId(clip.id);
@@ -118,23 +119,45 @@ export default function App() {
   }, [activeClipId]);
 
   const handleAddText = useCallback(() => {
+    if (!activeClipId) return;
     const id = nextId('text');
-    const t = { id, text: 'New text', x: 290, y: 920, size: 60, font: 'inter', color: '#ffffff' };
-    setMeta((m) => ({ ...m, texts: [...(m.texts || []), t] }));
+    const clipDur = activeClipDuration;
+    const t = {
+      id, text: 'New text', x: 290, y: 920, size: 60,
+      font: 'inter', color: '#ffffff',
+      startOffset: 0,
+      endOffset: clipDur,
+    };
+    setClips((prev) =>
+      prev.map((c) =>
+        c.id === activeClipId
+          ? { ...c, texts: [...(c.texts || []), t] }
+          : c
+      )
+    );
     setSelectedTextId(id);
-  }, []);
+  }, [activeClipId, activeClipDuration]);
 
   const handleUpdateText = useCallback((id, partial) => {
-    setMeta((m) => ({
-      ...m,
-      texts: (m.texts || []).map((t) => (t.id === id ? { ...t, ...partial } : t)),
-    }));
-  }, []);
+    setClips((prev) =>
+      prev.map((c) =>
+        c.id === activeClipId
+          ? { ...c, texts: (c.texts || []).map((t) => (t.id === id ? { ...t, ...partial } : t)) }
+          : c
+      )
+    );
+  }, [activeClipId]);
 
   const handleDeleteText = useCallback((id) => {
-    setMeta((m) => ({ ...m, texts: (m.texts || []).filter((t) => t.id !== id) }));
+    setClips((prev) =>
+      prev.map((c) =>
+        c.id === activeClipId
+          ? { ...c, texts: (c.texts || []).filter((t) => t.id !== id) }
+          : c
+      )
+    );
     setSelectedTextId((sel) => (sel === id ? null : sel));
-  }, []);
+  }, [activeClipId]);
 
   const handleSplit = useCallback(() => {
     if (!activeClip) return;
@@ -143,13 +166,14 @@ export default function App() {
     const cut = activeClip.sourceStart + currentOffset;
     const idx = clips.findIndex((c) => c.id === activeClip.id);
     if (idx < 0) return;
-    const clipA = { ...activeClip, sourceEnd: cut };
+    const clipA = { ...activeClip, sourceEnd: cut, texts: [...(activeClip.texts || [])] };
     const clipB = {
       id: nextId('clip'),
       fileId: activeClip.fileId,
       sourceStart: cut,
       sourceEnd: activeClip.sourceEnd,
       transform: { ...(activeClip.transform || DEFAULT_TRANSFORM) },
+      texts: (activeClip.texts || []).map((t) => ({ ...t, id: t.id, endOffset: t.endOffset ? t.endOffset : (activeClip.sourceEnd - cut) })),
     };
     const next = [...clips];
     next.splice(idx, 1, clipA, clipB);
@@ -174,6 +198,7 @@ export default function App() {
   const handleSelectClip = useCallback((clipId) => {
     setActiveClipId(clipId);
     setCurrentOffset(0);
+    setSelectedTextId(null);
   }, []);
 
   const handleSeek = useCallback((offsetWithinClip) => {
@@ -186,11 +211,13 @@ export default function App() {
     if (idx >= 0 && idx < clips.length - 1) {
       setActiveClipId(clips[idx + 1].id);
       setCurrentOffset(0);
+      setSelectedTextId(null);
     } else {
       setIsPlaying(false);
       if (clips.length > 0) {
         setActiveClipId(clips[0].id);
         setCurrentOffset(0);
+        setSelectedTextId(null);
         previewRef.current?.seekTo(0);
       }
     }
@@ -204,6 +231,7 @@ export default function App() {
     setActiveClipId(null);
     setCurrentOffset(0);
     setIsPlaying(false);
+    setSelectedTextId(null);
   }, [files]);
 
   useEffect(() => {
@@ -230,7 +258,7 @@ export default function App() {
             Multi-clip vertical editor · split, reorder, transitions, export 1080×1920.
           </p>
         </div>
-        <div className="text-xs text-slate-500 font-mono">v0.2 · multi-clip</div>
+        <div className="text-xs text-slate-500 font-mono">v0.6 · per-clip texts</div>
       </header>
 
       {files.length === 0 ? (
@@ -271,6 +299,7 @@ export default function App() {
                 selectedTextId={selectedTextId}
                 onSelectText={setSelectedTextId}
                 onUpdateText={handleUpdateText}
+                currentOffset={currentOffset}
               />
               <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
                 <button
@@ -311,6 +340,7 @@ export default function App() {
               <CardMetadata
                 meta={meta}
                 onMetaChange={setMeta}
+                activeClip={activeClip}
                 selectedTextId={selectedTextId}
                 onSelectText={setSelectedTextId}
                 onAddText={handleAddText}

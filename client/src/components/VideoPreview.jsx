@@ -23,6 +23,7 @@ const VideoPreview = forwardRef(function VideoPreview(
   {
     clip, fileUrl, isPlaying, onTimeUpdate, onClipEnded, onPlayStateChange,
     meta, onTransformChange, selectedTextId, onSelectText, onUpdateText,
+    currentOffset,
   },
   ref
 ) {
@@ -38,7 +39,7 @@ const VideoPreview = forwardRef(function VideoPreview(
   const [handles, setHandles] = useState(null);
 
   const t = clip?.transform || { x: 0, y: 0, scale: 1 };
-  const texts = meta?.texts || [];
+  const texts = clip?.texts || [];
 
   useImperativeHandle(ref, () => ({
     seekTo: (offsetWithinClip) => {
@@ -285,7 +286,10 @@ const VideoPreview = forwardRef(function VideoPreview(
         )}
 
         {texts.map((tx) => {
+          const isVisible = tx.startOffset == null || tx.endOffset == null
+            || (currentOffset >= tx.startOffset && currentOffset <= tx.endOffset);
           const selected = tx.id === selectedTextId;
+          if (!isVisible && !selected) return null;
           return (
             <div
               key={tx.id}
@@ -309,6 +313,7 @@ const VideoPreview = forwardRef(function VideoPreview(
                 outline: selected ? '1.5px dashed #818cf8' : 'none',
                 outlineOffset: '4px',
                 zIndex: selected ? 30 : 20,
+                opacity: !isVisible && selected ? 0.3 : 1,
               }}
             >
               {tx.text}

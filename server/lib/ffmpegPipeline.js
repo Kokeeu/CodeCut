@@ -15,7 +15,6 @@ const AUDIO_RATE = 44100;
 const BG_BRIGHTNESS = -0.05;
 const BG_SATURATION = 0.5;
 
-const MAIN_MAX_W = 1080;
 const MAIN_Y = 300;
 
 const TEMP_DIR = path.join(__dirname, '..', 'temp');
@@ -53,23 +52,6 @@ function safeUnlink(file) {
   }
 }
 
-function truncate(s, n = 28) {
-  const v = String(s == null ? '' : s);
-  return v.length > n ? v.slice(0, n - 1) + '…' : v;
-}
-
-function resolveFont(family) {
-  if (family && FONT_REGISTRY[family]) return FONT_REGISTRY[family];
-  return FONT_FALLBACK;
-}
-
-function colorToHex(color) {
-  if (!color) return '0xFFFFFF';
-  const v = String(color).trim().replace(/^#/, '');
-  if (/^[0-9a-fA-F]{6}$/.test(v)) return '0x' + v.toUpperCase();
-  return '0xFFFFFF';
-}
-
 function escapeFilterPath(p) {
   return String(p).replace(/\\/g, '/').replace(/:/g, '\\:');
 }
@@ -92,23 +74,35 @@ function fmtSigned(v) {
   return r >= 0 ? `+${r}` : `${r}`;
 }
 
-function writeTextFiles(meta, runId) {
+function colorToHex(color) {
+  if (!color) return '0xFFFFFF';
+  const v = String(color).trim().replace(/^#/, '');
+  if (/^[0-9a-fA-F]{6}$/.test(v)) return '0x' + v.toUpperCase();
+  return '0xFFFFFF';
+}
+
+function resolveFont(family) {
+  if (family && FONT_REGISTRY[family]) return FONT_REGISTRY[family];
+  return FONT_FALLBACK;
+}
+
+function writeTextFiles(clips, runId) {
   const map = {};
-  const list = (meta && Array.isArray(meta.texts)) ? meta.texts : [];
-  list.forEach((t, i) => {
-    const content = t && t.text != null ? String(t.text) : '';
-    if (!content.trim()) return;
-    const p = path.join(TEMP_DIR, `text-${runId}-${i}.txt`);
-    fs.writeFileSync(p, content, 'utf8');
-    map[i] = p;
+  clips.forEach((clip, ci) => {
+    (clip.texts || []).forEach((t, ti) => {
+      const content = t && t.text != null ? String(t.text) : '';
+      if (!content.trim()) return;
+      const key = `c${ci}-t${ti}`;
+      const p = path.join(TEMP_DIR, `text-${runId}-${key}.txt`);
+      fs.writeFileSync(p, content, 'utf8');
+      map[key] = p;
+    });
   });
   return map;
 }
 
 function cleanupTextFiles(map) {
-  Object.values(map).forEach((p) => {
-    if (p) safeUnlink(p);
-  });
+  Object.values(map).forEach((p) => { if (p) safeUnlink(p); });
 }
 
 function buildFilterGraph(clips, transitions, meta, textFiles) {
@@ -117,6 +111,8 @@ function buildFilterGraph(clips, transitions, meta, textFiles) {
   const outA = 'aout';
   const blurSigma = Math.max(0, Math.min(200, Number(meta && meta.blur) || 0));
   const blurEnabled = !(meta && meta.blurEnabled === false);
+
+  const MAIN_MAX_W = OUTPUT_W;
 
   for (let i = 0; i < clips.length; i++) {
     const c = clips[i];
@@ -148,13 +144,16 @@ function buildFilterGraph(clips, transitions, meta, textFiles) {
     filters.push(`[bg${i}][m${i}f]overlay=x=${xExpr}:y=${yExpr}[c${i}]`);
   }
 
+  const composedStart = [];
   if (clips.length === 1) {
+    composedStart.push(0);
     filters.push(`[c0]null[vc]`);
     filters.push(`[a0]anull[ac]`);
   } else {
     let curV = 'c0';
     let curA = 'a0';
-    let cumDuration = clips[0].duration;
+    let cumDuration = 0;
+    composedStart.push(0);
 
     for (let i = 0; i < clips.length - 1; i++) {
       const nextV = `c${i + 1}`;
@@ -174,7 +173,7 @@ function buildFilterGraph(clips, transitions, meta, textFiles) {
         );
       } else {
         const dur = effDur.toFixed(3);
-        const offset = Math.max(0, cumDuration - effDur).toFixed(3);
+        const offset = Math.max(0, cumDuration + clips[i].duration - effDur).toFixed(3);
         filters.push(
           `[${curV}][${nextV}]xfade=transition=${t.type}:duration=${dur}:offset=${offset}[${vLabel}]`
         );
@@ -185,27 +184,38 @@ function buildFilterGraph(clips, transitions, meta, textFiles) {
 
       curV = vLabel;
       curA = aLabel;
-      cumDuration += clips[i + 1].duration;
+      cumDuration += clips[i].duration;
       if (hasTransition) cumDuration -= effDur;
+      composedStart.push(cumDuration);
     }
   }
 
-  const textList = (meta && Array.isArray(meta.texts)) ? meta.texts : [];
   let prevLabel = 'vc';
-
-  textList.forEach((t, i) => {
-    const fp = textFiles && textFiles[i];
-    if (!fp) return;
-    const size = Math.max(8, Math.min(400, Number(t.size) || 60));
-    const tx = Math.round(Number(t.x) || 0);
-    const ty = Math.round(Number(t.y) || 0);
-    const fcolor = colorToHex(t.color);
-    const ffile = escapeFilterPath(resolveFont(t.font));
-    const out = `vt${i}`;
-    filters.push(
-      `[${prevLabel}]drawtext=textfile='${escapeFilterPath(fp)}':x=${tx}:y=${ty}:fontsize=${size}:fontcolor=${fcolor}:fontfile='${ffile}':shadowcolor=black@0.75:shadowx=3:shadowy=3[${out}]`
-    );
-    prevLabel = out;
+  clips.forEach((clip, ci) => {
+    const clipStart = composedStart[ci];
+    let ti = 0;
+    (clip.texts || []).forEach((t) => {
+      const content = t && t.text != null ? String(t.text) : '';
+      if (!content.trim()) { ti++; return; }
+      const key = `c${ci}-t${ti}`;
+      ti++;
+      const fp = textFiles && textFiles[key];
+      if (!fp) return;
+      const size = Math.max(8, Math.min(400, Number(t.size) || 60));
+      const tx = Math.round(Number(t.x) || 0);
+      const ty = Math.round(Number(t.y) || 0);
+      const fcolor = colorToHex(t.color);
+      const ffile = escapeFilterPath(resolveFont(t.font));
+      const out = `vt${ti}`;
+      const startOff = Number(t.startOffset) || 0;
+      const endOff = Number(t.endOffset) || (clip.sourceEnd - clip.sourceStart);
+      const enableStart = (clipStart + startOff).toFixed(3);
+      const enableEnd = (clipStart + endOff).toFixed(3);
+      filters.push(
+        `[${prevLabel}]drawtext=textfile='${escapeFilterPath(fp)}':x=${tx}:y=${ty}:fontsize=${size}:fontcolor=${fcolor}:fontfile='${ffile}':shadowcolor=black@0.75:shadowx=3:shadowy=3:enable='between(t,${enableStart},${enableEnd})'[${out}]`
+      );
+      prevLabel = out;
+    });
   });
 
   if (prevLabel !== outV) {
@@ -233,7 +243,7 @@ function validateClips(clips) {
 
 function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog }) {
   const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const textFiles = writeTextFiles(meta, runId);
+  const textFiles = writeTextFiles(clips, runId);
   const filterGraph = buildFilterGraph(clips, transitions, meta, textFiles);
 
   return new Promise((resolve, reject) => {

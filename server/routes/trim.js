@@ -29,7 +29,6 @@ function safeUnlinkAll(paths) {
 const DEFAULT_META = {
   blur: 30,
   blurEnabled: true,
-  texts: [],
 };
 
 router.post('/', upload.array('videos', MAX_FILES), async (req, res) => {
