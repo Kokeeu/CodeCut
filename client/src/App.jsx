@@ -36,11 +36,11 @@ const TEMPLATES = [
     blur: 30,
     blurEnabled: true,
     texts: [
-      { text: 'Openings favs', x: 540, y: 120, size: 64, align: 'center' },
-      { text: 'ANIME TITLE', x: 70, y: 1080, size: 67, align: 'left' },
-      { text: 'Opening: 1', x: 70, y: 1180, size: 67, align: 'left' },
-      { text: 'Canción: Song', x: 70, y: 1280, size: 67, align: 'left' },
-      { text: 'Artistas: Artist', x: 70, y: 1380, size: 67, align: 'left' },
+      { text: 'Openings favs', x: 285, y: 120, size: 75, align: 'center' },
+      { text: 'ANIME TITLE', x: 70, y: 980, size: 67, align: 'left' },
+      { text: 'Opening: 1', x: 70, y: 1080, size: 67, align: 'left' },
+      { text: 'Canción: Song', x: 70, y: 1180, size: 67, align: 'left' },
+      { text: 'Artistas: Artist', x: 70, y: 1280, size: 67, align: 'left' },
     ],
   },
   {
