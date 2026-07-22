@@ -5,6 +5,7 @@ import VideoPreview from './components/VideoPreview.jsx';
 import ClipTrack from './components/ClipTrack.jsx';
 import ClipTrim from './components/ClipTrim.jsx';
 import CardMetadata from './components/CardMetadata.jsx';
+import CardTemplateGrid from './components/CardTemplateGrid.jsx';
 import ExportButton from './components/ExportButton.jsx';
 import ProjectSummary from './components/ProjectSummary.jsx';
 
@@ -17,6 +18,13 @@ function nextId(prefix) {
 const DEFAULT_TRANSITION = { type: 'none', durationSec: 0 };
 const DEFAULT_TRANSFORM = { x: 0, y: 0, scale: 1 };
 const DEFAULT_META = { blur: 30, blurEnabled: true };
+
+const EXAMPLE_CARDS = [
+  { headerText: 'Openings favs', animeTitle: "Cruel Angel's Thesis", openingNumber: 'Ep 1', songName: "A Cruel Angel's Thesis", artistName: 'Yoko Takahashi', font: 'inter', color: '#ffffff', blur: 30, blurEnabled: true, transform: { x: 0, y: 0, scale: 1 } },
+  { headerText: 'Openings favs', animeTitle: 'Unravel', openingNumber: 'Ep 1', songName: 'Unravel', artistName: 'TK from Ling Tosite Sigure', font: 'montserrat', color: '#ffeb3b', blur: 40, blurEnabled: true, transform: { x: 0, y: 0, scale: 1 } },
+  { headerText: 'Openings favs', animeTitle: 'THE HERO!!', openingNumber: 'Ep 1', songName: 'THE HERO!! ~Ikareru Ken ni Honō o Tsukero~', artistName: 'JAM Project', font: 'bebasneue', color: '#ff5252', blur: 35, blurEnabled: true, transform: { x: 0, y: 0, scale: 1 } },
+  { headerText: 'Openings favs', animeTitle: 'Gurenge', openingNumber: 'Ep 1', songName: 'Gurenge', artistName: 'LiSA', font: 'inter', color: '#e040fb', blur: 45, blurEnabled: true, transform: { x: 0, y: 0, scale: 1 } },
+];
 
 export default function App() {
   const [files, setFiles] = useState([]);
@@ -387,6 +395,39 @@ export default function App() {
               onDelete={handleDeleteClip}
               onReorder={handleReorder}
               onTransitionChange={handleTransitionChange}
+            />
+          </div>
+
+          <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800">
+            <h2 className="text-sm font-semibold text-slate-200 mb-3">Card Gallery</h2>
+            <CardTemplateGrid
+              items={clips.length > 0 ? clips.map((c) => {
+                const f = fileById[c.fileId];
+                const t = (c.texts || [])[0] || {};
+                return {
+                  videoUrl: f?.url,
+                  headerText: t.text || '',
+                  animeTitle: '',
+                  openingNumber: '',
+                  songName: '',
+                  artistName: '',
+                  font: t.font || 'inter',
+                  color: t.color || '#ffffff',
+                  blur: meta.blur,
+                  blurEnabled: meta.blurEnabled,
+                  transform: c.transform,
+                };
+              }) : EXAMPLE_CARDS}
+              activeIndex={clips.length > 0 ? clips.findIndex((c) => c.id === activeClipId) : 0}
+              onActiveChange={clips.length > 0 ? (i) => {
+                const c = clips[i];
+                if (c) {
+                  setActiveClipId(c.id);
+                  setCurrentOffset(0);
+                  setSelectedTextId(null);
+                }
+              } : undefined}
+              height={400}
             />
           </div>
         </main>
