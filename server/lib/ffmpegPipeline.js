@@ -15,7 +15,7 @@ const AUDIO_RATE = 44100;
 const BG_BRIGHTNESS = -0.05;
 const BG_SATURATION = 0.5;
 
-const MAIN_Y = 300;
+const MAIN_Y = 360;
 
 const TEMP_DIR = path.join(__dirname, '..', 'temp');
 if (!fs.existsSync(TEMP_DIR)) {
@@ -211,8 +211,10 @@ function buildFilterGraph(clips, transitions, meta, textFiles) {
       const endOff = Number(t.endOffset) || (clip.sourceEnd - clip.sourceStart);
       const enableStart = (clipStart + startOff).toFixed(3);
       const enableEnd = (clipStart + endOff).toFixed(3);
+      const align = t.align || 'left';
+      const xExpr = align === 'center' ? '(w-text_w)/2' : String(tx);
       filters.push(
-        `[${prevLabel}]drawtext=textfile='${escapeFilterPath(fp)}':x=${tx}:y=${ty}:fontsize=${size}:fontcolor=${fcolor}:fontfile='${ffile}':shadowcolor=black@0.75:shadowx=3:shadowy=3:enable='between(t,${enableStart},${enableEnd})'[${out}]`
+        `[${prevLabel}]drawtext=textfile='${escapeFilterPath(fp)}':x=${xExpr}:y=${ty}:fontsize=${size}:fontcolor=${fcolor}:fontfile='${ffile}':text_align=${align}:shadowcolor=black@0.75:shadowx=3:shadowy=3:enable='between(t,${enableStart},${enableEnd})'[${out}]`
       );
       prevLabel = out;
     });

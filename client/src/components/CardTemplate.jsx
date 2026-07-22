@@ -3,10 +3,11 @@ import { FONT_CSS } from './CardMetadata.jsx';
 
 const EXPORT_H = 1920;
 const EXPORT_W = 1080;
-const MAIN_Y = 300;
+const MAIN_Y = 360;
 
 export default function CardTemplate({
   videoUrl,
+  texts,
   headerText,
   animeTitle,
   openingNumber,
@@ -108,7 +109,35 @@ export default function CardTemplate({
         </div>
       ) : null}
 
-      {hasBottomText && (
+      {texts && texts.length > 0 && texts.map((tx) => {
+        const align = tx.align || 'left';
+        const isCenter = align === 'center';
+        const style = {
+          position: 'absolute',
+          left: isCenter ? '50%' : `${(tx.x || 0) * ds}px`,
+          top: `${(tx.y || 0) * ds}px`,
+          transform: isCenter ? 'translateX(-50%)' : 'none',
+          color: tx.color || '#ffffff',
+          fontFamily: FONT_CSS[tx.font] || FONT_CSS.inter,
+          fontSize: `${(tx.size || 60) * ds}px`,
+          fontWeight: 700,
+          lineHeight: 1.2,
+          textShadow: '0 2px 8px rgba(0,0,0,0.7)',
+          whiteSpace: 'pre',
+          textAlign: align,
+        };
+        if (align === 'right') {
+          style.right = `${(1080 - (tx.x || 0)) * ds}px`;
+          style.left = 'auto';
+        }
+        return (
+          <div key={tx.id} className="pointer-events-none" style={style}>
+            {tx.text}
+          </div>
+        );
+      })}
+
+      {!texts && hasBottomText && (
         <div
           className="absolute bottom-[6%] left-1/2 -translate-x-1/2 text-center px-3 pointer-events-none"
           style={{

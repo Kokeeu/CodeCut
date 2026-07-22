@@ -5,6 +5,7 @@ export default function CardTemplateGrid({
   items = [],
   activeIndex = 0,
   onActiveChange,
+  onToggleSelect,
   height = 520,
   gap = 16,
 }) {
@@ -52,29 +53,49 @@ export default function CardTemplateGrid({
         }}
       >
         <style>{`.card-grid-scroll::-webkit-scrollbar { display: none; }`}</style>
-        {items.map((item, i) => (
-          <div
-            key={item.id || i}
-            style={{ scrollSnapAlign: 'center' }}
-          >
-            <CardTemplate
-              videoUrl={item.videoUrl}
-              headerText={item.headerText}
-              animeTitle={item.animeTitle}
-              openingNumber={item.openingNumber}
-              songName={item.songName}
-              artistName={item.artistName}
-              font={item.font}
-              color={item.color}
-              blur={item.blur}
-              blurEnabled={item.blurEnabled}
-              transform={item.transform}
-              height={height}
-              isActive={i === activeIndex}
-              onClick={() => onActiveChange?.(i)}
-            />
-          </div>
-        ))}
+        {items.map((item, i) => {
+          const isSelected = !!item.selected;
+          return (
+            <div
+              key={item.id || i}
+              className="relative"
+              style={{ scrollSnapAlign: 'center' }}
+            >
+              {onToggleSelect && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onToggleSelect(i); }}
+                  className={[
+                    'absolute -top-2 -left-2 z-20 w-6 h-6 rounded-md border-2 flex items-center justify-center text-xs font-bold transition-colors',
+                    isSelected
+                      ? 'bg-indigo-500 border-indigo-300 text-white'
+                      : 'bg-slate-800/80 border-slate-500 text-slate-400 hover:border-slate-300',
+                  ].join(' ')}
+                  title={isSelected ? 'Deselect' : 'Select for template'}
+                >
+                  {isSelected ? '✓' : ''}
+                </button>
+              )}
+              <CardTemplate
+                videoUrl={item.videoUrl}
+                texts={item.texts}
+                headerText={item.headerText}
+                animeTitle={item.animeTitle}
+                openingNumber={item.openingNumber}
+                songName={item.songName}
+                artistName={item.artistName}
+                font={item.font}
+                color={item.color}
+                blur={item.blur}
+                blurEnabled={item.blurEnabled}
+                transform={item.transform}
+                height={height}
+                isActive={i === activeIndex}
+                onClick={() => onActiveChange?.(i)}
+                showPlaceholder={false}
+              />
+            </div>
+          );
+        })}
       </div>
 
       <div className="flex justify-center gap-2 mt-3">

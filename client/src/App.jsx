@@ -6,6 +6,7 @@ import ClipTrack from './components/ClipTrack.jsx';
 import ClipTrim from './components/ClipTrim.jsx';
 import CardMetadata from './components/CardMetadata.jsx';
 import CardTemplateGrid from './components/CardTemplateGrid.jsx';
+import TemplatesPanel from './components/TemplatesPanel.jsx';
 import ExportButton from './components/ExportButton.jsx';
 import ProjectSummary from './components/ProjectSummary.jsx';
 
@@ -26,6 +27,62 @@ const EXAMPLE_CARDS = [
   { headerText: 'Openings favs', animeTitle: 'Gurenge', openingNumber: 'Ep 1', songName: 'Gurenge', artistName: 'LiSA', font: 'inter', color: '#e040fb', blur: 45, blurEnabled: true, transform: { x: 0, y: 0, scale: 1 } },
 ];
 
+const TEMPLATES = [
+  {
+    id: 'tpl-opening-anime',
+    name: 'Opening Anime',
+    font: 'inter',
+    color: '#ffffff',
+    blur: 30,
+    blurEnabled: true,
+    texts: [
+      { text: 'Openings favs', x: 540, y: 120, size: 64, align: 'center' },
+      { text: 'ANIME TITLE', x: 70, y: 1080, size: 67, align: 'left' },
+      { text: 'Opening: 1', x: 70, y: 1180, size: 67, align: 'left' },
+      { text: 'Canción: Song', x: 70, y: 1280, size: 67, align: 'left' },
+      { text: 'Artistas: Artist', x: 70, y: 1380, size: 67, align: 'left' },
+    ],
+  },
+  {
+    id: 'tpl-neon-style',
+    name: 'Neon Style',
+    font: 'bebasneue',
+    color: '#ffeb3b',
+    blur: 40,
+    blurEnabled: true,
+    texts: [
+      { text: 'OPENINGS', x: 540, y: 120, size: 84, align: 'center' },
+      { text: 'ANIME TITLE', x: 70, y: 1080, size: 67, align: 'left' },
+      { text: 'Song — Artist', x: 70, y: 1200, size: 60, align: 'left' },
+    ],
+  },
+  {
+    id: 'tpl-dark-mode',
+    name: 'Dark Mode',
+    font: 'montserrat',
+    color: '#ffffff',
+    blur: 60,
+    blurEnabled: true,
+    texts: [
+      { text: 'Openings favs', x: 540, y: 130, size: 56, align: 'center' },
+      { text: 'ANIME TITLE', x: 70, y: 1080, size: 67, align: 'left' },
+      { text: 'Ep 1', x: 70, y: 1180, size: 67, align: 'left' },
+    ],
+  },
+  {
+    id: 'tpl-editorial',
+    name: 'Editorial',
+    font: 'inter',
+    color: '#ffffff',
+    blur: 25,
+    blurEnabled: true,
+    texts: [
+      { text: 'ANIME TITLE', x: 70, y: 1080, size: 67, align: 'left' },
+      { text: 'Ep 1 · Song — Artist', x: 70, y: 1180, size: 60, align: 'left' },
+    ],
+  },
+];
+
 export default function App() {
   const [files, setFiles] = useState([]);
   const [clips, setClips] = useState([]);
@@ -35,6 +92,7 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [meta, setMeta] = useState(DEFAULT_META);
   const [selectedTextId, setSelectedTextId] = useState(null);
+  const [selectedClipIds, setSelectedClipIds] = useState(new Set());
   const previewRef = useRef(null);
 
   const fileById = useMemo(() => {
@@ -209,6 +267,40 @@ export default function App() {
     setSelectedTextId(null);
   }, []);
 
+  const handleToggleClipSelection = useCallback((clipId) => {
+    setSelectedClipIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(clipId)) next.delete(clipId);
+      else next.add(clipId);
+      return next;
+    });
+  }, []);
+
+  const handleApplyTemplate = useCallback((template) => {
+    if (!template || selectedClipIds.size === 0) return;
+    setClips((prev) =>
+      prev.map((c) => {
+        if (!selectedClipIds.has(c.id)) return c;
+        const dur = c.sourceEnd - c.sourceStart;
+        return {
+          ...c,
+          texts: template.texts.map((t) => ({
+            id: nextId('text'),
+            text: t.text,
+            x: t.x,
+            y: t.y,
+            size: t.size,
+            font: template.font,
+            color: template.color,
+            startOffset: 0,
+            endOffset: dur,
+          })),
+        };
+      })
+    );
+    setMeta((m) => ({ ...m, blur: template.blur, blurEnabled: template.blurEnabled }));
+  }, [selectedClipIds]);
+
   const handleSeek = useCallback((offsetWithinClip) => {
     previewRef.current?.seekTo(offsetWithinClip);
     setCurrentOffset(offsetWithinClip);
@@ -240,6 +332,7 @@ export default function App() {
     setCurrentOffset(0);
     setIsPlaying(false);
     setSelectedTextId(null);
+    setSelectedClipIds(new Set());
   }, [files]);
 
   useEffect(() => {
@@ -398,39 +491,48 @@ export default function App() {
             />
           </div>
 
-          <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800">
-            <h2 className="text-sm font-semibold text-slate-200 mb-3">Card Gallery</h2>
-            <CardTemplateGrid
-              items={clips.length > 0 ? clips.map((c) => {
-                const f = fileById[c.fileId];
-                const t = (c.texts || [])[0] || {};
-                return {
-                  videoUrl: f?.url,
-                  headerText: t.text || '',
-                  animeTitle: '',
-                  openingNumber: '',
-                  songName: '',
-                  artistName: '',
-                  font: t.font || 'inter',
-                  color: t.color || '#ffffff',
-                  blur: meta.blur,
-                  blurEnabled: meta.blurEnabled,
-                  transform: c.transform,
-                };
-              }) : EXAMPLE_CARDS}
-              activeIndex={clips.length > 0 ? clips.findIndex((c) => c.id === activeClipId) : 0}
-              onActiveChange={clips.length > 0 ? (i) => {
-                const c = clips[i];
-                if (c) {
-                  setActiveClipId(c.id);
-                  setCurrentOffset(0);
-                  setSelectedTextId(null);
-                }
-              } : undefined}
-              height={400}
-            />
-          </div>
         </main>
+      )}
+
+      <div className="max-w-6xl mx-auto mt-6 p-4 rounded-2xl bg-slate-900/60 border border-slate-800">
+        <h2 className="text-sm font-semibold text-slate-200 mb-3">Card Gallery</h2>
+        <CardTemplateGrid
+          items={clips.length > 0 ? clips.map((c) => {
+            const f = fileById[c.fileId];
+            return {
+              videoUrl: f?.url,
+              texts: c.texts || [],
+              blur: meta.blur,
+              blurEnabled: meta.blurEnabled,
+              transform: c.transform,
+              selected: selectedClipIds.has(c.id),
+            };
+          }) : EXAMPLE_CARDS.map((c) => ({ ...c, selected: false }))}
+          activeIndex={clips.length > 0 ? clips.findIndex((c) => c.id === activeClipId) : 0}
+          onActiveChange={clips.length > 0 ? (i) => {
+            const c = clips[i];
+            if (c) {
+              setActiveClipId(c.id);
+              setCurrentOffset(0);
+              setSelectedTextId(null);
+            }
+          } : undefined}
+          onToggleSelect={clips.length > 0 ? (i) => {
+            const c = clips[i];
+            if (c) handleToggleClipSelection(c.id);
+          } : undefined}
+          height={400}
+        />
+      </div>
+
+      {clips.length > 0 && (
+        <div className="max-w-6xl mx-auto mt-6">
+          <TemplatesPanel
+            templates={TEMPLATES}
+            onApply={handleApplyTemplate}
+            selectedCount={selectedClipIds.size}
+          />
+        </div>
       )}
     </div>
   );

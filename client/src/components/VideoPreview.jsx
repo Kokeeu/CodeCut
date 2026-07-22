@@ -11,7 +11,7 @@ function formatTime(seconds) {
 const CARD_H = 520;
 const EXPORT_H = 1920;
 const EXPORT_W = 1080;
-const MAIN_Y = 300;
+const MAIN_Y = 360;
 const DISPLAY_SCALE = CARD_H / EXPORT_H;
 
 const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
