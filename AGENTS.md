@@ -133,6 +133,20 @@ Props: `videoUrl, texts, headerText, animeTitle, ...font, color, blur, transform
 - **Texts**: custom pointer events in VideoPreview
 - **Resize**: 4 corner handles, ResizeObserver
 
+### Trim Controls
+
+| Feature | Details |
+|---|---|
+| **Visual trim track** | Full source duration shown as a bar; active region highlighted in indigo with border markers |
+| **Draggable in/out handles** | Thin 2px handles (expand to 4px on hover) for precise trimming |
+| **Playhead scrubbing** | Click anywhere on the trim track to seek; green playhead line shows current position |
+| **Numeric time input** | Editable fields for In/Out in `HH:MM:SS.mmm` format |
+| **Frame-by-frame buttons** | ◀ ▶ buttons to adjust In/Out by 1 frame (1/30s) |
+| **Set In / Set Out buttons** | Mark current playhead position as In or Out point |
+| **Waveform visual** | Audio waveform rendered inside the trim track |
+| **Zoom** | 1x-10x zoom slider with horizontal scroll for precision |
+| **Seek integration** | Trim changes update the video preview in real time |
+
 ## Testing
 
 Backend smoke tests in `server/scripts/`:
@@ -247,3 +261,4 @@ cd server && node scripts/smoke_all.js
 - v0.7: Full editor (undo/redo, speed, audio, animations, save/load, scrubber)
 - v0.8: Precision editing (frame-by-frame, timeline zoom, waveform, corner PIP)
 - v0.9: Export progress bar (SSE real-time progress from FFmpeg)
+- v0.10: Precision trim (frame-by-frame, numeric input, waveform, zoom, Set In/Out, thin handles)

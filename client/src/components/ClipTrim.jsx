@@ -5,20 +5,55 @@ function clamp(v, min, max) {
 }
 
 function formatTime(seconds) {
-  if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00.0';
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   const ms = Math.floor((seconds % 1) * 10);
   return `${m}:${s.toString().padStart(2, '0')}.${ms}`;
 }
 
-const MIN_GAP = 0.1;
+function formatTimeInput(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return '00:00:00.000';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  const ms = Math.floor((seconds % 1) * 1000);
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+}
 
-export default function ClipTrim({ clip, fileDuration, currentOffset, onChange, onSeek }) {
+function parseTimeInput(str) {
+  const trimmed = str.trim();
+  if (!trimmed) return 0;
+  
+  const parts = trimmed.split(':');
+  
+  if (parts.length === 3) {
+    const h = parseFloat(parts[0]) || 0;
+    const m = parseFloat(parts[1]) || 0;
+    const s = parseFloat(parts[2]) || 0;
+    return h * 3600 + m * 60 + s;
+  } else if (parts.length === 2) {
+    const m = parseFloat(parts[0]) || 0;
+    const s = parseFloat(parts[1]) || 0;
+    return m * 60 + s;
+  } else {
+    return parseFloat(trimmed) || 0;
+  }
+}
+
+const MIN_GAP = 0.1;
+const FRAME_DURATION = 1 / 30;
+
+export default function ClipTrim({ clip, file, currentOffset, onChange, onSeek }) {
   const trackRef = useRef(null);
   const [dragging, setDragging] = useState(null);
-
+  const [trimZoom, setTrimZoom] = useState(1);
+  const [viewOffset, setViewOffset] = useState(0);
+  
+  const fileDuration = file?.duration || 0;
+  const waveform = file?.waveform;
   const safeDuration = Math.max(0.01, fileDuration || 0.01);
+  
   const startPct = (clip.sourceStart / safeDuration) * 100;
   const endPct = (clip.sourceEnd / safeDuration) * 100;
   const playheadPct = clamp(((clip.sourceStart + currentOffset) / safeDuration) * 100, 0, 100);
@@ -26,8 +61,11 @@ export default function ClipTrim({ clip, fileDuration, currentOffset, onChange, 
   const updateFromEvent = useCallback((e) => {
     if (!dragging || !trackRef.current) return;
     const rect = trackRef.current.getBoundingClientRect();
-    const pct = clamp((e.clientX - rect.left) / rect.width, 0, 1);
-    const t = pct * safeDuration;
+    const rawPct = clamp((e.clientX - rect.left) / rect.width, 0, 1);
+    
+    const visibleRange = 100 / trimZoom;
+    const actualPct = viewOffset + rawPct * visibleRange;
+    const t = (actualPct / 100) * safeDuration;
 
     if (dragging === 'start') {
       onChange({ sourceStart: clamp(t, 0, clip.sourceEnd - MIN_GAP), sourceEnd: clip.sourceEnd });
@@ -37,7 +75,7 @@ export default function ClipTrim({ clip, fileDuration, currentOffset, onChange, 
       const clamped = clamp(t, clip.sourceStart, clip.sourceEnd);
       onSeek?.(clamped - clip.sourceStart);
     }
-  }, [dragging, safeDuration, clip.sourceStart, clip.sourceEnd, onChange, onSeek]);
+  }, [dragging, safeDuration, clip.sourceStart, clip.sourceEnd, onChange, onSeek, trimZoom, viewOffset]);
 
   useEffect(() => {
     if (!dragging) return undefined;
@@ -55,47 +93,183 @@ export default function ClipTrim({ clip, fileDuration, currentOffset, onChange, 
     setDragging('seek');
     if (!trackRef.current) return;
     const rect = trackRef.current.getBoundingClientRect();
-    const pct = clamp((e.clientX - rect.left) / rect.width, 0, 1);
-    const t = clamp(pct * safeDuration, clip.sourceStart, clip.sourceEnd);
+    const rawPct = clamp((e.clientX - rect.left) / rect.width, 0, 1);
+    const visibleRange = 100 / trimZoom;
+    const actualPct = viewOffset + rawPct * visibleRange;
+    const t = clamp((actualPct / 100) * safeDuration, clip.sourceStart, clip.sourceEnd);
     onSeek?.(t - clip.sourceStart);
   };
 
+  const handleTimeInput = (handle, value) => {
+    const t = parseTimeInput(value);
+    if (handle === 'start') {
+      onChange({ sourceStart: clamp(t, 0, clip.sourceEnd - MIN_GAP), sourceEnd: clip.sourceEnd });
+    } else {
+      onChange({ sourceStart: clip.sourceStart, sourceEnd: clamp(t, clip.sourceStart + MIN_GAP, safeDuration) });
+    }
+  };
+
+  const adjustFrame = (handle, direction) => {
+    const delta = direction * FRAME_DURATION;
+    if (handle === 'start') {
+      const newStart = clamp(clip.sourceStart + delta, 0, clip.sourceEnd - MIN_GAP);
+      onChange({ sourceStart: newStart, sourceEnd: clip.sourceEnd });
+    } else {
+      const newEnd = clamp(clip.sourceEnd + delta, clip.sourceStart + MIN_GAP, safeDuration);
+      onChange({ sourceStart: clip.sourceStart, sourceEnd: newEnd });
+    }
+  };
+
+  const setInPoint = () => {
+    const newStart = clip.sourceStart + currentOffset;
+    onChange({ sourceStart: clamp(newStart, 0, clip.sourceEnd - MIN_GAP), sourceEnd: clip.sourceEnd });
+  };
+
+  const setOutPoint = () => {
+    const newEnd = clip.sourceStart + currentOffset;
+    onChange({ sourceStart: clip.sourceStart, sourceEnd: clamp(newEnd, clip.sourceStart + MIN_GAP, safeDuration) });
+  };
+
+  const trackWidth = trimZoom * 100;
+
   return (
     <div className="w-full">
-      <div className="flex items-center justify-between text-xs text-slate-400 mb-2 font-mono">
-        <span>In: {formatTime(clip.sourceStart)}</span>
-        <span>Clip: {formatTime(Math.max(0, clip.sourceEnd - clip.sourceStart))}</span>
-        <span>Out: {formatTime(clip.sourceEnd)}</span>
+      <div className="flex flex-col gap-2 mb-3">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => adjustFrame('start', -1)}
+              className="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs"
+              title="Retroceder 1 frame"
+            >
+              ◀
+            </button>
+            <label className="text-xs text-slate-400 w-8">In:</label>
+            <input
+              type="text"
+              value={formatTimeInput(clip.sourceStart)}
+              onChange={(e) => handleTimeInput('start', e.target.value)}
+              className="w-28 px-2 py-1 rounded bg-slate-800 border border-slate-700 text-xs text-slate-200 font-mono focus:border-indigo-400 focus:outline-none"
+            />
+            <button
+              onClick={() => adjustFrame('start', 1)}
+              className="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs"
+              title="Avanzar 1 frame"
+            >
+              ▶
+            </button>
+          </div>
+          <button
+            onClick={setInPoint}
+            className="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-xs text-white font-medium"
+            title="Marcar punto actual como inicio"
+          >
+            Set In
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => adjustFrame('end', -1)}
+              className="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs"
+              title="Retroceder 1 frame"
+            >
+              ◀
+            </button>
+            <label className="text-xs text-slate-400 w-8">Out:</label>
+            <input
+              type="text"
+              value={formatTimeInput(clip.sourceEnd)}
+              onChange={(e) => handleTimeInput('end', e.target.value)}
+              className="w-28 px-2 py-1 rounded bg-slate-800 border border-slate-700 text-xs text-slate-200 font-mono focus:border-indigo-400 focus:outline-none"
+            />
+            <button
+              onClick={() => adjustFrame('end', 1)}
+              className="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs"
+              title="Avanzar 1 frame"
+            >
+              ▶
+            </button>
+          </div>
+          <button
+            onClick={setOutPoint}
+            className="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-xs text-white font-medium"
+            title="Marcar punto actual como fin"
+          >
+            Set Out
+          </button>
+        </div>
+
+        <div className="text-xs text-slate-400 font-mono text-center">
+          Duration: {formatTime(Math.max(0, clip.sourceEnd - clip.sourceStart))}
+        </div>
       </div>
-      <div
-        ref={trackRef}
-        onMouseDown={onTrackMouseDown}
-        className="relative h-14 rounded-xl bg-slate-800 cursor-pointer select-none"
-      >
+
+      <div className="overflow-x-auto">
         <div
-          className="absolute top-0 bottom-0 bg-indigo-500/20 border-x-2 border-indigo-400 pointer-events-none"
-          style={{ left: `${startPct}%`, width: `${Math.max(0, endPct - startPct)}%` }}
-        />
-        <div
-          className="absolute top-0 bottom-0 w-0.5 bg-emerald-400 pointer-events-none"
-          style={{ left: `${playheadPct}%` }}
-        />
-        <div
-          onMouseDown={(e) => { e.stopPropagation(); setDragging('start'); }}
-          className="absolute top-0 bottom-0 w-3 -ml-1.5 cursor-ew-resize bg-indigo-400 hover:bg-indigo-300 rounded-sm z-10"
-          style={{ left: `${startPct}%` }}
-          title="Trim start"
-        />
-        <div
-          onMouseDown={(e) => { e.stopPropagation(); setDragging('end'); }}
-          className="absolute top-0 bottom-0 w-3 -ml-1.5 cursor-ew-resize bg-indigo-400 hover:bg-indigo-300 rounded-sm z-10"
-          style={{ left: `${endPct}%` }}
-          title="Trim end"
-        />
+          ref={trackRef}
+          onMouseDown={onTrackMouseDown}
+          className="relative h-16 rounded-xl bg-slate-800 cursor-pointer select-none"
+          style={{ width: `${trackWidth}%`, minWidth: '100%' }}
+        >
+          {waveform && (
+            <div className="absolute inset-0 flex items-center gap-px px-1 pointer-events-none opacity-40">
+              {waveform.map((peak, i) => (
+                <div
+                  key={i}
+                  className="flex-1 bg-slate-400 rounded-t"
+                  style={{ height: `${Math.max(2, peak * 100)}%` }}
+                />
+              ))}
+            </div>
+          )}
+
+          <div
+            className="absolute top-0 bottom-0 bg-indigo-500/20 border-x border-indigo-400 pointer-events-none"
+            style={{ left: `${startPct}%`, width: `${Math.max(0, endPct - startPct)}%` }}
+          />
+
+          <div
+            className="absolute top-0 bottom-0 w-0.5 bg-emerald-400 pointer-events-none"
+            style={{ left: `${playheadPct}%` }}
+          />
+
+          <div
+            onMouseDown={(e) => { e.stopPropagation(); setDragging('start'); }}
+            className="absolute top-0 bottom-0 w-0.5 -ml-0.5 cursor-ew-resize bg-indigo-400 hover:bg-indigo-300 hover:w-1 hover:-ml-1 z-10 transition-all"
+            style={{ left: `${startPct}%` }}
+            title="Trim start"
+          />
+
+          <div
+            onMouseDown={(e) => { e.stopPropagation(); setDragging('end'); }}
+            className="absolute top-0 bottom-0 w-0.5 -ml-0.5 cursor-ew-resize bg-indigo-400 hover:bg-indigo-300 hover:w-1 hover:-ml-1 z-10 transition-all"
+            style={{ left: `${endPct}%` }}
+            title="Trim end"
+          />
+        </div>
       </div>
+
       <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono mt-1">
         <span>0:00</span>
         <span>{formatTime(safeDuration)}</span>
+      </div>
+
+      <div className="flex items-center gap-2 mt-3">
+        <span className="text-[10px] text-slate-500 shrink-0">Zoom</span>
+        <input
+          type="range"
+          min="1"
+          max="10"
+          step="0.5"
+          value={trimZoom}
+          onChange={(e) => setTrimZoom(Number(e.target.value))}
+          className="flex-1 accent-indigo-500 h-1"
+        />
+        <span className="text-[10px] font-mono text-slate-400 w-8 text-right">
+          {trimZoom.toFixed(1)}x
+        </span>
       </div>
     </div>
   );

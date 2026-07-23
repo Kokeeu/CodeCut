@@ -23,7 +23,7 @@ const DEFAULT_TRANSFORM = { x: 0, y: 0, scale: 1 };
 const DEFAULT_AUDIO = { volume: 1, mute: false, fadeIn: 0, fadeOut: 0 };
 const DEFAULT_PIP = { enabled: false, fileId: null, position: 'bottom-right', size: 30, opacity: 1, border: true, borderWidth: 4, borderRadius: 8 };
 const DEFAULT_META = { blur: 30, blurEnabled: true };
-const PROJECT_VERSION = '0.9';
+const PROJECT_VERSION = '0.10';
 
 const TEMPLATES = [
   {
@@ -538,7 +538,7 @@ export default function App() {
             Multi-clip vertical editor · split, reorder, transitions, export 1080×1920.
           </p>
         </div>
-        <div className="text-xs text-slate-500 font-mono">v0.9 · export progress</div>
+        <div className="text-xs text-slate-500 font-mono">v0.10 · precision trim</div>
       </header>
 
       {files.length === 0 ? (
@@ -638,7 +638,7 @@ export default function App() {
                 {activeClip && activeFile ? (
                   <ClipTrim
                     clip={activeClip}
-                    fileDuration={activeFile.duration}
+                    file={activeFile}
                     currentOffset={currentOffset}
                     onChange={handleTrimChange}
                     onSeek={handleSeek}
