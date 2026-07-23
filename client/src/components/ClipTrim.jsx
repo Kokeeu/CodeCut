@@ -46,9 +46,10 @@ const FRAME_DURATION = 1 / 30;
 
 export default function ClipTrim({ clip, file, currentOffset, onChange, onSeek }) {
   const trackRef = useRef(null);
+  const containerRef = useRef(null);
   const [dragging, setDragging] = useState(null);
   const [trimZoom, setTrimZoom] = useState(1);
-  const [viewOffset, setViewOffset] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
   
   const fileDuration = file?.duration || 0;
   const waveform = file?.waveform;
@@ -58,14 +59,22 @@ export default function ClipTrim({ clip, file, currentOffset, onChange, onSeek }
   const endPct = (clip.sourceEnd / safeDuration) * 100;
   const playheadPct = clamp(((clip.sourceStart + currentOffset) / safeDuration) * 100, 0, 100);
 
-  const updateFromEvent = useCallback((e) => {
-    if (!dragging || !trackRef.current) return;
-    const rect = trackRef.current.getBoundingClientRect();
-    const rawPct = clamp((e.clientX - rect.left) / rect.width, 0, 1);
+  const getTimeFromEvent = useCallback((e) => {
+    if (!trackRef.current || !containerRef.current) return 0;
+    const trackRect = trackRef.current.getBoundingClientRect();
+    const containerRect = containerRef.current.getBoundingClientRect();
     
-    const visibleRange = 100 / trimZoom;
-    const actualPct = viewOffset + rawPct * visibleRange;
-    const t = (actualPct / 100) * safeDuration;
+    // Calcular la posición del click relativa al track completo
+    const clickX = e.clientX - trackRect.left;
+    const trackWidth = trackRect.width;
+    const pct = clamp(clickX / trackWidth, 0, 1);
+    const t = pct * safeDuration;
+    return t;
+  }, [safeDuration]);
+
+  const updateFromEvent = useCallback((e) => {
+    if (!dragging) return;
+    const t = getTimeFromEvent(e);
 
     if (dragging === 'start') {
       onChange({ sourceStart: clamp(t, 0, clip.sourceEnd - MIN_GAP), sourceEnd: clip.sourceEnd });
@@ -75,7 +84,7 @@ export default function ClipTrim({ clip, file, currentOffset, onChange, onSeek }
       const clamped = clamp(t, clip.sourceStart, clip.sourceEnd);
       onSeek?.(clamped - clip.sourceStart);
     }
-  }, [dragging, safeDuration, clip.sourceStart, clip.sourceEnd, onChange, onSeek, trimZoom, viewOffset]);
+  }, [dragging, getTimeFromEvent, clip.sourceStart, clip.sourceEnd, onChange, onSeek, safeDuration]);
 
   useEffect(() => {
     if (!dragging) return undefined;
@@ -91,13 +100,13 @@ export default function ClipTrim({ clip, file, currentOffset, onChange, onSeek }
 
   const onTrackMouseDown = (e) => {
     setDragging('seek');
-    if (!trackRef.current) return;
-    const rect = trackRef.current.getBoundingClientRect();
-    const rawPct = clamp((e.clientX - rect.left) / rect.width, 0, 1);
-    const visibleRange = 100 / trimZoom;
-    const actualPct = viewOffset + rawPct * visibleRange;
-    const t = clamp((actualPct / 100) * safeDuration, clip.sourceStart, clip.sourceEnd);
-    onSeek?.(t - clip.sourceStart);
+    const t = getTimeFromEvent(e);
+    const clamped = clamp(t, clip.sourceStart, clip.sourceEnd);
+    onSeek?.(clamped - clip.sourceStart);
+  };
+
+  const handleScroll = (e) => {
+    setScrollLeft(e.target.scrollLeft);
   };
 
   const handleTimeInput = (handle, value) => {
@@ -206,7 +215,7 @@ export default function ClipTrim({ clip, file, currentOffset, onChange, onSeek }
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" ref={containerRef} onScroll={handleScroll}>
         <div
           ref={trackRef}
           onMouseDown={onTrackMouseDown}
