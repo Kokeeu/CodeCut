@@ -1,5 +1,6 @@
 import SpeedPicker from './SpeedPicker.jsx';
 import AudioPanel from './AudioPanel.jsx';
+import PipPicker from './PipPicker.jsx';
 import { getAnimationTypes } from '../lib/textAnimations.js';
 
 export const FONT_OPTIONS = [
@@ -80,6 +81,8 @@ export default function CardMetadata({
   onDeleteText,
   onSpeedChange,
   onAudioChange,
+  onPipChange,
+  files,
 }) {
   const texts = activeClip?.texts || [];
   const clipDuration = activeClip ? Math.max(0, activeClip.sourceEnd - activeClip.sourceStart) : 0;
@@ -133,6 +136,17 @@ export default function CardMetadata({
           <AudioPanel
             audio={activeClip.audio || { volume: 1, mute: false, fadeIn: 0, fadeOut: 0 }}
             onChange={onAudioChange}
+          />
+        </div>
+      )}
+
+      {activeClip && (
+        <div className="mb-3 p-2 rounded-lg bg-slate-800/50 border border-slate-700">
+          <label className="block text-[10px] text-slate-400 mb-1.5">Picture-in-Picture</label>
+          <PipPicker
+            pip={activeClip.pip || { enabled: false, fileId: null, position: 'bottom-right', size: 30, opacity: 1, border: true, borderWidth: 4, borderRadius: 8 }}
+            files={files}
+            onChange={onPipChange}
           />
         </div>
       )}

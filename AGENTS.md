@@ -15,7 +15,8 @@ video-editor/
 │       │   └── useUndoableState.js  # Undo/redo hook
 │       ├── lib/
 │       │   ├── speed.js             # Speed constants + atempo chain
-│       │   └── textAnimations.js    # Animation definitions (preview)
+│       │   ├── textAnimations.js    # Animation definitions (preview)
+│       │   └── waveform.js          # Waveform extraction
 │       └── components/
 │           ├── VideoPreview.jsx      # Editor preview (drag/resize texts)
 │           ├── CardTemplate.jsx      # Pure card renderer (4 layers)
@@ -32,7 +33,8 @@ video-editor/
 │           ├── SpeedPicker.jsx       # Speed selector (0.25x-3x)
 │           ├── AudioPanel.jsx        # Volume + fade controls
 │           ├── TimelineScrubber.jsx  # Global timeline scrubber
-│           └── ProjectIO.jsx         # Save/Load project JSON
+│           ├── ProjectIO.jsx         # Save/Load project JSON
+│           └── PipPicker.jsx         # Picture-in-Picture config
 ├── server/
 │   ├── index.js                  # Express entry
 │   ├── routes/trim.js            # POST /api/trim endpoint
@@ -59,17 +61,18 @@ Every output is a 1080×1920 card with 4 layers:
 ```js
 // App.jsx
 {
-  files: [{ id, file, url, name, duration, thumbnail }],
+  files: [{ id, file, url, name, duration, thumbnail, waveform }],
   clips: [{
     id, fileId, sourceStart, sourceEnd,
     speed,  // 0.25, 0.5, 0.75, 1, 1.5, 2, 3
     transform: { x, y, scale },
     audio: { volume, mute, fadeIn, fadeOut },
+    pip: { enabled, fileId, position, size, opacity, border, borderWidth, borderRadius },
     texts: [{ id, text, x, y, size, font, color, align, startOffset, endOffset, animation: { type, duration } }]
   }],
   transitions: [{ type, durationSec }],  // between clips
   meta: { blur, blurEnabled },
-  activeClipId, currentOffset, isPlaying, selectedTextId
+  activeClipId, currentOffset, isPlaying, selectedTextId, timelineZoom
 }
 ```
 
@@ -96,6 +99,16 @@ Key constants:
 - `OUTPUT_W = 1080, OUTPUT_H = 1920`
 - `MAIN_Y = 360` (video top position)
 - `BG_BLUR_SIGMA = 30` (default)
+
+### Export Flow with Progress
+
+The export uses a 3-step async flow with Server-Sent Events (SSE) for real-time progress:
+
+1. **POST /api/trim** - Upload files + config, returns `{ jobId }` (HTTP 202)
+2. **GET /api/trim/progress/:jobId** - SSE stream with `{ progress, status }` updates
+3. **GET /api/trim/download/:jobId** - Download the final MP4 when status is 'ready'
+
+Progress is parsed from FFmpeg stderr (`time=HH:MM:SS.ms`) and compared against total duration. Jobs auto-cleanup after 5 minutes.
 
 ## Frontend Patterns
 
@@ -134,6 +147,8 @@ Run: `node server/scripts/smoke_all.js` (requires server running on :4000)
 - `S` - Split active clip at playhead
 - `Ctrl+Z` - Undo
 - `Ctrl+Y` or `Ctrl+Shift+Z` - Redo
+- `←` - Step back 1 frame (when paused)
+- `→` - Step forward 1 frame (when paused)
 
 ## Common Tasks
 
@@ -219,6 +234,7 @@ cd server && node scripts/smoke_all.js
 - Preview blur intensity differs slightly from export (CSS `blur()` vs FFmpeg `gblur`)
 - Text `align: 'center'` uses `(w-text_w)/2` in export, CSS `translateX(-50%)` in preview
 - Typewriter and karaoke text animations are preview-only (not yet in FFmpeg export)
+- Corner PIP is preview-only (not yet in FFmpeg export)
 
 ## Version History
 
@@ -229,3 +245,5 @@ cd server && node scripts/smoke_all.js
 - v0.5: Free-form texts (drag/resize)
 - v0.6: Per-clip texts + time ranges
 - v0.7: Full editor (undo/redo, speed, audio, animations, save/load, scrubber)
+- v0.8: Precision editing (frame-by-frame, timeline zoom, waveform, corner PIP)
+- v0.9: Export progress bar (SSE real-time progress from FFmpeg)

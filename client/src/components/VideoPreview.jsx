@@ -24,7 +24,7 @@ const VideoPreview = forwardRef(function VideoPreview(
   {
     clip, fileUrl, isPlaying, onTimeUpdate, onClipEnded, onPlayStateChange,
     meta, onTransformChange, selectedTextId, onSelectText, onUpdateText,
-    currentOffset,
+    currentOffset, files,
   },
   ref
 ) {
@@ -50,7 +50,18 @@ const VideoPreview = forwardRef(function VideoPreview(
       if (v) v.currentTime = tt;
       if (bg) bg.currentTime = tt;
     },
-  }), [clip]);
+    stepFrame: (direction) => {
+      const v = videoRef.current;
+      const bg = bgVideoRef.current;
+      if (!v || !clip) return;
+      const frameDuration = 1 / OUTPUT_FPS;
+      const newTime = Math.max(clip.sourceStart, Math.min(clip.sourceEnd - 0.01, v.currentTime + direction * frameDuration));
+      v.currentTime = newTime;
+      if (bg) bg.currentTime = newTime;
+      const offset = newTime - clip.sourceStart;
+      if (offset >= 0) onTimeUpdate?.(offset);
+    },
+  }), [clip, onTimeUpdate]);
 
   useEffect(() => {
     endedRef.current = false;
@@ -294,6 +305,54 @@ const VideoPreview = forwardRef(function VideoPreview(
             No clip selected
           </div>
         )}
+
+        {clip?.pip?.enabled && clip.pip.fileId && (() => {
+          const pipFile = files?.find((f) => f.id === clip.pip.fileId);
+          if (!pipFile?.url) return null;
+          
+          const sizePercent = clip.pip.size || 30;
+          const pipWidth = EXPORT_W * (sizePercent / 100) * DISPLAY_SCALE;
+          const pipHeight = pipWidth * 9 / 16;
+          
+          let x = 20 * DISPLAY_SCALE;
+          let y = 20 * DISPLAY_SCALE;
+          
+          switch (clip.pip.position) {
+            case 'top-right':
+              x = (EXPORT_W - pipWidth / DISPLAY_SCALE - 20) * DISPLAY_SCALE;
+              y = 20 * DISPLAY_SCALE;
+              break;
+            case 'bottom-left':
+              x = 20 * DISPLAY_SCALE;
+              y = (EXPORT_H - pipHeight / DISPLAY_SCALE - 20) * DISPLAY_SCALE;
+              break;
+            case 'bottom-right':
+              x = (EXPORT_W - pipWidth / DISPLAY_SCALE - 20) * DISPLAY_SCALE;
+              y = (EXPORT_H - pipHeight / DISPLAY_SCALE - 20) * DISPLAY_SCALE;
+              break;
+          }
+          
+          return (
+            <video
+              src={pipFile.url}
+              playsInline
+              autoPlay={isPlaying}
+              muted
+              className="pointer-events-none"
+              style={{
+                position: 'absolute',
+                width: `${pipWidth}px`,
+                height: `${pipHeight}px`,
+                left: `${x}px`,
+                top: `${y}px`,
+                opacity: clip.pip.opacity ?? 1,
+                border: clip.pip.border ? `${(clip.pip.borderWidth || 4) * DISPLAY_SCALE}px solid white` : 'none',
+                borderRadius: `${(clip.pip.borderRadius || 8) * DISPLAY_SCALE}px`,
+                objectFit: 'cover',
+              }}
+            />
+          );
+        })()}
 
         {texts.map((tx) => {
           const isVisible = tx.startOffset == null || tx.endOffset == null

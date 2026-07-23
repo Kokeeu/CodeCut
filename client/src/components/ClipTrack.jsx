@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, arrayMove, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import ClipBlock from './ClipBlock.jsx';
@@ -15,7 +16,10 @@ export default function ClipTrack({
   onDelete,
   onReorder,
   onTransitionChange,
+  timelineZoom = 1,
+  onTimelineZoomChange,
 }) {
+  const containerRef = useRef(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
@@ -29,6 +33,13 @@ export default function ClipTrack({
     onReorder(arrayMove(clips, oldIndex, newIndex));
   };
 
+  const handleWheel = (e) => {
+    if (!e.ctrlKey || !onTimelineZoomChange) return;
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.5 : 0.5;
+    onTimelineZoomChange(timelineZoom + delta);
+  };
+
   if (clips.length === 0) {
     return (
       <p className="text-xs text-slate-500 py-6 text-center">
@@ -37,41 +48,64 @@ export default function ClipTrack({
     );
   }
 
+  const effectivePxPerSec = PX_PER_SEC * timelineZoom;
+
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <SortableContext items={clips.map((c) => c.id)} strategy={horizontalListSortingStrategy}>
-        <div className="flex items-stretch overflow-x-auto pb-2 pt-1">
-          {clips.map((clip, i) => {
-            const dur = clip.sourceEnd - clip.sourceStart;
-            const width = Math.max(MIN_WIDTH, dur * PX_PER_SEC);
-            const nextClip = clips[i + 1];
-            const seamMaxDur = nextClip
-              ? Math.max(0, Math.min(dur, nextClip.sourceEnd - nextClip.sourceStart) - 0.1)
-              : 0;
-            return (
-              <div key={clip.id} className="flex items-stretch shrink-0">
-                <ClipBlock
-                  clip={clip}
-                  index={i}
-                  width={width}
-                  file={fileById[clip.fileId]}
-                  isActive={clip.id === activeClipId}
-                  canDelete={clips.length > 1}
-                  onSelect={() => onSelect(clip.id)}
-                  onDelete={() => onDelete(clip.id)}
-                />
-                {nextClip && (
-                  <TransitionPicker
-                    value={transitions[i] || { type: 'none', durationSec: 0 }}
-                    maxDuration={seamMaxDur}
-                    onChange={(v) => onTransitionChange(i, v)}
+    <div>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={clips.map((c) => c.id)} strategy={horizontalListSortingStrategy}>
+          <div
+            ref={containerRef}
+            onWheel={handleWheel}
+            className="flex items-stretch overflow-x-auto pb-2 pt-1"
+          >
+            {clips.map((clip, i) => {
+              const dur = clip.sourceEnd - clip.sourceStart;
+              const width = Math.max(MIN_WIDTH, dur * effectivePxPerSec);
+              const nextClip = clips[i + 1];
+              const seamMaxDur = nextClip
+                ? Math.max(0, Math.min(dur, nextClip.sourceEnd - nextClip.sourceStart) - 0.1)
+                : 0;
+              return (
+                <div key={clip.id} className="flex items-stretch shrink-0">
+                  <ClipBlock
+                    clip={clip}
+                    index={i}
+                    width={width}
+                    file={fileById[clip.fileId]}
+                    isActive={clip.id === activeClipId}
+                    canDelete={clips.length > 1}
+                    onSelect={() => onSelect(clip.id)}
+                    onDelete={() => onDelete(clip.id)}
                   />
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </SortableContext>
-    </DndContext>
+                  {nextClip && (
+                    <TransitionPicker
+                      value={transitions[i] || { type: 'none', durationSec: 0 }}
+                      maxDuration={seamMaxDur}
+                      onChange={(v) => onTransitionChange(i, v)}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </SortableContext>
+      </DndContext>
+      <div className="flex items-center gap-2 mt-2 px-1">
+        <span className="text-[10px] text-slate-500">Zoom</span>
+        <input
+          type="range"
+          min="1"
+          max="10"
+          step="0.5"
+          value={timelineZoom}
+          onChange={(e) => onTimelineZoomChange?.(Number(e.target.value))}
+          className="flex-1 accent-indigo-500 h-1"
+        />
+        <span className="text-[10px] font-mono text-slate-400 w-8 text-right">
+          {timelineZoom.toFixed(1)}x
+        </span>
+      </div>
+    </div>
   );
 }

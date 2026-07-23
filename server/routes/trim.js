@@ -31,6 +31,8 @@ const DEFAULT_META = {
   blurEnabled: true,
 };
 
+const jobs = new Map();
+
 router.post('/', upload.array('videos', MAX_FILES), async (req, res) => {
   const files = req.files || [];
   if (files.length === 0) {
@@ -70,6 +72,20 @@ router.post('/', upload.array('videos', MAX_FILES), async (req, res) => {
   const inputPaths = normalizedClips.map((c) => files[c.fileIndex].path);
   const outputName = `composed-${Date.now()}.mp4`;
   const outputPath = path.join(TEMP_DIR, outputName);
+  const jobId = `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  const job = {
+    id: jobId,
+    status: 'processing',
+    progress: 0,
+    outputPath,
+    outputName,
+    inputPaths,
+    createdAt: Date.now(),
+  };
+  jobs.set(jobId, job);
+
+  res.status(202).json({ jobId });
 
   try {
     await runPipeline({
@@ -78,20 +94,82 @@ router.post('/', upload.array('videos', MAX_FILES), async (req, res) => {
       transitions,
       meta,
       outputPath,
+      onProgress: (progress) => {
+        job.progress = progress;
+      },
     });
+    job.status = 'ready';
   } catch (err) {
-    safeUnlinkAll([...files.map((f) => f.path), outputPath]);
-    if (!res.headersSent) {
-      return res.status(500).json({ error: `FFmpeg failed: ${err.message || String(err)}` });
-    }
-    return;
+    job.status = 'error';
+    job.error = err.message || String(err);
+    safeUnlinkAll([...inputPaths, outputPath]);
   }
 
-  res.download(outputPath, outputName, (err) => {
-    safeUnlinkAll([...files.map((f) => f.path), outputPath]);
+  setTimeout(() => {
+    const j = jobs.get(jobId);
+    if (j && j.status === 'ready') {
+      safeUnlink(j.outputPath);
+    }
+    jobs.delete(jobId);
+  }, 5 * 60 * 1000);
+});
+
+router.get('/download/:jobId', (req, res) => {
+  const job = jobs.get(req.params.jobId);
+  if (!job) {
+    return res.status(404).json({ error: 'Job not found or expired.' });
+  }
+  if (job.status === 'error') {
+    return res.status(500).json({ error: job.error || 'Processing failed.' });
+  }
+  if (job.status !== 'ready') {
+    return res.status(202).json({ status: job.status, progress: job.progress });
+  }
+
+  res.download(job.outputPath, job.outputName, (err) => {
+    safeUnlinkAll([...job.inputPaths, job.outputPath]);
+    jobs.delete(job.id);
     if (err && !res.headersSent) {
       console.error('[trim] download error:', err);
     }
+  });
+});
+
+router.get('/progress/:jobId', (req, res) => {
+  const job = jobs.get(req.params.jobId);
+  if (!job) {
+    return res.status(404).json({ error: 'Job not found.' });
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const sendUpdate = () => {
+    const data = { progress: job.progress, status: job.status };
+    if (job.error) data.error = job.error;
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  sendUpdate();
+
+  const interval = setInterval(() => {
+    const currentJob = jobs.get(req.params.jobId);
+    if (!currentJob) {
+      clearInterval(interval);
+      res.end();
+      return;
+    }
+    sendUpdate();
+    if (currentJob.status === 'ready' || currentJob.status === 'error') {
+      clearInterval(interval);
+      setTimeout(() => res.end(), 1000);
+    }
+  }, 200);
+
+  req.on('close', () => {
+    clearInterval(interval);
   });
 });
 

@@ -308,10 +308,23 @@ function validateClips(clips) {
   return null;
 }
 
-function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog }) {
+function parseTimeToSeconds(timeStr) {
+  const parts = timeStr.split(':');
+  if (parts.length !== 3) return 0;
+  const hours = parseFloat(parts[0]) || 0;
+  const minutes = parseFloat(parts[1]) || 0;
+  const seconds = parseFloat(parts[2]) || 0;
+  return hours * 3600 + minutes * 60 + seconds;
+}
+
+function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog, onProgress }) {
   const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const textFiles = writeTextFiles(clips, runId);
   const filterGraph = buildFilterGraph(clips, transitions, meta, textFiles);
+
+  const totalDuration = clips.reduce((sum, c) => {
+    return sum + (Number(c.sourceEnd) - Number(c.sourceStart)) / (Number(c.speed) || 1);
+  }, 0);
 
   return new Promise((resolve, reject) => {
     const command = ffmpeg();
@@ -335,6 +348,15 @@ function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog }
       })
       .on('stderr', (line) => {
         if (onLog) onLog('stderr', line);
+        
+        if (onProgress && totalDuration > 0) {
+          const timeMatch = line.match(/time=(\d+:\d+:\d+\.\d+)/);
+          if (timeMatch) {
+            const currentTime = parseTimeToSeconds(timeMatch[1]);
+            const progress = Math.min(1, currentTime / totalDuration);
+            onProgress(progress);
+          }
+        }
       })
       .on('error', (err) => {
         if (onLog) onLog('error', err.message);
@@ -345,6 +367,7 @@ function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog }
       })
       .on('end', () => {
         if (onLog) onLog('end', null);
+        if (onProgress) onProgress(1);
         console.log('[pipeline] done ->', outputPath);
         cleanupTextFiles(textFiles);
         resolve();

@@ -20,6 +20,7 @@ export default function ClipBlock({ clip, index, width, file, isActive, canDelet
   };
 
   const duration = clip.sourceEnd - clip.sourceStart;
+  const waveform = file?.waveform;
 
   return (
     <div
@@ -39,6 +40,19 @@ export default function ClipBlock({ clip, index, width, file, isActive, canDelet
         <img src={file.thumbnail} alt="" className="absolute inset-0 w-full h-full object-cover opacity-60 pointer-events-none" />
       ) : null}
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/40 pointer-events-none" />
+      
+      {waveform && (
+        <div className="absolute bottom-0 left-0 right-0 h-8 flex items-end gap-px px-1 pointer-events-none opacity-60">
+          {waveform.map((peak, i) => (
+            <div
+              key={i}
+              className="flex-1 bg-slate-400 rounded-t"
+              style={{ height: `${Math.max(2, peak * 100)}%` }}
+            />
+          ))}
+        </div>
+      )}
+      
       <div className="absolute top-1 left-1.5 text-[10px] font-mono text-slate-200 bg-black/50 px-1 rounded">
         #{index + 1}
       </div>

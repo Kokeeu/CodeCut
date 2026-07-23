@@ -21,8 +21,9 @@ function nextId(prefix) {
 const DEFAULT_TRANSITION = { type: 'none', durationSec: 0 };
 const DEFAULT_TRANSFORM = { x: 0, y: 0, scale: 1 };
 const DEFAULT_AUDIO = { volume: 1, mute: false, fadeIn: 0, fadeOut: 0 };
+const DEFAULT_PIP = { enabled: false, fileId: null, position: 'bottom-right', size: 30, opacity: 1, border: true, borderWidth: 4, borderRadius: 8 };
 const DEFAULT_META = { blur: 30, blurEnabled: true };
-const PROJECT_VERSION = '0.7';
+const PROJECT_VERSION = '0.9';
 
 const TEMPLATES = [
   {
@@ -92,6 +93,7 @@ export default function App() {
   const [currentOffset, setCurrentOffset] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [selectedTextId, setSelectedTextId] = useState(null);
+  const [timelineZoom, setTimelineZoom] = useState(1);
   const previewRef = useRef(null);
 
   const fileById = useMemo(() => {
@@ -127,6 +129,7 @@ export default function App() {
       name: m.file.name,
       duration: m.duration || 0,
       thumbnail: m.thumbnail || null,
+      waveform: m.waveform || null,
     }));
     if (newFiles.length === 0) return;
     
@@ -158,6 +161,7 @@ export default function App() {
           speed: 1,
           transform: { ...DEFAULT_TRANSFORM },
           audio: { ...DEFAULT_AUDIO },
+          pip: { ...DEFAULT_PIP },
           texts: [],
         };
         setClips([clip]);
@@ -177,6 +181,7 @@ export default function App() {
       speed: 1,
       transform: { ...DEFAULT_TRANSFORM },
       audio: { ...DEFAULT_AUDIO },
+      pip: { ...DEFAULT_PIP },
       texts: [],
     };
     setClips((prev) => [...prev, clip]);
@@ -227,6 +232,12 @@ export default function App() {
   const handleAudioChange = useCallback((audio) => {
     setClips((prev) =>
       prev.map((c) => (c.id === activeClipId ? { ...c, audio } : c))
+    );
+  }, [activeClipId]);
+
+  const handlePipChange = useCallback((pip) => {
+    setClips((prev) =>
+      prev.map((c) => (c.id === activeClipId ? { ...c, pip } : c))
     );
   }, [activeClipId]);
 
@@ -314,6 +325,10 @@ export default function App() {
     setActiveClipId(clipId);
     setCurrentOffset(0);
     setSelectedTextId(null);
+  }, []);
+
+  const handleTimelineZoomChange = useCallback((zoom) => {
+    setTimelineZoom(Math.max(1, Math.min(10, zoom)));
   }, []);
 
   const handleApplyTemplate = useCallback((template) => {
@@ -502,11 +517,17 @@ export default function App() {
       } else if (e.key === ' ') {
         e.preventDefault();
         setIsPlaying((p) => !p);
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        if (!isPlaying) previewRef.current?.stepFrame(-1);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        if (!isPlaying) previewRef.current?.stepFrame(1);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleSplit, undo]);
+  }, [handleSplit, undo, isPlaying]);
 
   return (
     <div className="min-h-full p-6 md:p-8">
@@ -517,7 +538,7 @@ export default function App() {
             Multi-clip vertical editor · split, reorder, transitions, export 1080×1920.
           </p>
         </div>
-        <div className="text-xs text-slate-500 font-mono">v0.7 · full editor</div>
+        <div className="text-xs text-slate-500 font-mono">v0.9 · export progress</div>
       </header>
 
       {files.length === 0 ? (
@@ -559,6 +580,7 @@ export default function App() {
                 onSelectText={setSelectedTextId}
                 onUpdateText={handleUpdateText}
                 currentOffset={currentOffset}
+                files={files}
               />
               <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
                 <button
@@ -607,6 +629,8 @@ export default function App() {
                 onDeleteText={handleDeleteText}
                 onSpeedChange={handleSpeedChange}
                 onAudioChange={handleAudioChange}
+                onPipChange={handlePipChange}
+                files={files}
               />
 
               <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800">
@@ -662,6 +686,8 @@ export default function App() {
               onDelete={handleDeleteClip}
               onReorder={handleReorder}
               onTransitionChange={handleTransitionChange}
+              timelineZoom={timelineZoom}
+              onTimelineZoomChange={handleTimelineZoomChange}
             />
           </div>
 

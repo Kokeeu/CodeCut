@@ -1,10 +1,11 @@
 import { useCallback, useRef, useState } from 'react';
+import { extractWaveform } from '../lib/waveform.js';
 
 const MAX_SIZE_MB = 500;
 const MAX_FILES = 10;
 
 function extractMeta(file) {
-  return new Promise((resolve) => {
+  return new Promise(async (resolve) => {
     const url = URL.createObjectURL(file);
     const video = document.createElement('video');
     video.preload = 'metadata';
@@ -12,11 +13,17 @@ function extractMeta(file) {
     video.src = url;
 
     let done = false;
-    const finish = (duration, thumbnail) => {
+    const finish = async (duration, thumbnail) => {
       if (done) return;
       done = true;
       clearTimeout(timer);
-      resolve({ file, url, duration, thumbnail });
+      
+      let waveform = null;
+      try {
+        waveform = await extractWaveform(url, 200);
+      } catch (_) {}
+      
+      resolve({ file, url, duration, thumbnail, waveform });
     };
 
     const timer = setTimeout(() => finish(0, null), 5000);
