@@ -42,7 +42,7 @@ export default function ClipTrack({
 
   if (clips.length === 0) {
     return (
-      <p className="text-xs text-slate-500 py-6 text-center">
+      <p className="text-xs text-neutral-500 py-6 text-center">
         Timeline is empty — add a clip from the media pool.
       </p>
     );
@@ -92,7 +92,7 @@ export default function ClipTrack({
         </SortableContext>
       </DndContext>
       <div className="flex items-center gap-2 mt-2 px-1">
-        <span className="text-[10px] text-slate-500">Zoom</span>
+        <span className="text-[10px] text-neutral-500">Zoom</span>
         <input
           type="range"
           min="1"
@@ -100,9 +100,9 @@ export default function ClipTrack({
           step="0.5"
           value={timelineZoom}
           onChange={(e) => onTimelineZoomChange?.(Number(e.target.value))}
-          className="flex-1 accent-indigo-500 h-1"
+          className="flex-1 h-1"
         />
-        <span className="text-[10px] font-mono text-slate-400 w-8 text-right">
+        <span className="text-[10px] font-mono text-neutral-400 w-8 text-right">
           {timelineZoom.toFixed(1)}x
         </span>
       </div>

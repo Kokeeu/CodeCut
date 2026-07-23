@@ -114,7 +114,7 @@ export default function VideoUploader({ onFilesAdded, compact }) {
         <button
           onClick={() => inputRef.current?.click()}
           disabled={busy}
-          className="px-3 py-2 rounded-lg border border-dashed border-slate-600 hover:border-indigo-400 text-xs text-slate-300 disabled:opacity-50"
+          className="px-3 py-2 rounded-lg border border-dashed border-editor-border hover:border-accent text-xs text-neutral-300 disabled:opacity-50 transition-colors"
         >
           {busy ? 'Loading…' : '+ Add videos'}
         </button>
@@ -132,14 +132,14 @@ export default function VideoUploader({ onFilesAdded, compact }) {
         onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
         onDragLeave={() => setIsDragging(false)}
         className={[
-          'cursor-pointer rounded-2xl border-2 border-dashed p-10 text-center transition-colors',
-          isDragging ? 'border-indigo-400 bg-indigo-500/10' : 'border-slate-700 bg-slate-900/60 hover:border-slate-500',
+          'cursor-pointer rounded-lg border-2 border-dashed p-10 text-center transition-colors',
+          isDragging ? 'border-accent bg-accent/10' : 'border-editor-border bg-editor-panel hover:border-neutral-600',
         ].join(' ')}
       >
         <div className="text-4xl mb-3">🎬</div>
         <p className="text-lg font-semibold">{busy ? 'Reading videos…' : 'Drag your videos here'}</p>
-        <p className="text-sm text-slate-400 mt-1">or click to select (multiple allowed)</p>
-        <p className="text-xs text-slate-500 mt-4">MP4, MOV, WebM, MKV · up to {MAX_FILES} files · {MAX_SIZE_MB} MB each</p>
+        <p className="text-sm text-neutral-400 mt-1">or click to select (multiple allowed)</p>
+        <p className="text-xs text-neutral-500 mt-4">MP4, MOV, WebM, MKV · up to {MAX_FILES} files · {MAX_SIZE_MB} MB each</p>
         <input ref={inputRef} type="file" accept="video/*" multiple onChange={onChange} className="hidden" />
       </div>
       {error && <p className="mt-3 text-sm text-red-400 text-center">{error}</p>}

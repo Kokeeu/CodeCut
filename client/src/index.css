@@ -6,8 +6,66 @@
 
 html, body, #root {
   height: 100%;
+  overflow: hidden;
+  background: #0d0d0d;
+  color: #e5e5e5;
 }
 
 body {
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  height: 16px;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 3px;
+  background: #333;
+  border-radius: 2px;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #a855f7;
+  border: none;
+  margin-top: -3.5px;
+}
+input[type="range"]:disabled::-webkit-slider-thumb {
+  background: #555;
+}
+
+input[type="checkbox"] {
+  accent-color: #a855f7;
+}
+
+select, input[type="text"], input[type="number"] {
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  color: #e5e5e5;
+}
+select:focus, input[type="text"]:focus, input[type="number"]:focus {
+  border-color: #a855f7;
+  outline: none;
 }

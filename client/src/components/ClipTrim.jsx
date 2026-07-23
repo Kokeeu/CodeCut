@@ -148,21 +148,21 @@ export default function ClipTrim({ clip, file, currentOffset, onChange, onSeek }
           <div className="flex items-center gap-1">
             <button
               onClick={() => adjustFrame('start', -1)}
-              className="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs"
+              className="w-6 h-6 rounded bg-editor-surface hover:bg-editor-hover text-neutral-300 text-xs border border-editor-border"
               title="Retroceder 1 frame"
             >
               ◀
             </button>
-            <label className="text-xs text-slate-400 w-8">In:</label>
+            <label className="text-xs text-neutral-400 w-8">In:</label>
             <input
               type="text"
               value={formatTimeInput(clip.sourceStart)}
               onChange={(e) => handleTimeInput('start', e.target.value)}
-              className="w-28 px-2 py-1 rounded bg-slate-800 border border-slate-700 text-xs text-slate-200 font-mono focus:border-indigo-400 focus:outline-none"
+              className="w-28 px-2 py-1 rounded text-xs font-mono"
             />
             <button
               onClick={() => adjustFrame('start', 1)}
-              className="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs"
+              className="w-6 h-6 rounded bg-editor-surface hover:bg-editor-hover text-neutral-300 text-xs border border-editor-border"
               title="Avanzar 1 frame"
             >
               ▶
@@ -170,7 +170,7 @@ export default function ClipTrim({ clip, file, currentOffset, onChange, onSeek }
           </div>
           <button
             onClick={setInPoint}
-            className="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-xs text-white font-medium"
+            className="px-3 py-1 rounded bg-accent hover:bg-accent-hover text-xs text-white font-medium transition-colors"
             title="Marcar punto actual como inicio"
           >
             Set In
@@ -181,21 +181,21 @@ export default function ClipTrim({ clip, file, currentOffset, onChange, onSeek }
           <div className="flex items-center gap-1">
             <button
               onClick={() => adjustFrame('end', -1)}
-              className="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs"
+              className="w-6 h-6 rounded bg-editor-surface hover:bg-editor-hover text-neutral-300 text-xs border border-editor-border"
               title="Retroceder 1 frame"
             >
               ◀
             </button>
-            <label className="text-xs text-slate-400 w-8">Out:</label>
+            <label className="text-xs text-neutral-400 w-8">Out:</label>
             <input
               type="text"
               value={formatTimeInput(clip.sourceEnd)}
               onChange={(e) => handleTimeInput('end', e.target.value)}
-              className="w-28 px-2 py-1 rounded bg-slate-800 border border-slate-700 text-xs text-slate-200 font-mono focus:border-indigo-400 focus:outline-none"
+              className="w-28 px-2 py-1 rounded text-xs font-mono"
             />
             <button
               onClick={() => adjustFrame('end', 1)}
-              className="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs"
+              className="w-6 h-6 rounded bg-editor-surface hover:bg-editor-hover text-neutral-300 text-xs border border-editor-border"
               title="Avanzar 1 frame"
             >
               ▶
@@ -203,14 +203,14 @@ export default function ClipTrim({ clip, file, currentOffset, onChange, onSeek }
           </div>
           <button
             onClick={setOutPoint}
-            className="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-xs text-white font-medium"
+            className="px-3 py-1 rounded bg-accent hover:bg-accent-hover text-xs text-white font-medium transition-colors"
             title="Marcar punto actual como fin"
           >
             Set Out
           </button>
         </div>
 
-        <div className="text-xs text-slate-400 font-mono text-center">
+        <div className="text-xs text-neutral-400 font-mono text-center">
           Duration: {formatTime(Math.max(0, clip.sourceEnd - clip.sourceStart))}
         </div>
       </div>
@@ -219,7 +219,7 @@ export default function ClipTrim({ clip, file, currentOffset, onChange, onSeek }
         <div
           ref={trackRef}
           onMouseDown={onTrackMouseDown}
-          className="relative h-16 rounded-xl bg-slate-800 cursor-pointer select-none"
+          className="relative h-16 rounded-lg bg-editor-surface cursor-pointer select-none border border-editor-border"
           style={{ width: `${trackWidth}%`, minWidth: '100%' }}
         >
           {waveform && (
@@ -235,38 +235,38 @@ export default function ClipTrim({ clip, file, currentOffset, onChange, onSeek }
           )}
 
           <div
-            className="absolute top-0 bottom-0 bg-indigo-500/20 border-x border-indigo-400 pointer-events-none"
+            className="absolute top-0 bottom-0 bg-accent/15 border-x border-accent pointer-events-none"
             style={{ left: `${startPct}%`, width: `${Math.max(0, endPct - startPct)}%` }}
           />
 
           <div
-            className="absolute top-0 bottom-0 w-0.5 bg-emerald-400 pointer-events-none"
+            className="absolute top-0 bottom-0 w-0.5 bg-green-400 pointer-events-none"
             style={{ left: `${playheadPct}%` }}
           />
 
           <div
             onMouseDown={(e) => { e.stopPropagation(); setDragging('start'); }}
-            className="absolute top-0 bottom-0 w-0.5 -ml-0.5 cursor-ew-resize bg-indigo-400 hover:bg-indigo-300 hover:w-1 hover:-ml-1 z-10 transition-all"
+            className="absolute top-0 bottom-0 w-0.5 -ml-0.5 cursor-ew-resize bg-accent hover:bg-accent-hover hover:w-1 hover:-ml-1 z-10 transition-all"
             style={{ left: `${startPct}%` }}
             title="Trim start"
           />
 
           <div
             onMouseDown={(e) => { e.stopPropagation(); setDragging('end'); }}
-            className="absolute top-0 bottom-0 w-0.5 -ml-0.5 cursor-ew-resize bg-indigo-400 hover:bg-indigo-300 hover:w-1 hover:-ml-1 z-10 transition-all"
+            className="absolute top-0 bottom-0 w-0.5 -ml-0.5 cursor-ew-resize bg-accent hover:bg-accent-hover hover:w-1 hover:-ml-1 z-10 transition-all"
             style={{ left: `${endPct}%` }}
             title="Trim end"
           />
         </div>
       </div>
 
-      <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono mt-1">
+      <div className="flex items-center justify-between text-[10px] text-neutral-500 font-mono mt-1">
         <span>0:00</span>
         <span>{formatTime(safeDuration)}</span>
       </div>
 
       <div className="flex items-center gap-2 mt-3">
-        <span className="text-[10px] text-slate-500 shrink-0">Zoom</span>
+        <span className="text-[10px] text-neutral-500 shrink-0">Zoom</span>
         <input
           type="range"
           min="1"
@@ -274,9 +274,9 @@ export default function ClipTrim({ clip, file, currentOffset, onChange, onSeek }
           step="0.5"
           value={trimZoom}
           onChange={(e) => setTrimZoom(Number(e.target.value))}
-          className="flex-1 accent-indigo-500 h-1"
+          className="flex-1 h-1"
         />
-        <span className="text-[10px] font-mono text-slate-400 w-8 text-right">
+        <span className="text-[10px] font-mono text-neutral-400 w-8 text-right">
           {trimZoom.toFixed(1)}x
         </span>
       </div>

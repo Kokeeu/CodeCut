@@ -30,9 +30,9 @@ export default function ClipBlock({ clip, index, width, file, isActive, canDelet
       {...listeners}
       onClick={onSelect}
       className={[
-        'relative h-20 rounded-lg overflow-hidden cursor-pointer select-none border-2 shrink-0',
-        isActive ? 'border-indigo-400 ring-2 ring-indigo-500/30' : 'border-slate-700 hover:border-slate-500',
-        'bg-slate-800',
+        'relative h-16 rounded-lg overflow-hidden cursor-pointer select-none border-2 shrink-0',
+        isActive ? 'border-accent ring-2 ring-accent/20' : 'border-editor-border hover:border-neutral-600',
+        'bg-editor-surface',
       ].join(' ')}
       title={file ? file.name : ''}
     >

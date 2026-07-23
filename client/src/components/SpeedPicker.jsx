@@ -7,12 +7,12 @@ export default function SpeedPicker({ speed, onChange }) {
         <button
           key={s}
           onClick={() => onChange(s)}
-          className={[
-            'px-2 py-1 rounded text-[10px] font-mono transition-colors',
-            speed === s
-              ? 'bg-indigo-500 text-white'
-              : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200',
-          ].join(' ')}
+        className={[
+          'px-2 py-1 rounded text-[10px] font-mono transition-colors',
+          speed === s
+            ? 'bg-accent text-white'
+            : 'bg-editor-surface text-neutral-400 hover:bg-editor-hover hover:text-neutral-200 border border-editor-border',
+        ].join(' ')}
         >
           {SPEED_LABELS[s] || `${s}x`}
         </button>

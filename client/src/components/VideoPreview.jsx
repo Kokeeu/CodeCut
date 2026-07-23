@@ -9,11 +9,10 @@ function formatTime(seconds) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-const CARD_H = 520;
 const EXPORT_H = 1920;
 const EXPORT_W = 1080;
 const MAIN_Y = 360;
-const DISPLAY_SCALE = CARD_H / EXPORT_H;
+const OUTPUT_FPS = 30;
 
 const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 
@@ -31,6 +30,7 @@ const VideoPreview = forwardRef(function VideoPreview(
   const videoRef = useRef(null);
   const bgVideoRef = useRef(null);
   const cardRef = useRef(null);
+  const containerRef = useRef(null);
   const dragRef = useRef(null);
   const textRefs = useRef({});
   const endedRef = useRef(false);
@@ -38,6 +38,23 @@ const VideoPreview = forwardRef(function VideoPreview(
   isPlayingRef.current = isPlaying;
 
   const [handles, setHandles] = useState(null);
+  const [cardH, setCardH] = useState(480);
+
+  const DISPLAY_SCALE = cardH / EXPORT_H;
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { height, width } = entry.contentRect;
+        const maxH = Math.min(height, width * 16 / 9);
+        setCardH(Math.max(200, Math.floor(maxH)));
+      }
+    });
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, []);
 
   const t = clip?.transform || { x: 0, y: 0, scale: 1 };
   const texts = clip?.texts || [];
@@ -267,15 +284,15 @@ const VideoPreview = forwardRef(function VideoPreview(
   const blurPx = (Number(meta?.blur) || 0) * DISPLAY_SCALE;
 
   return (
-    <div className="flex flex-col items-center">
+    <div ref={containerRef} className="flex items-center justify-center w-full h-full p-4">
       <div
         ref={cardRef}
         onPointerDown={startVideoDrag}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
-        className="relative bg-black rounded-2xl overflow-hidden shadow-2xl ring-1 ring-slate-800 select-none"
-        style={{ aspectRatio: '9 / 16', height: `${CARD_H}px`, cursor: clip ? 'grab' : 'default', touchAction: 'none' }}
+        className="relative bg-black rounded-lg overflow-hidden shadow-2xl ring-1 ring-editor-border select-none"
+        style={{ aspectRatio: '9 / 16', height: `${cardH}px`, cursor: clip ? 'grab' : 'default', touchAction: 'none' }}
       >
         {fileUrl && meta?.blurEnabled !== false && (
           <video
@@ -410,7 +427,7 @@ const VideoPreview = forwardRef(function VideoPreview(
                 cursor: 'move',
                 userSelect: 'none',
                 whiteSpace: 'pre',
-                outline: selected ? '1.5px dashed #818cf8' : 'none',
+                outline: selected ? '1.5px dashed #a855f7' : 'none',
                 outlineOffset: '4px',
                 zIndex: selected ? 30 : 20,
                 opacity: !isVisible && selected ? 0.3 : 1,
@@ -433,7 +450,7 @@ const VideoPreview = forwardRef(function VideoPreview(
               top: `${handles[corner].y - 5}px`,
               width: '10px',
               height: '10px',
-              background: '#6366f1',
+                background: '#a855f7',
               border: '1.5px solid #fff',
               borderRadius: '2px',
               cursor: CORNER_CURSOR[corner],
@@ -452,32 +469,6 @@ const VideoPreview = forwardRef(function VideoPreview(
           </div>
         )}
       </div>
-
-      {clip && (
-        <div className="mt-2 w-full max-w-[292px] flex items-center gap-2">
-          <span className="text-[10px] text-slate-500 shrink-0">Zoom</span>
-          <input
-            type="range"
-            min="0.2"
-            max="3"
-            step="0.05"
-            value={t.scale}
-            onChange={(e) => setScale(Number(e.target.value))}
-            className="flex-1 accent-indigo-500 h-1"
-          />
-          <span className="text-[10px] font-mono text-slate-400 w-10 text-right">{Math.round(t.scale * 100)}%</span>
-          <button
-            onClick={resetTransform}
-            className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300"
-            title="Reset position and zoom"
-          >
-            Reset
-          </button>
-        </div>
-      )}
-      {clip && (
-        <p className="mt-1 text-[10px] text-slate-600">Drag video to move · scroll to zoom · drag texts to place</p>
-      )}
     </div>
   );
 });

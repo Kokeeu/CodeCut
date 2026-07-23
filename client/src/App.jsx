@@ -10,6 +10,11 @@ import ExportButton from './components/ExportButton.jsx';
 import ProjectSummary from './components/ProjectSummary.jsx';
 import TimelineScrubber from './components/TimelineScrubber.jsx';
 import ProjectIO from './components/ProjectIO.jsx';
+import TopBar from './components/TopBar.jsx';
+import LeftSidebar from './components/LeftSidebar.jsx';
+import PropertiesPanel from './components/PropertiesPanel.jsx';
+import TransportBar from './components/TransportBar.jsx';
+import TimelineRuler from './components/TimelineRuler.jsx';
 import useUndoableState from './hooks/useUndoableState.js';
 
 let idCounter = 0;
@@ -529,43 +534,79 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [handleSplit, undo, isPlaying]);
 
-  return (
-    <div className="min-h-full p-6 md:p-8">
-      <header className="max-w-6xl mx-auto mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Codecut 9:16</h1>
-          <p className="text-sm text-slate-400">
-            Multi-clip vertical editor · split, reorder, transitions, export 1080×1920.
-          </p>
-        </div>
-        <div className="text-xs text-slate-500 font-mono">v0.10 · precision trim</div>
-      </header>
+  const hasFiles = files.length > 0;
 
-      {files.length === 0 ? (
-        <main className="max-w-5xl mx-auto">
-          <VideoUploader onFilesAdded={handleFilesAdded} compact={false} />
-          <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-slate-400">
-            <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800">
-              <div className="text-2xl mb-1">1</div>
-              <div className="font-semibold text-slate-200">Upload</div>
-              <p>Sube uno o varios videos (hasta 10, 500 MB c/u).</p>
-            </div>
-            <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800">
-              <div className="text-2xl mb-1">2</div>
-              <div className="font-semibold text-slate-200">Edit</div>
-              <p>Corta con <span className="font-mono text-slate-200">S</span>, reordena arrastrando, ajusta trim y transiciones.</p>
-            </div>
-            <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800">
-              <div className="text-2xl mb-1">3</div>
-              <div className="font-semibold text-slate-200">Export</div>
-              <p>FFmpeg compone todo a un MP4 vertical 1080×1920.</p>
+  const cumulativeStarts = useMemo(() => {
+    const starts = [];
+    let cum = 0;
+    for (let i = 0; i < clips.length; i++) {
+      starts.push(cum);
+      const dur = (clips[i].sourceEnd - clips[i].sourceStart) / (clips[i].speed || 1);
+      cum += dur;
+      if (i < clips.length - 1) {
+        const t = transitions[i];
+        if (t && t.type && t.type !== 'none') cum -= Number(t.durationSec) || 0;
+      }
+    }
+    return starts;
+  }, [clips, transitions]);
+
+  const currentGlobalTime = useMemo(() => {
+    const idx = clips.findIndex((c) => c.id === activeClipId);
+    if (idx < 0) return 0;
+    return cumulativeStarts[idx] + currentOffset;
+  }, [clips, activeClipId, cumulativeStarts, currentOffset]);
+
+  return (
+    <div className="h-full flex flex-col bg-editor-bg">
+      <TopBar
+        files={files}
+        clips={clips}
+        transitions={transitions}
+        meta={meta}
+        totalDuration={totalDuration}
+        onSave={handleSaveProject}
+        onLoad={handleLoadProject}
+      />
+
+      {!hasFiles ? (
+        <div className="flex-1 flex items-center justify-center p-8">
+          <div className="w-full max-w-lg flex flex-col gap-6">
+            <VideoUploader onFilesAdded={handleFilesAdded} compact={false} />
+            <div className="grid grid-cols-3 gap-3 text-sm text-neutral-400">
+              <div className="p-3 rounded-lg bg-editor-panel border border-editor-border">
+                <div className="text-xl mb-1">1</div>
+                <div className="font-semibold text-neutral-200 text-xs">Upload</div>
+                <p className="text-[11px] mt-1">Sube uno o varios videos (hasta 10, 500 MB c/u).</p>
+              </div>
+              <div className="p-3 rounded-lg bg-editor-panel border border-editor-border">
+                <div className="text-xl mb-1">2</div>
+                <div className="font-semibold text-neutral-200 text-xs">Edit</div>
+                <p className="text-[11px] mt-1">Corta con <span className="font-mono text-neutral-200">S</span>, reordena, ajusta trim y transiciones.</p>
+              </div>
+              <div className="p-3 rounded-lg bg-editor-panel border border-editor-border">
+                <div className="text-xl mb-1">3</div>
+                <div className="font-semibold text-neutral-200 text-xs">Export</div>
+                <p className="text-[11px] mt-1">FFmpeg compone todo a un MP4 vertical 1080x1920.</p>
+              </div>
             </div>
           </div>
-        </main>
+        </div>
       ) : (
-        <main className="max-w-6xl mx-auto flex flex-col gap-6">
-          <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-6">
-            <section>
+        <div className="flex-1 flex overflow-hidden">
+          <LeftSidebar
+            files={files}
+            onAddClip={handleAddClip}
+            onFilesAdded={handleFilesAdded}
+            templates={TEMPLATES}
+            onApplyTemplate={handleApplyTemplate}
+            hasClips={clips.length > 0}
+            onAddText={handleAddText}
+            activeClip={activeClip}
+          />
+
+          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+            <div className="flex-1 flex items-center justify-center bg-editor-bg overflow-hidden">
               <VideoPreview
                 ref={previewRef}
                 clip={activeClip}
@@ -582,124 +623,61 @@ export default function App() {
                 currentOffset={currentOffset}
                 files={files}
               />
-              <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
-                <button
-                  onClick={() => setIsPlaying((p) => !p)}
-                  className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-medium"
-                >
-                  {isPlaying ? '⏸ Pause' : '▶ Play'}
-                </button>
-                <button
-                  onClick={handleSplit}
-                  className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium"
-                  title="Split active clip at playhead (S)"
-                >
-                  ✂ Split
-                </button>
-                <button
-                  onClick={() => activeClip && handleDeleteClip(activeClip.id)}
-                  disabled={clips.length <= 1}
-                  className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  🗑 Delete clip
-                </button>
-                <button
-                  onClick={handleReset}
-                  className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-medium"
-                >
-                  Reset project
-                </button>
-              </div>
-            </section>
-
-            <section className="flex flex-col gap-4 min-w-0">
-              <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800">
-                <h2 className="text-sm font-semibold text-slate-200 mb-3">Media pool</h2>
-                <FilePool files={files} onAddClip={handleAddClip} onFilesAdded={handleFilesAdded} />
-              </div>
-
-              <CardMetadata
-                meta={meta}
-                onMetaChange={setMeta}
-                activeClip={activeClip}
-                selectedTextId={selectedTextId}
-                onSelectText={setSelectedTextId}
-                onAddText={handleAddText}
-                onUpdateText={handleUpdateText}
-                onDeleteText={handleDeleteText}
-                onSpeedChange={handleSpeedChange}
-                onAudioChange={handleAudioChange}
-                onPipChange={handlePipChange}
-                files={files}
-              />
-
-              <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800">
-                <h2 className="text-sm font-semibold text-slate-200 mb-3">Trim active clip</h2>
-                {activeClip && activeFile ? (
-                  <ClipTrim
-                    clip={activeClip}
-                    file={activeFile}
-                    currentOffset={currentOffset}
-                    onChange={handleTrimChange}
-                    onSeek={handleSeek}
-                  />
-                ) : (
-                  <p className="text-xs text-slate-500">Select a clip in the timeline.</p>
-                )}
-              </div>
-
-              <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800">
-                <h2 className="text-sm font-semibold text-slate-200 mb-3">Export</h2>
-                <ProjectSummary files={files} clips={clips} totalDuration={totalDuration} />
-                <div className="mt-3">
-                  <ExportButton files={files} clips={clips} transitions={transitions} meta={meta} />
-                </div>
-                <div className="mt-3">
-                  <ProjectIO onSave={handleSaveProject} onLoad={handleLoadProject} />
-                </div>
-              </div>
-            </section>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-slate-200">Timeline</h2>
-              <span className="text-xs text-slate-500">Drag clips to reorder · click seam for transitions</span>
             </div>
-            {clips.length > 0 && (
-              <div className="mb-3">
-                <TimelineScrubber
+
+            <TransportBar
+              isPlaying={isPlaying}
+              onPlayPause={() => setIsPlaying((p) => !p)}
+              onSplit={handleSplit}
+              onDelete={() => activeClip && handleDeleteClip(activeClip.id)}
+              onReset={handleReset}
+              currentOffset={currentOffset}
+              totalDuration={activeClipDuration}
+              clipsCount={clips.length}
+              canDelete={clips.length > 1}
+            />
+
+            <div className="h-48 flex flex-col bg-editor-panel border-t border-editor-border shrink-0">
+              <TimelineRuler
+                totalDuration={totalDuration}
+                onSeek={handleGlobalSeek}
+                currentGlobalTime={currentGlobalTime}
+                timelineZoom={timelineZoom}
+              />
+              <div className="flex-1 overflow-x-auto overflow-y-hidden px-2 py-1">
+                <ClipTrack
                   clips={clips}
-                  transitions={transitions}
                   activeClipId={activeClipId}
-                  totalDuration={totalDuration}
-                  onSeek={handleGlobalSeek}
+                  transitions={transitions}
+                  fileById={fileById}
+                  onSelect={handleSelectClip}
+                  onDelete={handleDeleteClip}
+                  onReorder={handleReorder}
+                  onTransitionChange={handleTransitionChange}
+                  timelineZoom={timelineZoom}
+                  onTimelineZoomChange={handleTimelineZoomChange}
                 />
               </div>
-            )}
-            <ClipTrack
-              clips={clips}
-              activeClipId={activeClipId}
-              transitions={transitions}
-              fileById={fileById}
-              onSelect={handleSelectClip}
-              onDelete={handleDeleteClip}
-              onReorder={handleReorder}
-              onTransitionChange={handleTransitionChange}
-              timelineZoom={timelineZoom}
-              onTimelineZoomChange={handleTimelineZoomChange}
-            />
+            </div>
           </div>
 
-        </main>
-      )}
-
-      {clips.length > 0 && (
-        <div className="max-w-6xl mx-auto mt-6">
-          <TemplatesPanel
-            templates={TEMPLATES}
-            onApply={handleApplyTemplate}
-            hasClips={clips.length > 0}
+          <PropertiesPanel
+            meta={meta}
+            onMetaChange={setMeta}
+            activeClip={activeClip}
+            activeFile={activeFile}
+            selectedTextId={selectedTextId}
+            onSelectText={setSelectedTextId}
+            onAddText={handleAddText}
+            onUpdateText={handleUpdateText}
+            onDeleteText={handleDeleteText}
+            onSpeedChange={handleSpeedChange}
+            onAudioChange={handleAudioChange}
+            onPipChange={handlePipChange}
+            onTrimChange={handleTrimChange}
+            onSeek={handleSeek}
+            files={files}
+            currentOffset={currentOffset}
           />
         </div>
       )}

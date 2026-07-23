@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export default function ExportButton({ files, clips, transitions, meta }) {
+export default function ExportButton({ files, clips, transitions, meta, compact }) {
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState(null);
   const [progress, setProgress] = useState(0);
@@ -135,6 +135,22 @@ export default function ExportButton({ files, clips, transitions, meta }) {
     done: 'Done ✓',
   };
 
+  if (compact) {
+    return (
+      <button
+        onClick={onExport}
+        disabled={disabled || status !== 'idle'}
+        className={[
+          'px-4 py-1.5 rounded-lg text-xs font-semibold transition-all',
+          'bg-accent hover:bg-accent-hover text-white',
+          'disabled:bg-editor-surface disabled:text-neutral-500 disabled:cursor-not-allowed',
+        ].join(' ')}
+      >
+        {status === 'processing' ? `${Math.round(progress * 100)}%` : labels[status] || labels.idle}
+      </button>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center gap-3">
       <button
@@ -142,8 +158,8 @@ export default function ExportButton({ files, clips, transitions, meta }) {
         disabled={disabled || status !== 'idle'}
         className={[
           'px-6 py-3 rounded-xl font-semibold transition-all',
-          'bg-indigo-500 hover:bg-indigo-400 text-white shadow-lg shadow-indigo-900/40',
-          'disabled:bg-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed disabled:shadow-none',
+          'bg-accent hover:bg-accent-hover text-white shadow-lg shadow-accent/20',
+          'disabled:bg-editor-surface disabled:text-neutral-500 disabled:cursor-not-allowed disabled:shadow-none',
         ].join(' ')}
       >
         {labels[status] || labels.idle}
@@ -151,13 +167,13 @@ export default function ExportButton({ files, clips, transitions, meta }) {
       
       {status === 'processing' && (
         <div className="w-full max-w-md">
-          <div className="relative h-2 bg-slate-700 rounded-full overflow-hidden">
+          <div className="relative h-2 bg-editor-border rounded-full overflow-hidden">
             <div
-              className="absolute left-0 top-0 h-full bg-gradient-to-r from-indigo-500 to-indigo-400 transition-all duration-200"
+              className="absolute left-0 top-0 h-full bg-gradient-to-r from-accent-dim to-accent transition-all duration-200"
               style={{ width: `${progress * 100}%` }}
             />
           </div>
-          <div className="flex justify-between mt-1 text-xs text-slate-400">
+          <div className="flex justify-between mt-1 text-xs text-neutral-400">
             <span>Processing video</span>
             <span>{Math.round(progress * 100)}%</span>
           </div>

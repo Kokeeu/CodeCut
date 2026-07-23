@@ -80,7 +80,7 @@ export default function TimelineScrubber({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
-        className="relative h-8 rounded-lg bg-slate-800 cursor-pointer select-none overflow-hidden touch-none"
+        className="relative h-8 rounded-lg bg-editor-surface cursor-pointer select-none overflow-hidden touch-none border border-editor-border"
       >
         {clips.map((clip, i) => {
           const start = cumulativeStarts[i];
@@ -92,23 +92,23 @@ export default function TimelineScrubber({
             <div
               key={clip.id}
               className={[
-                'absolute top-0 bottom-0 border-r border-slate-600',
-                isActive ? 'bg-indigo-500/20' : 'bg-slate-700/30',
+                'absolute top-0 bottom-0 border-r border-editor-border',
+                isActive ? 'bg-accent/15' : 'bg-editor-hover/30',
               ].join(' ')}
               style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
             >
-              <span className="absolute top-0.5 left-1 text-[8px] font-mono text-slate-400 truncate max-w-full">
+              <span className="absolute top-0.5 left-1 text-[8px] font-mono text-neutral-400 truncate max-w-full">
                 #{i + 1}
               </span>
             </div>
           );
         })}
         <div
-          className="absolute top-0 bottom-0 w-0.5 bg-green-400 pointer-events-none z-10"
+          className="absolute top-0 bottom-0 w-0.5 bg-accent pointer-events-none z-10"
           style={{ left: `${playheadPct}%` }}
         />
       </div>
-      <div className="flex justify-between text-[9px] font-mono text-slate-500 px-1">
+      <div className="flex justify-between text-[9px] font-mono text-neutral-500 px-1">
         <span>0:00.0</span>
         <span>{formatTime(globalOffset)}</span>
         <span>{formatTime(totalDuration)}</span>
