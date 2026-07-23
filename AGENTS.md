@@ -11,6 +11,11 @@ video-editor/
 ├── client/          # React SPA (Vite)
 │   └── src/
 │       ├── App.jsx              # Main state + layout
+│       ├── hooks/
+│       │   └── useUndoableState.js  # Undo/redo hook
+│       ├── lib/
+│       │   ├── speed.js             # Speed constants + atempo chain
+│       │   └── textAnimations.js    # Animation definitions (preview)
 │       └── components/
 │           ├── VideoPreview.jsx      # Editor preview (drag/resize texts)
 │           ├── CardTemplate.jsx      # Pure card renderer (4 layers)
@@ -23,11 +28,18 @@ video-editor/
 │           ├── FilePool.jsx          # Media pool cards
 │           ├── CardMetadata.jsx      # Per-clip text editor
 │           ├── ExportButton.jsx      # Sends to /api/trim
-│           └── ProjectSummary.jsx    # Stats display
+│           ├── ProjectSummary.jsx    # Stats display
+│           ├── SpeedPicker.jsx       # Speed selector (0.25x-3x)
+│           ├── AudioPanel.jsx        # Volume + fade controls
+│           ├── TimelineScrubber.jsx  # Global timeline scrubber
+│           └── ProjectIO.jsx         # Save/Load project JSON
 ├── server/
 │   ├── index.js                  # Express entry
 │   ├── routes/trim.js            # POST /api/trim endpoint
-│   ├── lib/ffmpegPipeline.js     # FFmpeg filter graph builder
+│   ├── lib/
+│   │   ├── ffmpegPipeline.js     # FFmpeg filter graph builder
+│   │   ├── speed.js              # Speed constants + atempo chain
+│   │   └── textAnimations.js     # Animation definitions (export)
 │   └── assets/fonts/             # Inter, Montserrat, Bebas Neue
 └── README.md
 ```
@@ -50,8 +62,10 @@ Every output is a 1080×1920 card with 4 layers:
   files: [{ id, file, url, name, duration, thumbnail }],
   clips: [{
     id, fileId, sourceStart, sourceEnd,
+    speed,  // 0.25, 0.5, 0.75, 1, 1.5, 2, 3
     transform: { x, y, scale },
-    texts: [{ id, text, x, y, size, font, color, align, startOffset, endOffset }]
+    audio: { volume, mute, fadeIn, fadeOut },
+    texts: [{ id, text, x, y, size, font, color, align, startOffset, endOffset, animation: { type, duration } }]
   }],
   transitions: [{ type, durationSec }],  // between clips
   meta: { blur, blurEnabled },
@@ -114,6 +128,13 @@ Backend smoke tests in `server/scripts/`:
 
 Run: `node server/scripts/smoke_all.js` (requires server running on :4000)
 
+## Keyboard Shortcuts
+
+- `Space` - Play/Pause
+- `S` - Split active clip at playhead
+- `Ctrl+Z` - Undo
+- `Ctrl+Y` or `Ctrl+Shift+Z` - Redo
+
 ## Common Tasks
 
 ### Add a new template
@@ -154,6 +175,17 @@ const MAIN_Y = 360;  // change this
 
 Use `textfile=` approach (already implemented). Write text to temp file, reference in drawtext.
 
+### Add a new text animation
+
+1. Add animation definition to `client/src/lib/textAnimations.js`:
+   - `getPreviewStyle(progress, tx, ty, text)` - Returns CSS style object for preview
+   - `getFfmpegX/Y/FontSize/Enable()` - Returns FFmpeg expression strings
+
+2. Add server-side version to `server/lib/textAnimations.js`:
+   - Only FFmpeg expression functions needed
+
+3. Animation types: `fade-in`, `slide-up`, `slide-left`, `typewriter`, `bounce`, `scale-in`, `karaoke`
+
 ## Conventions
 
 - **No comments** in code unless necessary
@@ -186,8 +218,7 @@ cd server && node scripts/smoke_all.js
 
 - Preview blur intensity differs slightly from export (CSS `blur()` vs FFmpeg `gblur`)
 - Text `align: 'center'` uses `(w-text_w)/2` in export, CSS `translateX(-50%)` in preview
-- No undo/redo (planned)
-- No project save/load (planned)
+- Typewriter and karaoke text animations are preview-only (not yet in FFmpeg export)
 
 ## Version History
 
@@ -197,9 +228,4 @@ cd server && node scripts/smoke_all.js
 - v0.4: Text overlays (structured fields)
 - v0.5: Free-form texts (drag/resize)
 - v0.6: Per-clip texts + time ranges
-- v0.7: CardTemplate + gallery (removed)
-- v0.8: Templates system
-- v0.9: Left-aligned layout
-- v0.10: Position refinements
-- v0.11: Size 67 for all texts
-- v0.12: Simplified (removed gallery, apply to all)
+- v0.7: Full editor (undo/redo, speed, audio, animations, save/load, scrubber)

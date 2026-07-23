@@ -8,6 +8,9 @@ import CardMetadata from './components/CardMetadata.jsx';
 import TemplatesPanel from './components/TemplatesPanel.jsx';
 import ExportButton from './components/ExportButton.jsx';
 import ProjectSummary from './components/ProjectSummary.jsx';
+import TimelineScrubber from './components/TimelineScrubber.jsx';
+import ProjectIO from './components/ProjectIO.jsx';
+import useUndoableState from './hooks/useUndoableState.js';
 
 let idCounter = 0;
 function nextId(prefix) {
@@ -17,7 +20,9 @@ function nextId(prefix) {
 
 const DEFAULT_TRANSITION = { type: 'none', durationSec: 0 };
 const DEFAULT_TRANSFORM = { x: 0, y: 0, scale: 1 };
+const DEFAULT_AUDIO = { volume: 1, mute: false, fadeIn: 0, fadeOut: 0 };
 const DEFAULT_META = { blur: 30, blurEnabled: true };
+const PROJECT_VERSION = '0.7';
 
 const TEMPLATES = [
   {
@@ -77,12 +82,15 @@ const TEMPLATES = [
 
 export default function App() {
   const [files, setFiles] = useState([]);
-  const [clips, setClips] = useState([]);
-  const [transitions, setTransitions] = useState([]);
+  const [clips, setClipsRaw, undo] = useUndoableState([]);
+  const [transitions, setTransitionsRaw] = useUndoableState([]);
+  const [meta, setMetaRaw] = useUndoableState(DEFAULT_META);
+  const setClips = setClipsRaw;
+  const setTransitions = setTransitionsRaw;
+  const setMeta = setMetaRaw;
   const [activeClipId, setActiveClipId] = useState(null);
   const [currentOffset, setCurrentOffset] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [meta, setMeta] = useState(DEFAULT_META);
   const [selectedTextId, setSelectedTextId] = useState(null);
   const previewRef = useRef(null);
 
@@ -104,7 +112,7 @@ export default function App() {
   }, [activeClip]);
 
   const totalDuration = useMemo(() => {
-    let total = clips.reduce((s, c) => s + (c.sourceEnd - c.sourceStart), 0);
+    let total = clips.reduce((s, c) => s + (c.sourceEnd - c.sourceStart) / (c.speed || 1), 0);
     transitions.forEach((t) => {
       if (t && t.type && t.type !== 'none') total -= Number(t.durationSec) || 0;
     });
@@ -121,11 +129,37 @@ export default function App() {
       thumbnail: m.thumbnail || null,
     }));
     if (newFiles.length === 0) return;
-    setFiles((prev) => [...prev, ...newFiles].slice(0, 10));
+    
+    setFiles((prev) => {
+      const pendingFiles = prev.filter((f) => f._pending);
+      const regularFiles = prev.filter((f) => !f._pending);
+      
+      const updatedPending = pendingFiles.map((pf) => {
+        const match = newFiles.find((nf) => nf.name === pf.name);
+        if (match) {
+          return { ...match, id: pf.id };
+        }
+        return pf;
+      });
+      
+      const unmatchedNew = newFiles.filter((nf) => !pendingFiles.some((pf) => pf.name === nf.name));
+      
+      return [...regularFiles, ...updatedPending, ...unmatchedNew].slice(0, 10);
+    });
+    
     if (clips.length === 0) {
       const first = newFiles.find((f) => f.duration > 0);
       if (first) {
-        const clip = { id: nextId('clip'), fileId: first.id, sourceStart: 0, sourceEnd: first.duration, transform: { ...DEFAULT_TRANSFORM }, texts: [] };
+        const clip = {
+          id: nextId('clip'),
+          fileId: first.id,
+          sourceStart: 0,
+          sourceEnd: first.duration,
+          speed: 1,
+          transform: { ...DEFAULT_TRANSFORM },
+          audio: { ...DEFAULT_AUDIO },
+          texts: [],
+        };
         setClips([clip]);
         setActiveClipId(clip.id);
       }
@@ -135,7 +169,16 @@ export default function App() {
   const handleAddClip = useCallback((fileId) => {
     const f = fileById[fileId];
     if (!f || !f.duration) return;
-    const clip = { id: nextId('clip'), fileId, sourceStart: 0, sourceEnd: f.duration, transform: { ...DEFAULT_TRANSFORM }, texts: [] };
+    const clip = {
+      id: nextId('clip'),
+      fileId,
+      sourceStart: 0,
+      sourceEnd: f.duration,
+      speed: 1,
+      transform: { ...DEFAULT_TRANSFORM },
+      audio: { ...DEFAULT_AUDIO },
+      texts: [],
+    };
     setClips((prev) => [...prev, clip]);
     setTransitions((prev) => [...prev, { ...DEFAULT_TRANSITION }]);
     setActiveClipId(clip.id);
@@ -175,6 +218,18 @@ export default function App() {
     );
   }, [activeClipId]);
 
+  const handleSpeedChange = useCallback((speed) => {
+    setClips((prev) =>
+      prev.map((c) => (c.id === activeClipId ? { ...c, speed } : c))
+    );
+  }, [activeClipId]);
+
+  const handleAudioChange = useCallback((audio) => {
+    setClips((prev) =>
+      prev.map((c) => (c.id === activeClipId ? { ...c, audio } : c))
+    );
+  }, [activeClipId]);
+
   const handleAddText = useCallback(() => {
     if (!activeClipId) return;
     const id = nextId('text');
@@ -184,6 +239,7 @@ export default function App() {
       font: 'inter', color: '#ffffff',
       startOffset: 0,
       endOffset: clipDur,
+      animation: null,
     };
     setClips((prev) =>
       prev.map((c) =>
@@ -229,7 +285,9 @@ export default function App() {
       fileId: activeClip.fileId,
       sourceStart: cut,
       sourceEnd: activeClip.sourceEnd,
+      speed: activeClip.speed || 1,
       transform: { ...(activeClip.transform || DEFAULT_TRANSFORM) },
+      audio: { ...(activeClip.audio || DEFAULT_AUDIO) },
       texts: (activeClip.texts || []).map((t) => ({ ...t, id: t.id, endOffset: t.endOffset ? t.endOffset : (activeClip.sourceEnd - cut) })),
     };
     const next = [...clips];
@@ -276,6 +334,7 @@ export default function App() {
             align: t.align || 'left',
             startOffset: 0,
             endOffset: dur,
+            animation: null,
           })),
         };
       })
@@ -287,6 +346,28 @@ export default function App() {
     previewRef.current?.seekTo(offsetWithinClip);
     setCurrentOffset(offsetWithinClip);
   }, []);
+
+  const handleGlobalSeek = useCallback((globalTime) => {
+    let cum = 0;
+    for (let i = 0; i < clips.length; i++) {
+      const clip = clips[i];
+      const clipDur = (clip.sourceEnd - clip.sourceStart) / (clip.speed || 1);
+      if (globalTime <= cum + clipDur || i === clips.length - 1) {
+        const offsetInClip = Math.max(0, Math.min(clipDur, globalTime - cum));
+        setActiveClipId(clip.id);
+        setCurrentOffset(offsetInClip);
+        previewRef.current?.seekTo(offsetInClip);
+        return;
+      }
+      cum += clipDur;
+      if (i < clips.length - 1) {
+        const t = transitions[i];
+        if (t && t.type && t.type !== 'none') {
+          cum -= Number(t.durationSec) || 0;
+        }
+      }
+    }
+  }, [clips, transitions]);
 
   const handleClipEnded = useCallback(() => {
     const idx = clips.findIndex((c) => c.id === activeClipId);
@@ -316,10 +397,106 @@ export default function App() {
     setSelectedTextId(null);
   }, [files]);
 
+  const handleSaveProject = useCallback(() => {
+    const fileNames = {};
+    files.forEach((f) => { fileNames[f.id] = f.name; });
+    return {
+      version: PROJECT_VERSION,
+      meta,
+      clips: clips.map((c) => ({
+        fileName: fileNames[c.fileId] || '',
+        sourceStart: c.sourceStart,
+        sourceEnd: c.sourceEnd,
+        speed: c.speed || 1,
+        transform: c.transform || { ...DEFAULT_TRANSFORM },
+        audio: c.audio || { ...DEFAULT_AUDIO },
+        texts: (c.texts || []).map((t) => ({
+          text: t.text,
+          x: t.x,
+          y: t.y,
+          size: t.size,
+          font: t.font,
+          color: t.color,
+          align: t.align,
+          startOffset: t.startOffset,
+          endOffset: t.endOffset,
+          animation: t.animation || null,
+        })),
+      })),
+      transitions: transitions.map((t) => ({ type: t.type, durationSec: t.durationSec })),
+    };
+  }, [files, clips, transitions, meta]);
+
+  const handleLoadProject = useCallback((data) => {
+    files.forEach((f) => URL.revokeObjectURL(f.url));
+    setFiles([]);
+    setClips([]);
+    setTransitions([]);
+    setActiveClipId(null);
+    setCurrentOffset(0);
+    setIsPlaying(false);
+    setSelectedTextId(null);
+
+    const newFiles = [];
+    const fileIdMap = {};
+    const newClips = (data.clips || []).map((c) => {
+      let fileId = fileIdMap[c.fileName];
+      if (!fileId) {
+        fileId = nextId('file');
+        fileIdMap[c.fileName] = fileId;
+        newFiles.push({ id: fileId, name: c.fileName, _pending: true });
+      }
+      return {
+        id: nextId('clip'),
+        fileId,
+        sourceStart: c.sourceStart,
+        sourceEnd: c.sourceEnd,
+        speed: c.speed || 1,
+        transform: c.transform || { ...DEFAULT_TRANSFORM },
+        audio: c.audio || { ...DEFAULT_AUDIO },
+        texts: (c.texts || []).map((t) => ({
+          id: nextId('text'),
+          text: t.text,
+          x: t.x,
+          y: t.y,
+          size: t.size,
+          font: t.font || 'inter',
+          color: t.color || '#ffffff',
+          align: t.align || 'left',
+          startOffset: t.startOffset,
+          endOffset: t.endOffset,
+          animation: t.animation || null,
+        })),
+      };
+    });
+    const newTransitions = (data.transitions || []).map((t) => ({
+      type: t.type || 'none',
+      durationSec: t.durationSec || 0,
+    }));
+
+    setFiles(newFiles.map((f) => ({
+      ...f,
+      file: null,
+      url: null,
+      duration: 0,
+      thumbnail: null,
+    })));
+    setClips(newClips);
+    setTransitions(newTransitions);
+    setMeta(data.meta || { ...DEFAULT_META });
+    if (newClips.length > 0) setActiveClipId(newClips[0].id);
+  }, [files]);
+
   useEffect(() => {
     const onKey = (e) => {
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA')) return;
-      if (e.key === 's' || e.key === 'S') {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo.undo();
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        undo.redo();
+      } else if (e.key === 's' || e.key === 'S') {
         e.preventDefault();
         handleSplit();
       } else if (e.key === ' ') {
@@ -329,7 +506,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleSplit]);
+  }, [handleSplit, undo]);
 
   return (
     <div className="min-h-full p-6 md:p-8">
@@ -340,7 +517,7 @@ export default function App() {
             Multi-clip vertical editor · split, reorder, transitions, export 1080×1920.
           </p>
         </div>
-        <div className="text-xs text-slate-500 font-mono">v0.6 · per-clip texts</div>
+        <div className="text-xs text-slate-500 font-mono">v0.7 · full editor</div>
       </header>
 
       {files.length === 0 ? (
@@ -428,6 +605,8 @@ export default function App() {
                 onAddText={handleAddText}
                 onUpdateText={handleUpdateText}
                 onDeleteText={handleDeleteText}
+                onSpeedChange={handleSpeedChange}
+                onAudioChange={handleAudioChange}
               />
 
               <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800">
@@ -451,6 +630,9 @@ export default function App() {
                 <div className="mt-3">
                   <ExportButton files={files} clips={clips} transitions={transitions} meta={meta} />
                 </div>
+                <div className="mt-3">
+                  <ProjectIO onSave={handleSaveProject} onLoad={handleLoadProject} />
+                </div>
               </div>
             </section>
           </div>
@@ -460,6 +642,17 @@ export default function App() {
               <h2 className="text-sm font-semibold text-slate-200">Timeline</h2>
               <span className="text-xs text-slate-500">Drag clips to reorder · click seam for transitions</span>
             </div>
+            {clips.length > 0 && (
+              <div className="mb-3">
+                <TimelineScrubber
+                  clips={clips}
+                  transitions={transitions}
+                  activeClipId={activeClipId}
+                  totalDuration={totalDuration}
+                  onSeek={handleGlobalSeek}
+                />
+              </div>
+            )}
             <ClipTrack
               clips={clips}
               activeClipId={activeClipId}

@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import { FONT_CSS } from './CardMetadata.jsx';
+import { getPreviewAnimationStyle, getAnimation } from '../lib/textAnimations.js';
 
 function formatTime(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
@@ -71,6 +72,15 @@ const VideoPreview = forwardRef(function VideoPreview(
       return () => v.removeEventListener('loadedmetadata', applySeek);
     }
   }, [clip && clip.id, clip && clip.sourceStart]);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || !clip) return;
+    const rate = clip.speed || 1;
+    if (v.playbackRate !== rate) {
+      v.playbackRate = rate;
+    }
+  }, [clip && clip.speed]);
 
   useEffect(() => {
     const v = videoRef.current;
@@ -290,6 +300,27 @@ const VideoPreview = forwardRef(function VideoPreview(
             || (currentOffset >= tx.startOffset && currentOffset <= tx.endOffset);
           const selected = tx.id === selectedTextId;
           if (!isVisible && !selected) return null;
+
+          let animStyle = {};
+          let displayText = tx.text;
+
+          if (tx.animation?.type && isVisible) {
+            const animDef = getAnimation(tx.animation.type);
+            const elapsed = currentOffset - tx.startOffset;
+            const animDur = tx.animation.duration || 0.5;
+            const progress = Math.min(1, elapsed / animDur);
+
+            if (animDef.isTypewriter) {
+              const len = (tx.text || '').length;
+              const visibleChars = Math.floor(progress * len);
+              displayText = (tx.text || '').slice(0, visibleChars);
+            } else if (animDef.isKaraoke) {
+              animStyle = { opacity: 1 };
+            } else if (animDef.getPreviewStyle) {
+              animStyle = animDef.getPreviewStyle(progress, tx.x, tx.y, tx.text) || {};
+            }
+          }
+
           return (
             <div
               key={tx.id}
@@ -314,9 +345,10 @@ const VideoPreview = forwardRef(function VideoPreview(
                 outlineOffset: '4px',
                 zIndex: selected ? 30 : 20,
                 opacity: !isVisible && selected ? 0.3 : 1,
+                ...animStyle,
               }}
             >
-              {tx.text}
+              {displayText}
             </div>
           );
         })}

@@ -64,7 +64,7 @@ router.post('/', upload.array('videos', MAX_FILES), async (req, res) => {
 
   const normalizedClips = clips.map((c) => ({
     ...c,
-    duration: c.sourceEnd - c.sourceStart,
+    duration: (c.sourceEnd - c.sourceStart) / (c.speed || 1),
   }));
 
   const inputPaths = normalizedClips.map((c) => files[c.fileIndex].path);

@@ -45,6 +45,11 @@ export default function ClipBlock({ clip, index, width, file, isActive, canDelet
       <div className="absolute bottom-1 left-1.5 text-[10px] font-mono text-slate-100 bg-black/50 px-1 rounded">
         {formatTime(duration)}
       </div>
+      {clip.speed && clip.speed !== 1 && (
+        <div className="absolute bottom-1 right-1 text-[9px] font-mono text-yellow-300 bg-black/60 px-1 rounded">
+          {clip.speed}x
+        </div>
+      )}
       {canDelete && (
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(); }}

@@ -1,3 +1,6 @@
+const { getAtempoChain } = require('./speed.js');
+const { getAnimation } = require('./textAnimations.js');
+
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegStatic = require('ffmpeg-static');
 const path = require('path');
@@ -118,12 +121,42 @@ function buildFilterGraph(clips, transitions, meta, textFiles) {
     const c = clips[i];
     const s = Number(c.sourceStart).toFixed(3);
     const e = Number(c.sourceEnd).toFixed(3);
-    filters.push(
-      `[${i}:v]trim=start=${s}:end=${e},setpts=PTS-STARTPTS,fps=${OUTPUT_FPS},format=yuv420p[s${i}raw]`
-    );
-    filters.push(
-      `[${i}:a]atrim=start=${s}:end=${e},asetpts=PTS-STARTPTS,aresample=${AUDIO_RATE}[a${i}]`
-    );
+    const speed = Number(c.speed) || 1;
+
+    let videoFilter = `[${i}:v]trim=start=${s}:end=${e},setpts=PTS-STARTPTS`;
+    if (speed !== 1) {
+      videoFilter += `,setpts=PTS/${speed}`;
+    }
+    videoFilter += `,fps=${OUTPUT_FPS},format=yuv420p[s${i}raw]`;
+    filters.push(videoFilter);
+
+    const audio = c.audio || { volume: 1, mute: false, fadeIn: 0, fadeOut: 0 };
+    const clipDur = (Number(c.sourceEnd) - Number(c.sourceStart)) / speed;
+    
+    let audioFilter = `[${i}:a]atrim=start=${s}:end=${e},asetpts=PTS-STARTPTS,aresample=${AUDIO_RATE}`;
+    if (speed !== 1) {
+      const atempoChain = getAtempoChain(speed);
+      if (atempoChain.length > 0) {
+        audioFilter += `,${atempoChain.join(',')}`;
+      }
+    }
+    if (audio.mute) {
+      audioFilter += `,volume=0`;
+    } else {
+      if (audio.volume !== 1) {
+        audioFilter += `,volume=${audio.volume}`;
+      }
+      if (audio.fadeIn > 0) {
+        audioFilter += `,afade=t=in:st=0:d=${audio.fadeIn}`;
+      }
+      if (audio.fadeOut > 0) {
+        const fadeStart = Math.max(0, clipDur - audio.fadeOut);
+        audioFilter += `,afade=t=out:st=${fadeStart.toFixed(3)}:d=${audio.fadeOut}`;
+      }
+    }
+    audioFilter += `[a${i}]`;
+    filters.push(audioFilter);
+
     const tr = normalizeTransform(c.transform);
     const mainW = Math.max(2, Math.round(MAIN_MAX_W * tr.scale));
     const xExpr = `(W-w)/2${fmtSigned(tr.x)}`;
@@ -138,13 +171,15 @@ function buildFilterGraph(clips, transitions, meta, textFiles) {
     } else {
       filters.push(`[s${i}raw]scale=${mainW}:-2:flags=lanczos,setsar=1[m${i}f]`);
       filters.push(
-        `color=c=black:s=${OUTPUT_W}x${OUTPUT_H}:r=${OUTPUT_FPS}:d=${(c.sourceEnd - c.sourceStart).toFixed(3)}[bg${i}]`
+        `color=c=black:s=${OUTPUT_W}x${OUTPUT_H}:r=${OUTPUT_FPS}:d=${clipDur.toFixed(3)}[bg${i}]`
       );
     }
     filters.push(`[bg${i}][m${i}f]overlay=x=${xExpr}:y=${yExpr}[c${i}]`);
   }
 
   const composedStart = [];
+  const clipDurations = clips.map((c) => (Number(c.sourceEnd) - Number(c.sourceStart)) / (Number(c.speed) || 1));
+
   if (clips.length === 1) {
     composedStart.push(0);
     filters.push(`[c0]null[vc]`);
@@ -162,7 +197,7 @@ function buildFilterGraph(clips, transitions, meta, textFiles) {
       const isLast = i === clips.length - 2;
       const vLabel = isLast ? 'vc' : `vc${i}`;
       const aLabel = isLast ? 'ac' : `ac${i}`;
-      const maxDur = Math.max(0, Math.min(clips[i].duration, clips[i + 1].duration) - 0.02);
+      const maxDur = Math.max(0, Math.min(clipDurations[i], clipDurations[i + 1]) - 0.02);
       const reqDur = t && t.type && t.type !== 'none' ? Number(t.durationSec) || 0 : 0;
       const effDur = Math.min(reqDur, maxDur);
       const hasTransition = t && t.type && t.type !== 'none' && effDur > 0;
@@ -173,7 +208,7 @@ function buildFilterGraph(clips, transitions, meta, textFiles) {
         );
       } else {
         const dur = effDur.toFixed(3);
-        const offset = Math.max(0, cumDuration + clips[i].duration - effDur).toFixed(3);
+        const offset = Math.max(0, cumDuration + clipDurations[i] - effDur).toFixed(3);
         filters.push(
           `[${curV}][${nextV}]xfade=transition=${t.type}:duration=${dur}:offset=${offset}[${vLabel}]`
         );
@@ -184,7 +219,7 @@ function buildFilterGraph(clips, transitions, meta, textFiles) {
 
       curV = vLabel;
       curA = aLabel;
-      cumDuration += clips[i].duration;
+      cumDuration += clipDurations[i];
       if (hasTransition) cumDuration -= effDur;
       composedStart.push(cumDuration);
     }
@@ -193,6 +228,7 @@ function buildFilterGraph(clips, transitions, meta, textFiles) {
   let prevLabel = 'vc';
   clips.forEach((clip, ci) => {
     const clipStart = composedStart[ci];
+    const speed = Number(clip.speed) || 1;
     let ti = 0;
     (clip.texts || []).forEach((t) => {
       const content = t && t.text != null ? String(t.text) : '';
@@ -207,14 +243,43 @@ function buildFilterGraph(clips, transitions, meta, textFiles) {
       const fcolor = colorToHex(t.color);
       const ffile = escapeFilterPath(resolveFont(t.font));
       const out = `vt${ti}`;
-      const startOff = Number(t.startOffset) || 0;
-      const endOff = Number(t.endOffset) || (clip.sourceEnd - clip.sourceStart);
+      const startOff = (Number(t.startOffset) || 0) / speed;
+      const endOff = (Number(t.endOffset) || (clip.sourceEnd - clip.sourceStart)) / speed;
       const enableStart = (clipStart + startOff).toFixed(3);
       const enableEnd = (clipStart + endOff).toFixed(3);
       const align = t.align || 'left';
-      const xExpr = align === 'center' ? '(w-text_w)/2' : String(tx);
+
+      let xExpr = align === 'center' ? '(w-text_w)/2' : String(tx);
+      let yExpr = String(ty);
+      let sizeExpr = String(size);
+      let alphaExpr = '1';
+
+      if (t.animation && t.animation.type) {
+        const animDur = Number(t.animation.duration) || 0.5;
+        const animDef = getAnimation(t.animation.type);
+        const sExpr = enableStart;
+
+        if (animDef.getFfmpegY) {
+          yExpr = animDef.getFfmpegY(ty, animDur);
+        }
+        if (animDef.getFfmpegX) {
+          xExpr = animDef.getFfmpegX(tx, animDur);
+        }
+        if (animDef.getFfmpegFontSize) {
+          sizeExpr = animDef.getFfmpegFontSize(size, animDur);
+        }
+        if (animDef.getFfmpegEnable) {
+          alphaExpr = animDef.getFfmpegEnable(animDur);
+        }
+      }
+
+      const enableExpr = `between(t,${enableStart},${enableEnd})`;
+      const fullEnable = alphaExpr !== '1'
+        ? `if(${enableExpr},${alphaExpr},0)`
+        : enableExpr;
+
       filters.push(
-        `[${prevLabel}]drawtext=textfile='${escapeFilterPath(fp)}':x=${xExpr}:y=${ty}:fontsize=${size}:fontcolor=${fcolor}:fontfile='${ffile}':text_align=${align}:shadowcolor=black@0.75:shadowx=3:shadowy=3:enable='between(t,${enableStart},${enableEnd})'[${out}]`
+        `[${prevLabel}]drawtext=textfile='${escapeFilterPath(fp)}':x=${xExpr}:y=${yExpr}:fontsize=${sizeExpr}:fontcolor=${fcolor}:fontfile='${ffile}':text_align=${align}:shadowcolor=black@0.75:shadowx=3:shadowy=3:alpha='${fullEnable}'[${out}]`
       );
       prevLabel = out;
     });

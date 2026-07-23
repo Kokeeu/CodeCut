@@ -1,3 +1,7 @@
+import SpeedPicker from './SpeedPicker.jsx';
+import AudioPanel from './AudioPanel.jsx';
+import { getAnimationTypes } from '../lib/textAnimations.js';
+
 export const FONT_OPTIONS = [
   { value: 'inter', label: 'Inter' },
   { value: 'montserrat', label: 'Montserrat' },
@@ -74,10 +78,13 @@ export default function CardMetadata({
   onAddText,
   onUpdateText,
   onDeleteText,
+  onSpeedChange,
+  onAudioChange,
 }) {
   const texts = activeClip?.texts || [];
   const clipDuration = activeClip ? Math.max(0, activeClip.sourceEnd - activeClip.sourceStart) : 0;
   const setBlur = (k, v) => onMetaChange({ ...meta, [k]: v });
+  const animationTypes = getAnimationTypes();
 
   return (
     <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800">
@@ -109,6 +116,26 @@ export default function CardMetadata({
           </div>
         )}
       </div>
+
+      {activeClip && (
+        <div className="mb-3 p-2 rounded-lg bg-slate-800/50 border border-slate-700">
+          <label className="block text-[10px] text-slate-400 mb-1.5">Speed</label>
+          <SpeedPicker
+            speed={activeClip.speed || 1}
+            onChange={onSpeedChange}
+          />
+        </div>
+      )}
+
+      {activeClip && (
+        <div className="mb-3 p-2 rounded-lg bg-slate-800/50 border border-slate-700">
+          <label className="block text-[10px] text-slate-400 mb-1.5">Audio</label>
+          <AudioPanel
+            audio={activeClip.audio || { volume: 1, mute: false, fadeIn: 0, fadeOut: 0 }}
+            onChange={onAudioChange}
+          />
+        </div>
+      )}
 
       {!activeClip ? (
         <p className="text-[11px] text-slate-500 text-center py-4">
@@ -208,6 +235,41 @@ export default function CardMetadata({
                       valueEnd={endOff}
                       onChange={(s, e) => onUpdateText(t.id, { startOffset: s, endOffset: e })}
                     />
+                  </div>
+                  <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
+                    <label className="block text-[9px] text-slate-500 mb-0.5">Animation</label>
+                    <div className="flex items-center gap-1.5">
+                      <select
+                        value={t.animation?.type || ''}
+                        onChange={(e) => onUpdateText(t.id, {
+                          animation: e.target.value ? { type: e.target.value, duration: t.animation?.duration || 0.5 } : null,
+                        })}
+                        className="flex-1 px-1.5 py-1 rounded-md bg-slate-900 border border-slate-700 text-[10px] text-slate-200 focus:border-indigo-400 focus:outline-none"
+                      >
+                        <option value="">None</option>
+                        {animationTypes.map((a) => (
+                          <option key={a.value} value={a.value}>{a.label}</option>
+                        ))}
+                      </select>
+                      {t.animation?.type && (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="range"
+                            min="0.1"
+                            max="2"
+                            step="0.1"
+                            value={t.animation.duration || 0.5}
+                            onChange={(e) => onUpdateText(t.id, {
+                              animation: { ...t.animation, duration: Number(e.target.value) },
+                            })}
+                            className="w-16 accent-indigo-500 h-1"
+                          />
+                          <span className="text-[9px] font-mono text-slate-400 w-7">
+                            {(t.animation.duration || 0.5).toFixed(1)}s
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               );

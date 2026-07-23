@@ -8,6 +8,13 @@ export default function ExportButton({ files, clips, transitions, meta }) {
 
   const onExport = async () => {
     if (disabled) return;
+    
+    const missingFiles = files.filter((f) => !f.file);
+    if (missingFiles.length > 0) {
+      setError('Some video files are missing. Please re-upload them after loading a project.');
+      return;
+    }
+    
     setStatus('uploading');
     setError(null);
 
@@ -24,9 +31,14 @@ export default function ExportButton({ files, clips, transitions, meta }) {
         fileIndex: fileIndexById[c.fileId],
         sourceStart: c.sourceStart,
         sourceEnd: c.sourceEnd,
-        duration: c.sourceEnd - c.sourceStart,
+        speed: c.speed || 1,
+        duration: (c.sourceEnd - c.sourceStart) / (c.speed || 1),
         transform: c.transform || { x: 0, y: 0, scale: 1 },
-        texts: c.texts || [],
+        audio: c.audio || { volume: 1, mute: false, fadeIn: 0, fadeOut: 0 },
+        texts: (c.texts || []).map((t) => ({
+          ...t,
+          animation: t.animation || null,
+        })),
       }));
 
       const transitionsMap = {};
