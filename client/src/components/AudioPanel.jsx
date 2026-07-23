@@ -23,7 +23,7 @@ export default function AudioPanel({ audio, onChange }) {
           <input
             type="range"
             min="0"
-            max="2"
+            max="1"
             step="0.05"
             value={vol}
             onChange={(e) => set('volume', Number(e.target.value))}

@@ -48,7 +48,7 @@ export default function ClipTrack({
     );
   }
 
-  const effectivePxPerSec = PX_PER_SEC * timelineZoom;
+  const effectivePxPerSec = PX_PER_SEC * Math.max(0.1, Math.min(20, timelineZoom || 1));
 
   return (
     <div>

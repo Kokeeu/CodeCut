@@ -38,7 +38,8 @@ export default function TransitionPicker({ value, maxDuration, onChange }) {
   };
 
   const setDuration = (d) => {
-    onChange({ type: value.type, durationSec: Math.min(d, maxDuration) });
+    const safeDuration = Math.max(0.1, Math.min(maxDuration, d));
+    onChange({ type: value.type, durationSec: safeDuration });
   };
 
   return (

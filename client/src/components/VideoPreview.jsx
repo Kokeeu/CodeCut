@@ -88,10 +88,20 @@ const VideoPreview = forwardRef(function VideoPreview(
     const v = videoRef.current;
     if (!v || !clip) return;
     const rate = clip.speed || 1;
-    if (v.playbackRate !== rate) {
-      v.playbackRate = rate;
+    const safeRate = Math.max(0.0625, Math.min(16, rate));
+    if (v.playbackRate !== safeRate) {
+      v.playbackRate = safeRate;
     }
-  }, [clip && clip.speed]);
+  }, [clip?.speed]);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || !clip) return;
+    const audio = clip.audio || { volume: 1, mute: false };
+    v.muted = audio.mute || false;
+    const volume = Math.max(0, Math.min(1, audio.volume || 1));
+    v.volume = audio.mute ? 0 : volume;
+  }, [clip?.audio?.volume, clip?.audio?.mute]);
 
   useEffect(() => {
     const v = videoRef.current;
@@ -293,7 +303,7 @@ const VideoPreview = forwardRef(function VideoPreview(
             className="pointer-events-none"
             style={{
               position: 'absolute',
-              width: `${EXPORT_W * t.scale * DISPLAY_SCALE}px`,
+              width: `${EXPORT_W * Math.max(0.1, Math.min(10, t.scale || 1)) * DISPLAY_SCALE}px`,
               maxWidth: 'none',
               left: '50%',
               top: `${MAIN_Y * DISPLAY_SCALE}px`,
@@ -345,7 +355,7 @@ const VideoPreview = forwardRef(function VideoPreview(
                 height: `${pipHeight}px`,
                 left: `${x}px`,
                 top: `${y}px`,
-                opacity: clip.pip.opacity ?? 1,
+                opacity: Math.max(0, Math.min(1, clip.pip.opacity ?? 1)),
                 border: clip.pip.border ? `${(clip.pip.borderWidth || 4) * DISPLAY_SCALE}px solid white` : 'none',
                 borderRadius: `${(clip.pip.borderRadius || 8) * DISPLAY_SCALE}px`,
                 objectFit: 'cover',
@@ -366,7 +376,7 @@ const VideoPreview = forwardRef(function VideoPreview(
           if (tx.animation?.type && isVisible) {
             const animDef = getAnimation(tx.animation.type);
             const elapsed = currentOffset - tx.startOffset;
-            const animDur = tx.animation.duration || 0.5;
+            const animDur = Math.max(0.1, tx.animation.duration || 0.5);
             const progress = Math.min(1, elapsed / animDur);
 
             if (animDef.isTypewriter) {
@@ -393,7 +403,7 @@ const VideoPreview = forwardRef(function VideoPreview(
                 top: `${(tx.y || 0) * DISPLAY_SCALE}px`,
                 color: tx.color || '#ffffff',
                 fontFamily: FONT_CSS[tx.font] || FONT_CSS.inter,
-                fontSize: `${(tx.size || 60) * DISPLAY_SCALE}px`,
+                fontSize: `${Math.max(12, Math.min(400, tx.size || 60)) * DISPLAY_SCALE}px`,
                 fontWeight: 700,
                 lineHeight: 1.2,
                 textShadow: '0 2px 8px rgba(0,0,0,0.7)',

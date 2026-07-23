@@ -144,14 +144,17 @@ function buildFilterGraph(clips, transitions, meta, textFiles) {
       audioFilter += `,volume=0`;
     } else {
       if (audio.volume !== 1) {
-        audioFilter += `,volume=${audio.volume}`;
+        const safeVolume = Math.max(0, Math.min(1, audio.volume));
+        audioFilter += `,volume=${safeVolume}`;
       }
       if (audio.fadeIn > 0) {
-        audioFilter += `,afade=t=in:st=0:d=${audio.fadeIn}`;
+        const safeFadeIn = Math.min(audio.fadeIn, clipDur / 2);
+        audioFilter += `,afade=t=in:st=0:d=${safeFadeIn.toFixed(3)}`;
       }
       if (audio.fadeOut > 0) {
-        const fadeStart = Math.max(0, clipDur - audio.fadeOut);
-        audioFilter += `,afade=t=out:st=${fadeStart.toFixed(3)}:d=${audio.fadeOut}`;
+        const safeFadeOut = Math.min(audio.fadeOut, clipDur / 2);
+        const fadeStart = Math.max(0, clipDur - safeFadeOut);
+        audioFilter += `,afade=t=out:st=${fadeStart.toFixed(3)}:d=${safeFadeOut.toFixed(3)}`;
       }
     }
     audioFilter += `[a${i}]`;
