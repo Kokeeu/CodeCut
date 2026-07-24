@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const PLATFORM_PRESETS = {
   tiktok: { label: 'TikTok', resolution: '1080', fps: 30, icon: '📱' },
@@ -8,8 +8,8 @@ const PLATFORM_PRESETS = {
 };
 
 const RESOLUTIONS = [
-  { value: '720', label: '720p (1280x720)' },
-  { value: '1080', label: '1080p (1920x1080)' },
+  { value: '720', label: '720p (720x1280)' },
+  { value: '1080', label: '1080p (1080x1920)' },
 ];
 
 const FPS_OPTIONS = [
@@ -29,9 +29,22 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
   const [error, setError] = useState(null);
   const [progress, setProgress] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
+  const containerRef = useRef(null);
 
   const disabled = clips.length === 0 || files.length === 0;
   const config = exportConfig || { resolution: '1080', fps: 30, quality: 'high', platform: 'tiktok' };
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setShowSettings(false);
+      }
+    };
+    if (showSettings) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showSettings]);
 
   const updateConfig = (partial) => {
     const next = { ...config, ...partial };
@@ -179,7 +192,7 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
 
   if (compact) {
     return (
-      <div className="relative">
+      <div ref={containerRef} className="relative">
         <button
           onClick={() => setShowSettings((s) => !s)}
           disabled={disabled || status !== 'idle'}
@@ -282,7 +295,7 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
   }
 
   return (
-    <div className="flex flex-col items-center gap-3">
+    <div ref={containerRef} className="flex flex-col items-center gap-3">
       <button
         onClick={() => setShowSettings((s) => !s)}
         disabled={disabled || status !== 'idle'}

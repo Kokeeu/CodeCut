@@ -92,14 +92,16 @@ export default function ClipBlock({ clip, index, width, file, isActive, canDelet
           ×
         </button>
       )}
-      <button
-        onClick={(e) => { e.stopPropagation(); onDuplicate?.(); }}
-        onPointerDown={(e) => e.stopPropagation()}
-        className="absolute top-1 right-7 w-5 h-5 rounded bg-black/60 hover:bg-accent text-[11px] leading-none text-slate-200"
-        title="Duplicate clip"
-      >
-        ⧉
-      </button>
+      {isActive && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onDuplicate?.(); }}
+          onPointerDown={(e) => e.stopPropagation()}
+          className="absolute top-1 right-7 w-5 h-5 rounded bg-black/60 hover:bg-accent text-[11px] leading-none text-slate-200"
+          title="Duplicate clip"
+        >
+          ⧉
+        </button>
+      )}
     </div>
   );
 }

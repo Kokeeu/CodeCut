@@ -241,6 +241,7 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig) {
   }
 
   let prevLabel = 'vc';
+  const scaleFactor = OUTPUT_W_DYN / 1080;
   clips.forEach((clip, ci) => {
     const clipStart = composedStart[ci];
     const speed = Number(clip.speed) || 1;
@@ -252,9 +253,9 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig) {
       ti++;
       const fp = textFiles && textFiles[key];
       if (!fp) return;
-      const size = Math.max(8, Math.min(400, Number(t.size) || 60));
-      const tx = Math.round(Number(t.x) || 0);
-      const ty = Math.round(Number(t.y) || 0);
+      const size = Math.max(8, Math.min(400, Number(t.size) || 60)) * scaleFactor;
+      const tx = Math.round((Number(t.x) || 0) * scaleFactor);
+      const ty = Math.round((Number(t.y) || 0) * scaleFactor);
       const fcolor = colorToHex(t.color);
       const ffile = escapeFilterPath(resolveFont(t.font));
       const out = `vt${ti}`;
@@ -296,13 +297,13 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig) {
       let drawtextOpts = `textfile='${escapeFilterPath(fp)}':x=${xExpr}:y=${yExpr}:fontsize=${sizeExpr}:fontcolor=${fcolor}:fontfile='${ffile}':text_align=${align}:alpha='${fullEnable}'`;
 
       if (t.strokeEnabled && t.strokeWidth > 0) {
-        drawtextOpts += `:borderw=${Math.round(Number(t.strokeWidth) || 2)}:bordercolor=${colorToHex(t.strokeColor)}`;
+        drawtextOpts += `:borderw=${Math.round((Number(t.strokeWidth) || 2) * scaleFactor)}:bordercolor=${colorToHex(t.strokeColor)}`;
       } else {
-        drawtextOpts += `:shadowcolor=black@0.75:shadowx=3:shadowy=3`;
+        drawtextOpts += `:shadowcolor=black@0.75:shadowx=${Math.round(3 * scaleFactor)}:shadowy=${Math.round(3 * scaleFactor)}`;
       }
 
       if (t.bgEnabled) {
-        const bgPadding = Math.round(Number(t.bgPadding) || 12);
+        const bgPadding = Math.round((Number(t.bgPadding) || 12) * scaleFactor);
         const bgOpacity = Number(t.bgOpacity ?? 0.7);
         const bgColorHex = colorToHex(t.bgColor).replace('0x', '');
         const bgAlpha = Math.round(bgOpacity * 255).toString(16).padStart(2, '0');

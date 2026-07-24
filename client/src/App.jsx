@@ -471,6 +471,15 @@ export default function App() {
           startOffset: t.startOffset,
           endOffset: t.endOffset,
           animation: t.animation || null,
+          bgEnabled: t.bgEnabled,
+          bgColor: t.bgColor,
+          bgPadding: t.bgPadding,
+          bgRadius: t.bgRadius,
+          bgOpacity: t.bgOpacity,
+          strokeEnabled: t.strokeEnabled,
+          strokeColor: t.strokeColor,
+          strokeWidth: t.strokeWidth,
+          rotation: t.rotation,
         })),
       })),
       transitions: transitions.map((t) => ({ type: t.type, durationSec: t.durationSec })),
@@ -516,6 +525,16 @@ export default function App() {
           startOffset: t.startOffset,
           endOffset: t.endOffset,
           animation: t.animation || null,
+          ...DEFAULT_TEXT_STYLE,
+          bgEnabled: t.bgEnabled,
+          bgColor: t.bgColor,
+          bgPadding: t.bgPadding,
+          bgRadius: t.bgRadius,
+          bgOpacity: t.bgOpacity,
+          strokeEnabled: t.strokeEnabled,
+          strokeColor: t.strokeColor,
+          strokeWidth: t.strokeWidth,
+          rotation: t.rotation,
         })),
       };
     });
@@ -708,7 +727,11 @@ export default function App() {
 
             <TransportBar
               isPlaying={isPlaying}
-              onPlayPause={() => setIsPlaying((p) => !p)}
+              onPlayPause={() => {
+                shuttleRef.current = { direction: 0, level: 0 };
+                previewRef.current?.stopRewind();
+                setIsPlaying((p) => !p);
+              }}
               onSplit={handleSplit}
               onDelete={() => activeClip && handleDeleteClip(activeClip.id)}
               onReset={handleReset}
