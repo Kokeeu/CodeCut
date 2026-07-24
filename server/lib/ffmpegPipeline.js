@@ -30,6 +30,10 @@ const FONT_REGISTRY = {
   inter: path.join(FONTS_DIR, 'Inter-Bold.ttf'),
   montserrat: path.join(FONTS_DIR, 'Montserrat-Bold.ttf'),
   bebasneue: path.join(FONTS_DIR, 'BebasNeue-Regular.ttf'),
+  poppins: path.join(FONTS_DIR, 'Poppins-Bold.ttf'),
+  oswald: path.join(FONTS_DIR, 'Oswald-Bold.ttf'),
+  pacifico: path.join(FONTS_DIR, 'Pacifico-Regular.ttf'),
+  anton: path.join(FONTS_DIR, 'Anton-Regular.ttf'),
 };
 const FONT_FALLBACK = (() => {
   const candidates = [
@@ -46,6 +50,10 @@ const FONT_PICKER_OPTIONS = [
   { value: 'inter', label: 'Inter' },
   { value: 'montserrat', label: 'Montserrat' },
   { value: 'bebasneue', label: 'Bebas Neue' },
+  { value: 'poppins', label: 'Poppins' },
+  { value: 'oswald', label: 'Oswald' },
+  { value: 'pacifico', label: 'Pacifico' },
+  { value: 'anton', label: 'Anton' },
   { value: 'arial', label: 'Arial (system)' },
 ];
 
@@ -108,14 +116,18 @@ function cleanupTextFiles(map) {
   Object.values(map).forEach((p) => { if (p) safeUnlink(p); });
 }
 
-function buildFilterGraph(clips, transitions, meta, textFiles) {
+function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig) {
   const filters = [];
   const outV = 'vout';
   const outA = 'aout';
   const blurSigma = Math.max(0, Math.min(200, Number(meta && meta.blur) || 0));
   const blurEnabled = !(meta && meta.blurEnabled === false);
 
-  const MAIN_MAX_W = OUTPUT_W;
+  const resolution = exportConfig?.resolution || '1080';
+  const OUTPUT_W_DYN = resolution === '720' ? 720 : 1080;
+  const OUTPUT_H_DYN = resolution === '720' ? 1280 : 1920;
+  const MAIN_Y_DYN = resolution === '720' ? 240 : 360;
+  const MAIN_MAX_W = OUTPUT_W_DYN;
 
   for (let i = 0; i < clips.length; i++) {
     const c = clips[i];
@@ -163,18 +175,18 @@ function buildFilterGraph(clips, transitions, meta, textFiles) {
     const tr = normalizeTransform(c.transform);
     const mainW = Math.max(2, Math.round(MAIN_MAX_W * tr.scale));
     const xExpr = `(W-w)/2${fmtSigned(tr.x)}`;
-    const yExpr = `${MAIN_Y}${fmtSigned(tr.y)}`;
+    const yExpr = `${MAIN_Y_DYN}${fmtSigned(tr.y)}`;
     if (blurEnabled) {
       filters.push(`[s${i}raw]split=2[m${i}][bgr${i}]`);
       filters.push(`[m${i}]scale=${mainW}:-2:flags=lanczos,setsar=1[m${i}f]`);
       const bgBlur = blurSigma > 0 ? `,gblur=sigma=${blurSigma}` : '';
       filters.push(
-        `[bgr${i}]scale=${OUTPUT_W}:${OUTPUT_H}:force_original_aspect_ratio=increase:flags=lanczos,crop=${OUTPUT_W}:${OUTPUT_H}${bgBlur},eq=brightness=${BG_BRIGHTNESS}:saturation=${BG_SATURATION}[bg${i}]`
+        `[bgr${i}]scale=${OUTPUT_W_DYN}:${OUTPUT_H_DYN}:force_original_aspect_ratio=increase:flags=lanczos,crop=${OUTPUT_W_DYN}:${OUTPUT_H_DYN}${bgBlur},eq=brightness=${BG_BRIGHTNESS}:saturation=${BG_SATURATION}[bg${i}]`
       );
     } else {
       filters.push(`[s${i}raw]scale=${mainW}:-2:flags=lanczos,setsar=1[m${i}f]`);
       filters.push(
-        `color=c=black:s=${OUTPUT_W}x${OUTPUT_H}:r=${OUTPUT_FPS}:d=${clipDur.toFixed(3)}[bg${i}]`
+        `color=c=black:s=${OUTPUT_W_DYN}x${OUTPUT_H_DYN}:r=${OUTPUT_FPS}:d=${clipDur.toFixed(3)}[bg${i}]`
       );
     }
     filters.push(`[bg${i}][m${i}f]overlay=x=${xExpr}:y=${yExpr}[c${i}]`);
@@ -281,9 +293,28 @@ function buildFilterGraph(clips, transitions, meta, textFiles) {
         ? `if(${enableExpr},${alphaExpr},0)`
         : enableExpr;
 
-      filters.push(
-        `[${prevLabel}]drawtext=textfile='${escapeFilterPath(fp)}':x=${xExpr}:y=${yExpr}:fontsize=${sizeExpr}:fontcolor=${fcolor}:fontfile='${ffile}':text_align=${align}:shadowcolor=black@0.75:shadowx=3:shadowy=3:alpha='${fullEnable}'[${out}]`
-      );
+      let drawtextOpts = `textfile='${escapeFilterPath(fp)}':x=${xExpr}:y=${yExpr}:fontsize=${sizeExpr}:fontcolor=${fcolor}:fontfile='${ffile}':text_align=${align}:alpha='${fullEnable}'`;
+
+      if (t.strokeEnabled && t.strokeWidth > 0) {
+        drawtextOpts += `:borderw=${Math.round(Number(t.strokeWidth) || 2)}:bordercolor=${colorToHex(t.strokeColor)}`;
+      } else {
+        drawtextOpts += `:shadowcolor=black@0.75:shadowx=3:shadowy=3`;
+      }
+
+      if (t.bgEnabled) {
+        const bgPadding = Math.round(Number(t.bgPadding) || 12);
+        const bgOpacity = Number(t.bgOpacity ?? 0.7);
+        const bgColorHex = colorToHex(t.bgColor).replace('0x', '');
+        const bgAlpha = Math.round(bgOpacity * 255).toString(16).padStart(2, '0');
+        drawtextOpts += `:box=1:boxborderw=${bgPadding}:boxcolor=0x${bgColorHex}${bgAlpha}`;
+      }
+
+      if (t.rotation) {
+        const angleRad = (Number(t.rotation) || 0) * Math.PI / 180;
+        drawtextOpts += `:angle=${angleRad.toFixed(4)}`;
+      }
+
+      filters.push(`[${prevLabel}]drawtext=${drawtextOpts}[${out}]`);
       prevLabel = out;
     });
   });
@@ -320,14 +351,20 @@ function parseTimeToSeconds(timeStr) {
   return hours * 3600 + minutes * 60 + seconds;
 }
 
-function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog, onProgress }) {
+function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog, onProgress, exportConfig }) {
   const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const textFiles = writeTextFiles(clips, runId);
-  const filterGraph = buildFilterGraph(clips, transitions, meta, textFiles);
+  const filterGraph = buildFilterGraph(clips, transitions, meta, textFiles, exportConfig);
 
   const totalDuration = clips.reduce((sum, c) => {
     return sum + (Number(c.sourceEnd) - Number(c.sourceStart)) / (Number(c.speed) || 1);
   }, 0);
+
+  const resolution = exportConfig?.resolution || '1080';
+  const fps = exportConfig?.fps || 30;
+  const quality = exportConfig?.quality || 'high';
+  const crfMap = { medium: 23, high: 20, ultra: 16 };
+  const crf = crfMap[quality] || 20;
 
   return new Promise((resolve, reject) => {
     const command = ffmpeg();
@@ -338,7 +375,8 @@ function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog, 
       .outputOptions([
         '-c:v libx264',
         '-preset veryfast',
-        '-crf 20',
+        `-crf ${crf}`,
+        `-r ${fps}`,
         '-c:a aac',
         '-b:a 128k',
         '-movflags +faststart',

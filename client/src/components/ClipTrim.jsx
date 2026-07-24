@@ -68,7 +68,16 @@ export default function ClipTrim({ clip, file, currentOffset, onChange, onSeek }
     const clickX = e.clientX - trackRect.left;
     const trackWidth = trackRect.width;
     const pct = clamp(clickX / trackWidth, 0, 1);
-    const t = pct * safeDuration;
+    let t = pct * safeDuration;
+    
+    const threshold = 0.15;
+    if (Math.abs(t - 0) <= threshold) t = 0;
+    else if (Math.abs(t - safeDuration) <= threshold) t = safeDuration;
+    else {
+      const rounded = Math.round(t);
+      if (Math.abs(t - rounded) <= threshold && rounded > 0 && rounded < safeDuration) t = rounded;
+    }
+    
     return t;
   }, [safeDuration]);
 

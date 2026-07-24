@@ -9,6 +9,7 @@ function formatTime(seconds) {
 export default function TransportBar({
   isPlaying, onPlayPause, onSplit, onDelete, onReset,
   currentOffset, totalDuration, clipsCount, canDelete,
+  showGuides, onToggleGuides,
 }) {
   return (
     <div className="flex items-center gap-2 px-3 py-2 bg-editor-panel border-t border-editor-border shrink-0">
@@ -32,6 +33,11 @@ export default function TransportBar({
           title="Reset project">
           ↺
         </button>
+        <button onClick={onToggleGuides}
+          className={`w-8 h-8 rounded-lg ${showGuides ? 'bg-accent/20 text-accent' : 'bg-editor-surface hover:bg-editor-hover text-neutral-300'} flex items-center justify-center text-sm transition-colors`}
+          title="Toggle title safe guides">
+          ⊞
+        </button>
       </div>
 
       <div className="w-px h-5 bg-editor-border" />
@@ -45,7 +51,7 @@ export default function TransportBar({
       <div className="flex-1" />
 
       <div className="text-[10px] text-neutral-500">
-        <span className="text-neutral-600">Space</span> play · <span className="text-neutral-600">S</span> split · <span className="text-neutral-600">←→</span> frame
+        <span className="text-neutral-600">Space</span> play · <span className="text-neutral-600">S</span> split · <span className="text-neutral-600">J/K/L</span> shuttle · <span className="text-neutral-600">←→</span> frame
       </div>
     </div>
   );

@@ -28,7 +28,8 @@ const DEFAULT_TRANSFORM = { x: 0, y: 0, scale: 1 };
 const DEFAULT_AUDIO = { volume: 1, mute: false, fadeIn: 0, fadeOut: 0 };
 const DEFAULT_PIP = { enabled: false, fileId: null, position: 'bottom-right', size: 30, opacity: 1, border: true, borderWidth: 4, borderRadius: 8 };
 const DEFAULT_META = { blur: 30, blurEnabled: true };
-const PROJECT_VERSION = '0.10';
+const DEFAULT_TEXT_STYLE = { bgEnabled: false, bgColor: '#000000', bgPadding: 12, bgRadius: 8, bgOpacity: 0.7, strokeEnabled: false, strokeColor: '#000000', strokeWidth: 2, rotation: 0 };
+const PROJECT_VERSION = '0.11';
 
 const TEMPLATES = [
   {
@@ -39,7 +40,7 @@ const TEMPLATES = [
     blur: 30,
     blurEnabled: true,
     texts: [
-      { text: 'Openings favs', x: 285, y: 120, size: 75, align: 'center' },
+      { text: 'Openings favs', x: 285, y: 180, size: 75, align: 'center' },
       { text: 'ANIME TITLE', x: 70, y: 980, size: 67, align: 'left' },
       { text: 'Opening: 1', x: 70, y: 1080, size: 67, align: 'left' },
       { text: 'Canción: Song', x: 70, y: 1180, size: 67, align: 'left' },
@@ -99,7 +100,10 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [selectedTextId, setSelectedTextId] = useState(null);
   const [timelineZoom, setTimelineZoom] = useState(1);
+  const [showGuides, setShowGuides] = useState(false);
+  const [exportConfig, setExportConfig] = useState({ resolution: '1080', fps: 30, quality: 'high', platform: 'tiktok' });
   const previewRef = useRef(null);
+  const shuttleRef = useRef({ direction: 0, level: 0 });
 
   const fileById = useMemo(() => {
     const m = {};
@@ -135,6 +139,7 @@ export default function App() {
       duration: m.duration || 0,
       thumbnail: m.thumbnail || null,
       waveform: m.waveform || null,
+      filmstrip: m.filmstrip || null,
     }));
     if (newFiles.length === 0) return;
     
@@ -212,6 +217,29 @@ export default function App() {
     }
   }, [clips, activeClipId]);
 
+  const handleDuplicateClip = useCallback((clipId) => {
+    const idx = clips.findIndex((c) => c.id === clipId);
+    if (idx < 0) return;
+    const source = clips[idx];
+    const dup = {
+      ...source,
+      id: nextId('clip'),
+      texts: (source.texts || []).map((t) => ({ ...t, id: nextId('text') })),
+      transform: { ...(source.transform || DEFAULT_TRANSFORM) },
+      audio: { ...(source.audio || DEFAULT_AUDIO) },
+      pip: { ...(source.pip || DEFAULT_PIP) },
+    };
+    const next = [...clips];
+    next.splice(idx + 1, 0, dup);
+    setClips(next);
+    setTransitions((prev) => {
+      const t = [...prev];
+      t.splice(idx, 0, { ...DEFAULT_TRANSITION });
+      return t;
+    });
+    setActiveClipId(dup.id);
+  }, [clips]);
+
   const handleReorder = useCallback((newClips) => {
     setClips(newClips);
   }, []);
@@ -256,6 +284,7 @@ export default function App() {
       startOffset: 0,
       endOffset: clipDur,
       animation: null,
+      ...DEFAULT_TEXT_STYLE,
     };
     setClips((prev) =>
       prev.map((c) =>
@@ -355,6 +384,7 @@ export default function App() {
             startOffset: 0,
             endOffset: dur,
             animation: null,
+            ...DEFAULT_TEXT_STYLE,
           })),
         };
       })
@@ -521,6 +551,8 @@ export default function App() {
         handleSplit();
       } else if (e.key === ' ') {
         e.preventDefault();
+        shuttleRef.current = { direction: 0, level: 0 };
+        previewRef.current?.stopRewind();
         setIsPlaying((p) => !p);
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
@@ -528,6 +560,37 @@ export default function App() {
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
         if (!isPlaying) previewRef.current?.stepFrame(1);
+      } else if (e.key === 'j' || e.key === 'J') {
+        e.preventDefault();
+        const s = shuttleRef.current;
+        previewRef.current?.stopRewind();
+        if (s.direction === -1) {
+          s.level = Math.min(4, s.level + 1);
+        } else {
+          s.direction = -1;
+          s.level = 1;
+        }
+        setIsPlaying(false);
+        previewRef.current?.startRewind(s.level);
+      } else if (e.key === 'k' || e.key === 'K') {
+        e.preventDefault();
+        shuttleRef.current = { direction: 0, level: 0 };
+        previewRef.current?.stopRewind();
+        previewRef.current?.setPlaybackSpeed(1);
+        setIsPlaying(false);
+      } else if (e.key === 'l' || e.key === 'L') {
+        e.preventDefault();
+        const s = shuttleRef.current;
+        previewRef.current?.stopRewind();
+        if (s.direction === 1) {
+          s.level = Math.min(4, s.level + 1);
+          previewRef.current?.setPlaybackSpeed(Math.pow(2, s.level - 1));
+        } else {
+          s.direction = 1;
+          s.level = 1;
+          setIsPlaying(true);
+          previewRef.current?.setPlaybackSpeed(1);
+        }
       }
     };
     window.addEventListener('keydown', onKey);
@@ -557,6 +620,21 @@ export default function App() {
     return cumulativeStarts[idx] + currentOffset;
   }, [clips, activeClipId, cumulativeStarts, currentOffset]);
 
+  const snapPoints = useMemo(() => {
+    const points = [0];
+    let cum = 0;
+    for (let i = 0; i < clips.length; i++) {
+      const dur = (clips[i].sourceEnd - clips[i].sourceStart) / (clips[i].speed || 1);
+      cum += dur;
+      points.push(cum);
+      if (i < clips.length - 1) {
+        const t = transitions[i];
+        if (t && t.type && t.type !== 'none') cum -= Number(t.durationSec) || 0;
+      }
+    }
+    return points;
+  }, [clips, transitions]);
+
   return (
     <div className="h-full flex flex-col bg-editor-bg">
       <TopBar
@@ -567,6 +645,8 @@ export default function App() {
         totalDuration={totalDuration}
         onSave={handleSaveProject}
         onLoad={handleLoadProject}
+        exportConfig={exportConfig}
+        onExportConfigChange={setExportConfig}
       />
 
       {!hasFiles ? (
@@ -622,6 +702,7 @@ export default function App() {
                 onUpdateText={handleUpdateText}
                 currentOffset={currentOffset}
                 files={files}
+                showGuides={showGuides}
               />
             </div>
 
@@ -635,6 +716,8 @@ export default function App() {
               totalDuration={activeClipDuration}
               clipsCount={clips.length}
               canDelete={clips.length > 1}
+              showGuides={showGuides}
+              onToggleGuides={() => setShowGuides((g) => !g)}
             />
 
             <div className="h-48 flex flex-col bg-editor-panel border-t border-editor-border shrink-0">
@@ -643,6 +726,7 @@ export default function App() {
                 onSeek={handleGlobalSeek}
                 currentGlobalTime={currentGlobalTime}
                 timelineZoom={timelineZoom}
+                snapPoints={snapPoints}
               />
               <div className="flex-1 overflow-x-auto overflow-y-hidden px-2 py-1">
                 <ClipTrack
@@ -652,6 +736,7 @@ export default function App() {
                   fileById={fileById}
                   onSelect={handleSelectClip}
                   onDelete={handleDeleteClip}
+                  onDuplicate={handleDuplicateClip}
                   onReorder={handleReorder}
                   onTransitionChange={handleTransitionChange}
                   timelineZoom={timelineZoom}

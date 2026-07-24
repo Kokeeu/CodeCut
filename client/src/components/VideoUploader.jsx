@@ -4,6 +4,46 @@ import { extractWaveform } from '../lib/waveform.js';
 const MAX_SIZE_MB = 500;
 const MAX_FILES = 10;
 
+function generateFilmstrip(videoUrl, duration, numFrames = 20) {
+  return new Promise((resolve) => {
+    if (!duration || duration <= 0 || numFrames <= 0) { resolve(null); return; }
+    const video = document.createElement('video');
+    video.preload = 'auto';
+    video.muted = true;
+    video.src = videoUrl;
+
+    const timeout = setTimeout(() => resolve(null), 15000);
+
+    video.onloadedmetadata = async () => {
+      try {
+        const vw = video.videoWidth || 0;
+        const vh = video.videoHeight || 0;
+        if (!vw || !vh) { clearTimeout(timeout); resolve(null); return; }
+        const frameW = 96;
+        const frameH = Math.round((vh / vw) * frameW);
+        const canvas = document.createElement('canvas');
+        canvas.width = numFrames * frameW;
+        canvas.height = frameH;
+        const ctx = canvas.getContext('2d');
+        const interval = duration / numFrames;
+
+        for (let i = 0; i < numFrames; i++) {
+          const t = Math.min(i * interval + interval / 2, Math.max(0, duration - 0.05));
+          video.currentTime = Math.max(0, t);
+          await new Promise((res) => { video.onseeked = res; });
+          ctx.drawImage(video, i * frameW, 0, frameW, frameH);
+        }
+        clearTimeout(timeout);
+        resolve(canvas.toDataURL('image/jpeg', 0.5));
+      } catch (_) {
+        clearTimeout(timeout);
+        resolve(null);
+      }
+    };
+    video.onerror = () => { clearTimeout(timeout); resolve(null); };
+  });
+}
+
 function extractMeta(file) {
   return new Promise(async (resolve) => {
     const url = URL.createObjectURL(file);
@@ -19,11 +59,15 @@ function extractMeta(file) {
       clearTimeout(timer);
       
       let waveform = null;
+      let filmstrip = null;
       try {
         waveform = await extractWaveform(url, 200);
       } catch (_) {}
+      try {
+        filmstrip = await generateFilmstrip(url, duration, 20);
+      } catch (_) {}
       
-      resolve({ file, url, duration, thumbnail, waveform });
+      resolve({ file, url, duration, thumbnail, waveform, filmstrip });
     };
 
     const timer = setTimeout(() => finish(0, null), 5000);

@@ -206,6 +206,67 @@ export default function PropertiesPanel({
                       )}
                     </div>
                   </div>
+
+                  <div className="mt-2 pt-2 border-t border-editor-border" onClick={(e) => e.stopPropagation()}>
+                    <label className="flex items-center gap-1.5 text-[9px] text-neutral-400 mb-1 cursor-pointer">
+                      <input type="checkbox" checked={t.bgEnabled || false}
+                        onChange={(e) => onUpdateText(t.id, { bgEnabled: e.target.checked })} />
+                      Background
+                    </label>
+                    {t.bgEnabled && (
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-1.5">
+                          <input type="color" value={t.bgColor || '#000000'}
+                            onChange={(e) => onUpdateText(t.id, { bgColor: e.target.value })}
+                            className="w-5 h-5 rounded border border-editor-border cursor-pointer" />
+                          <span className="text-[9px] text-neutral-500 flex-1">Color</span>
+                          <input type="range" min="0" max="1" step="0.05" value={t.bgOpacity ?? 0.7}
+                            onChange={(e) => onUpdateText(t.id, { bgOpacity: Number(e.target.value) })} className="w-14" />
+                          <span className="text-[9px] font-mono text-neutral-400 w-6 text-right">{Math.round((t.bgOpacity ?? 0.7) * 100)}%</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[9px] text-neutral-500 w-10">Padding</span>
+                          <input type="range" min="0" max="40" step="1" value={t.bgPadding || 12}
+                            onChange={(e) => onUpdateText(t.id, { bgPadding: Number(e.target.value) })} className="flex-1" />
+                          <span className="text-[9px] font-mono text-neutral-400 w-5 text-right">{t.bgPadding || 12}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[9px] text-neutral-500 w-10">Radius</span>
+                          <input type="range" min="0" max="30" step="1" value={t.bgRadius || 8}
+                            onChange={(e) => onUpdateText(t.id, { bgRadius: Number(e.target.value) })} className="flex-1" />
+                          <span className="text-[9px] font-mono text-neutral-400 w-5 text-right">{t.bgRadius || 8}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
+                    <label className="flex items-center gap-1.5 text-[9px] text-neutral-400 mb-1 cursor-pointer">
+                      <input type="checkbox" checked={t.strokeEnabled || false}
+                        onChange={(e) => onUpdateText(t.id, { strokeEnabled: e.target.checked })} />
+                      Stroke
+                    </label>
+                    {t.strokeEnabled && (
+                      <div className="flex items-center gap-1.5">
+                        <input type="color" value={t.strokeColor || '#000000'}
+                          onChange={(e) => onUpdateText(t.id, { strokeColor: e.target.value })}
+                          className="w-5 h-5 rounded border border-editor-border cursor-pointer" />
+                        <span className="text-[9px] text-neutral-500 flex-1">Width</span>
+                        <input type="range" min="1" max="8" step="1" value={t.strokeWidth || 2}
+                          onChange={(e) => onUpdateText(t.id, { strokeWidth: Number(e.target.value) })} className="w-14" />
+                        <span className="text-[9px] font-mono text-neutral-400 w-5 text-right">{t.strokeWidth || 2}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
+                    <label className="block text-[9px] text-neutral-500 mb-0.5">Rotation</label>
+                    <div className="flex items-center gap-1.5">
+                      <input type="range" min="-180" max="180" step="1" value={t.rotation || 0}
+                        onChange={(e) => onUpdateText(t.id, { rotation: Number(e.target.value) })} className="flex-1" />
+                      <span className="text-[9px] font-mono text-neutral-400 w-8 text-right">{t.rotation || 0}°</span>
+                    </div>
+                  </div>
                 </div>
               );
             })}

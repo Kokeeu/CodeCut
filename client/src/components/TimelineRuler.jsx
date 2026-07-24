@@ -7,7 +7,7 @@ function formatTime(seconds) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export default function TimelineRuler({ totalDuration, onSeek, currentGlobalTime, timelineZoom }) {
+export default function TimelineRuler({ totalDuration, onSeek, currentGlobalTime, timelineZoom, snapPoints }) {
   const rulerRef = useRef(null);
   const [dragging, setDragging] = useState(false);
 
@@ -16,8 +16,18 @@ export default function TimelineRuler({ totalDuration, onSeek, currentGlobalTime
     if (!el || totalDuration <= 0) return 0;
     const rect = el.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    return pct * totalDuration;
-  }, [totalDuration]);
+    let time = pct * totalDuration;
+    if (snapPoints && snapPoints.length > 0) {
+      const threshold = 0.15;
+      for (const p of snapPoints) {
+        if (Math.abs(time - p) <= threshold) {
+          time = p;
+          break;
+        }
+      }
+    }
+    return time;
+  }, [totalDuration, snapPoints]);
 
   const handlePointerDown = useCallback((e) => {
     setDragging(true);

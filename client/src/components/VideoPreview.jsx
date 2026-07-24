@@ -23,7 +23,7 @@ const VideoPreview = forwardRef(function VideoPreview(
   {
     clip, fileUrl, isPlaying, onTimeUpdate, onClipEnded, onPlayStateChange,
     meta, onTransformChange, selectedTextId, onSelectText, onUpdateText,
-    currentOffset, files,
+    currentOffset, files, showGuides,
   },
   ref
 ) {
@@ -35,6 +35,7 @@ const VideoPreview = forwardRef(function VideoPreview(
   const textRefs = useRef({});
   const endedRef = useRef(false);
   const isPlayingRef = useRef(isPlaying);
+  const rewindRef = useRef(null);
   isPlayingRef.current = isPlaying;
 
   const [handles, setHandles] = useState(null);
@@ -78,6 +79,40 @@ const VideoPreview = forwardRef(function VideoPreview(
       const offset = newTime - clip.sourceStart;
       if (offset >= 0) onTimeUpdate?.(offset);
     },
+    startRewind: (speedMultiplier = 1) => {
+      if (rewindRef.current) clearInterval(rewindRef.current);
+      const v = videoRef.current;
+      const bg = bgVideoRef.current;
+      if (!v || !clip) return;
+      v.pause();
+      if (bg) bg.pause();
+      const frameDuration = 1 / OUTPUT_FPS;
+      const step = frameDuration * 4 * speedMultiplier;
+      rewindRef.current = setInterval(() => {
+        if (!v) return;
+        const newTime = Math.max(clip.sourceStart, v.currentTime - step);
+        v.currentTime = newTime;
+        if (bg) bg.currentTime = newTime;
+        const offset = newTime - clip.sourceStart;
+        if (offset >= 0) onTimeUpdate?.(offset);
+        if (newTime <= clip.sourceStart + 0.01) {
+          clearInterval(rewindRef.current);
+          rewindRef.current = null;
+        }
+      }, 1000 / OUTPUT_FPS);
+    },
+    stopRewind: () => {
+      if (rewindRef.current) {
+        clearInterval(rewindRef.current);
+        rewindRef.current = null;
+      }
+    },
+    setPlaybackSpeed: (rate) => {
+      const v = videoRef.current;
+      if (!v) return;
+      const safeRate = Math.max(0.0625, Math.min(16, rate));
+      v.playbackRate = safeRate;
+    },
   }), [clip, onTimeUpdate]);
 
   useEffect(() => {
@@ -85,6 +120,10 @@ const VideoPreview = forwardRef(function VideoPreview(
     const v = videoRef.current;
     const bg = bgVideoRef.current;
     if (!v || !clip) return;
+    if (rewindRef.current) {
+      clearInterval(rewindRef.current);
+      rewindRef.current = null;
+    }
     const applySeek = () => {
       v.currentTime = clip.sourceStart;
       if (bg) bg.currentTime = clip.sourceStart;
@@ -407,6 +446,48 @@ const VideoPreview = forwardRef(function VideoPreview(
             }
           }
 
+          const hexToRgba = (hex, alpha) => {
+            const r = parseInt(hex.slice(1, 3), 16);
+            const g = parseInt(hex.slice(3, 5), 16);
+            const b = parseInt(hex.slice(5, 7), 16);
+            return `rgba(${r},${g},${b},${alpha})`;
+          };
+
+          const textStyle = {
+            position: 'absolute',
+            left: `${(tx.x || 0) * DISPLAY_SCALE}px`,
+            top: `${(tx.y || 0) * DISPLAY_SCALE}px`,
+            color: tx.color || '#ffffff',
+            fontFamily: FONT_CSS[tx.font] || FONT_CSS.inter,
+            fontSize: `${Math.max(12, Math.min(400, tx.size || 60)) * DISPLAY_SCALE}px`,
+            fontWeight: 700,
+            lineHeight: 1.2,
+            cursor: 'move',
+            userSelect: 'none',
+            whiteSpace: 'pre',
+            outline: selected ? '1.5px dashed #a855f7' : 'none',
+            outlineOffset: '4px',
+            zIndex: selected ? 30 : 20,
+            opacity: !isVisible && selected ? 0.3 : 1,
+            ...animStyle,
+          };
+
+          if (tx.strokeEnabled && tx.strokeWidth > 0) {
+            textStyle.WebkitTextStroke = `${(tx.strokeWidth || 2) * DISPLAY_SCALE}px ${tx.strokeColor || '#000000'}`;
+          } else {
+            textStyle.textShadow = '0 2px 8px rgba(0,0,0,0.7)';
+          }
+
+          if (tx.bgEnabled) {
+            textStyle.backgroundColor = hexToRgba(tx.bgColor || '#000000', tx.bgOpacity ?? 0.7);
+            textStyle.padding = `${(tx.bgPadding || 12) * DISPLAY_SCALE}px`;
+            textStyle.borderRadius = `${(tx.bgRadius || 8) * DISPLAY_SCALE}px`;
+          }
+
+          if (tx.rotation) {
+            textStyle.transform = `rotate(${tx.rotation}deg)`;
+          }
+
           return (
             <div
               key={tx.id}
@@ -414,25 +495,7 @@ const VideoPreview = forwardRef(function VideoPreview(
               ref={(el) => { if (el) textRefs.current[tx.id] = el; else delete textRefs.current[tx.id]; }}
               onPointerDown={(e) => startTextDrag(e, tx.id)}
               onClick={(e) => { e.stopPropagation(); onSelectText?.(tx.id); }}
-              style={{
-                position: 'absolute',
-                left: `${(tx.x || 0) * DISPLAY_SCALE}px`,
-                top: `${(tx.y || 0) * DISPLAY_SCALE}px`,
-                color: tx.color || '#ffffff',
-                fontFamily: FONT_CSS[tx.font] || FONT_CSS.inter,
-                fontSize: `${Math.max(12, Math.min(400, tx.size || 60)) * DISPLAY_SCALE}px`,
-                fontWeight: 700,
-                lineHeight: 1.2,
-                textShadow: '0 2px 8px rgba(0,0,0,0.7)',
-                cursor: 'move',
-                userSelect: 'none',
-                whiteSpace: 'pre',
-                outline: selected ? '1.5px dashed #a855f7' : 'none',
-                outlineOffset: '4px',
-                zIndex: selected ? 30 : 20,
-                opacity: !isVisible && selected ? 0.3 : 1,
-                ...animStyle,
-              }}
+              style={textStyle}
             >
               {displayText}
             </div>
@@ -459,6 +522,33 @@ const VideoPreview = forwardRef(function VideoPreview(
             }}
           />
         ))}
+
+        {showGuides && (
+          <>
+            <div style={{
+              position: 'absolute',
+              left: '2.5%', top: '2.5%',
+              width: '95%', height: '95%',
+              border: '1px solid rgba(255,255,255,0.15)',
+              pointerEvents: 'none',
+              zIndex: 50,
+            }} />
+            <div style={{
+              position: 'absolute',
+              left: '5%', top: '5%',
+              width: '90%', height: '90%',
+              border: '1px dashed rgba(255,255,255,0.3)',
+              pointerEvents: 'none',
+              zIndex: 50,
+            }} />
+            <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 50 }}>
+              <div style={{ position: 'absolute', left: '33.33%', top: 0, bottom: 0, width: 1, background: 'rgba(255,255,255,0.12)' }} />
+              <div style={{ position: 'absolute', left: '66.66%', top: 0, bottom: 0, width: 1, background: 'rgba(255,255,255,0.12)' }} />
+              <div style={{ position: 'absolute', top: '33.33%', left: 0, right: 0, height: 1, background: 'rgba(255,255,255,0.12)' }} />
+              <div style={{ position: 'absolute', top: '66.66%', left: 0, right: 0, height: 1, background: 'rgba(255,255,255,0.12)' }} />
+            </div>
+          </>
+        )}
 
         <div className="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-black/60 text-[10px] font-medium pointer-events-none">
           9:16

@@ -42,13 +42,15 @@ router.post('/', upload.array('videos', MAX_FILES), async (req, res) => {
   let clips;
   let transitions = {};
   let meta = { ...DEFAULT_META };
+  let exportConfig = {};
   try {
     clips = JSON.parse(req.body.clips || '[]');
     if (req.body.transitions) transitions = JSON.parse(req.body.transitions);
     if (req.body.meta) meta = { ...meta, ...JSON.parse(req.body.meta) };
+    if (req.body.exportConfig) exportConfig = JSON.parse(req.body.exportConfig);
   } catch (e) {
     safeUnlinkAll(files.map((f) => f.path));
-    return res.status(400).json({ error: 'Invalid JSON in clips, transitions or meta.' });
+    return res.status(400).json({ error: 'Invalid JSON in clips, transitions, meta or exportConfig.' });
   }
 
   const validationError = validateClips(clips);
@@ -94,6 +96,7 @@ router.post('/', upload.array('videos', MAX_FILES), async (req, res) => {
       transitions,
       meta,
       outputPath,
+      exportConfig,
       onProgress: (progress) => {
         job.progress = progress;
       },

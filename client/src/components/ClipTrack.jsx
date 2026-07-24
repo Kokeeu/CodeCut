@@ -14,6 +14,7 @@ export default function ClipTrack({
   fileById,
   onSelect,
   onDelete,
+  onDuplicate,
   onReorder,
   onTransitionChange,
   timelineZoom = 1,
@@ -77,6 +78,7 @@ export default function ClipTrack({
                     canDelete={clips.length > 1}
                     onSelect={() => onSelect(clip.id)}
                     onDelete={() => onDelete(clip.id)}
+                    onDuplicate={() => onDuplicate?.(clip.id)}
                   />
                   {nextClip && (
                     <TransitionPicker

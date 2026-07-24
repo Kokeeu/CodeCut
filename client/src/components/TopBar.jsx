@@ -8,7 +8,7 @@ function formatTime(seconds) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export default function TopBar({ files, clips, transitions, meta, totalDuration, onSave, onLoad }) {
+export default function TopBar({ files, clips, transitions, meta, totalDuration, onSave, onLoad, exportConfig, onExportConfigChange }) {
   return (
     <div className="h-12 bg-editor-panel border-b border-editor-border flex items-center px-4 gap-4 shrink-0">
       <div className="flex items-center gap-2">
@@ -31,7 +31,7 @@ export default function TopBar({ files, clips, transitions, meta, totalDuration,
 
       <div className="w-px h-5 bg-editor-border" />
 
-      <ExportButton files={files} clips={clips} transitions={transitions} meta={meta} compact />
+      <ExportButton files={files} clips={clips} transitions={transitions} meta={meta} exportConfig={exportConfig} onExportConfigChange={onExportConfigChange} compact />
     </div>
   );
 }

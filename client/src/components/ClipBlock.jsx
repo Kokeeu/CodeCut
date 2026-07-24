@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
@@ -8,7 +9,7 @@ function formatTime(seconds) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export default function ClipBlock({ clip, index, width, file, isActive, canDelete, onSelect, onDelete }) {
+export default function ClipBlock({ clip, index, width, file, isActive, canDelete, onSelect, onDelete, onDuplicate }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: clip.id });
 
   const style = {
@@ -21,6 +22,21 @@ export default function ClipBlock({ clip, index, width, file, isActive, canDelet
 
   const duration = clip.sourceEnd - clip.sourceStart;
   const waveform = file?.waveform;
+  const filmstrip = file?.filmstrip;
+  const fileDuration = file?.duration || 0;
+
+  const filmstripStyle = useMemo(() => {
+    if (!filmstrip || !duration || !fileDuration) return null;
+    const ratio = fileDuration / duration;
+    const bgWidth = width * ratio;
+    const bgPos = -(clip.sourceStart / duration) * width;
+    return {
+      backgroundImage: `url(${filmstrip})`,
+      backgroundSize: `${bgWidth}px 100%`,
+      backgroundPositionX: `${bgPos}px`,
+      backgroundRepeat: 'no-repeat',
+    };
+  }, [filmstrip, duration, fileDuration, width, clip.sourceStart]);
 
   return (
     <div
@@ -36,7 +52,9 @@ export default function ClipBlock({ clip, index, width, file, isActive, canDelet
       ].join(' ')}
       title={file ? file.name : ''}
     >
-      {file && file.thumbnail ? (
+      {filmstripStyle ? (
+        <div style={filmstripStyle} className="absolute inset-0 opacity-60 pointer-events-none" />
+      ) : file && file.thumbnail ? (
         <img src={file.thumbnail} alt="" className="absolute inset-0 w-full h-full object-cover opacity-60 pointer-events-none" />
       ) : null}
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/40 pointer-events-none" />
@@ -74,6 +92,14 @@ export default function ClipBlock({ clip, index, width, file, isActive, canDelet
           ×
         </button>
       )}
+      <button
+        onClick={(e) => { e.stopPropagation(); onDuplicate?.(); }}
+        onPointerDown={(e) => e.stopPropagation()}
+        className="absolute top-1 right-7 w-5 h-5 rounded bg-black/60 hover:bg-accent text-[11px] leading-none text-slate-200"
+        title="Duplicate clip"
+      >
+        ⧉
+      </button>
     </div>
   );
 }

@@ -7,6 +7,10 @@ export const FONT_OPTIONS = [
   { value: 'inter', label: 'Inter' },
   { value: 'montserrat', label: 'Montserrat' },
   { value: 'bebasneue', label: 'Bebas Neue' },
+  { value: 'poppins', label: 'Poppins' },
+  { value: 'oswald', label: 'Oswald' },
+  { value: 'pacifico', label: 'Pacifico' },
+  { value: 'anton', label: 'Anton' },
   { value: 'arial', label: 'Arial' },
 ];
 
@@ -14,6 +18,10 @@ export const FONT_CSS = {
   inter: "'Inter', sans-serif",
   montserrat: "'Montserrat', sans-serif",
   bebasneue: "'Bebas Neue', sans-serif",
+  poppins: "'Poppins', sans-serif",
+  oswald: "'Oswald', sans-serif",
+  pacifico: "'Pacifico', cursive",
+  anton: "'Anton', sans-serif",
   arial: "Arial, sans-serif",
 };
 
