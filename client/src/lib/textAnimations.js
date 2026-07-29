@@ -4,8 +4,8 @@ const ANIMATIONS = {
     getPreviewStyle(progress) {
       return { opacity: Math.min(1, progress) };
     },
-    getFfmpegEnable(animDur) {
-      return `if(lt(t-s,${animDur}),(t-s)/${animDur},1)`;
+    getFfmpegEnable(animDur, s) {
+      return `if(lt(t-${s},${animDur}),(t-${s})/${animDur},1)`;
     },
   },
   'slide-up': {
@@ -14,8 +14,8 @@ const ANIMATIONS = {
       const offset = 80 * (1 - Math.min(1, progress));
       return { transform: `translateY(${offset}px)` };
     },
-    getFfmpegY(ty, animDur) {
-      return `${ty}+80*(1-min(1,(t-s)/${animDur}))`;
+    getFfmpegY(ty, animDur, s) {
+      return `${ty}+80*(1-min(1,(t-${s})/${animDur}))`;
     },
   },
   'slide-left': {
@@ -24,8 +24,8 @@ const ANIMATIONS = {
       const offset = 120 * (1 - Math.min(1, progress));
       return { transform: `translateX(${offset}px)` };
     },
-    getFfmpegX(tx, animDur) {
-      return `${tx}+120*(1-min(1,(t-s)/${animDur}))`;
+    getFfmpegX(tx, animDur, s) {
+      return `${tx}+120*(1-min(1,(t-${s})/${animDur}))`;
     },
   },
   'typewriter': {
@@ -51,8 +51,8 @@ const ANIMATIONS = {
       }
       return { transform: `scale(${scale})` };
     },
-    getFfmpegFontSize(size, animDur) {
-      return `${size}*if(lt(t-s,${animDur}*0.6),t-s/${animDur}*1.2,if(lt(t-s,${animDur}*0.8),1.2-((t-s-${animDur}*0.6)/(${animDur}*0.2))*0.2,1))`;
+    getFfmpegFontSize(size, animDur, s) {
+      return `${size}*if(lt(t-${s},${animDur}*0.6),t-${s}/${animDur}*1.2,if(lt(t-${s},${animDur}*0.8),1.2-((t-${s}-${animDur}*0.6)/(${animDur}*0.2))*0.2,1))`;
     },
   },
   'scale-in': {
@@ -60,8 +60,8 @@ const ANIMATIONS = {
     getPreviewStyle(progress) {
       return { transform: `scale(${Math.min(1, progress)})` };
     },
-    getFfmpegFontSize(size, animDur) {
-      return `${size}*min(1,(t-s)/${animDur})`;
+    getFfmpegFontSize(size, animDur, s) {
+      return `${size}*min(1,(t-${s})/${animDur})`;
     },
   },
   'karaoke': {

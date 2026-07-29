@@ -67,6 +67,31 @@ function escapeFilterPath(p) {
   return String(p).replace(/\\/g, '/').replace(/:/g, '\\:');
 }
 
+function escapeFilterPathQuoted(p) {
+  return String(p).replace(/\\/g, '/');
+}
+
+function escapeDrawtextString(s) {
+  return String(s)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/:/g, '\\:')
+    .replace(/,/g, '\\,')
+    .replace(/%/g, '\\%')
+    .replace(/\[/g, '\\[')
+    .replace(/\]/g, '\\]')
+    .replace(/;/g, '\\;');
+}
+
+function escapeDrawtextExpr(s) {
+  return String(s)
+    .replace(/\\/g, '\\\\')
+    .replace(/,/g, '\\,')
+    .replace(/;/g, '\\;')
+    .replace(/\[/g, '\\[')
+    .replace(/\]/g, '\\]');
+}
+
 function normalizeTransform(t) {
   const n = t && typeof t === 'object' ? t : {};
   const clamp = (v, min, max, def) => {
@@ -257,7 +282,7 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig) {
       const tx = Math.round((Number(t.x) || 0) * scaleFactor);
       const ty = Math.round((Number(t.y) || 0) * scaleFactor);
       const fcolor = colorToHex(t.color);
-      const ffile = escapeFilterPath(resolveFont(t.font));
+      const ffile = escapeFilterPathQuoted(resolveFont(t.font));
       const out = `vt${ti}`;
       const startOff = (Number(t.startOffset) || 0) / speed;
       const endOff = (Number(t.endOffset) || (clip.sourceEnd - clip.sourceStart)) / speed;
@@ -276,16 +301,16 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig) {
         const sExpr = enableStart;
 
         if (animDef.getFfmpegY) {
-          yExpr = animDef.getFfmpegY(ty, animDur);
+          yExpr = animDef.getFfmpegY(ty, animDur, sExpr);
         }
         if (animDef.getFfmpegX) {
-          xExpr = animDef.getFfmpegX(tx, animDur);
+          xExpr = animDef.getFfmpegX(tx, animDur, sExpr);
         }
         if (animDef.getFfmpegFontSize) {
-          sizeExpr = animDef.getFfmpegFontSize(size, animDur);
+          sizeExpr = animDef.getFfmpegFontSize(size, animDur, sExpr);
         }
         if (animDef.getFfmpegEnable) {
-          alphaExpr = animDef.getFfmpegEnable(animDur);
+          alphaExpr = animDef.getFfmpegEnable(animDur, sExpr);
         }
       }
 
@@ -294,7 +319,7 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig) {
         ? `if(${enableExpr},${alphaExpr},0)`
         : enableExpr;
 
-      let drawtextOpts = `textfile='${escapeFilterPath(fp)}':x=${xExpr}:y=${yExpr}:fontsize=${sizeExpr}:fontcolor=${fcolor}:fontfile='${ffile}':text_align=${align}:alpha='${fullEnable}'`;
+      let drawtextOpts = `text='${escapeDrawtextString(content)}':x=${escapeDrawtextExpr(xExpr)}:y=${escapeDrawtextExpr(yExpr)}:fontsize=${escapeDrawtextExpr(sizeExpr)}:fontcolor=${fcolor}:fontfile='${ffile}':alpha='${escapeDrawtextExpr(fullEnable)}'`;
 
       if (t.strokeEnabled && t.strokeWidth > 0) {
         drawtextOpts += `:borderw=${Math.round((Number(t.strokeWidth) || 2) * scaleFactor)}:bordercolor=${colorToHex(t.strokeColor)}`;
@@ -310,10 +335,11 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig) {
         drawtextOpts += `:box=1:boxborderw=${bgPadding}:boxcolor=0x${bgColorHex}${bgAlpha}`;
       }
 
-      if (t.rotation) {
-        const angleRad = (Number(t.rotation) || 0) * Math.PI / 180;
-        drawtextOpts += `:angle=${angleRad.toFixed(4)}`;
-      }
+      // Rotation via 'angle' is not available in all FFmpeg builds
+      // if (t.rotation) {
+      //   const angleRad = (Number(t.rotation) || 0) * Math.PI / 180;
+      //   drawtextOpts += `:angle=${angleRad.toFixed(4)}`;
+      // }
 
       filters.push(`[${prevLabel}]drawtext=${drawtextOpts}[${out}]`);
       prevLabel = out;
