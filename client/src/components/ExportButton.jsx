@@ -30,6 +30,8 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
   const [progress, setProgress] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const containerRef = useRef(null);
+  const eventSourceRef = useRef(null);
+  const jobIdRef = useRef(null);
 
   const disabled = clips.length === 0 || files.length === 0;
   const config = exportConfig || { resolution: '1080', fps: 30, quality: 'high', platform: 'tiktok' };
@@ -58,6 +60,19 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
     } else {
       updateConfig({ platform });
     }
+  };
+
+  const cancelExport = () => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+    if (jobIdRef.current) {
+      fetch(`/api/trim/${jobIdRef.current}`, { method: 'DELETE' }).catch(() => {});
+      jobIdRef.current = null;
+    }
+    setStatus('idle');
+    setProgress(0);
   };
 
   const onExport = async () => {
@@ -130,8 +145,10 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
       }
 
       const { jobId } = await res.json();
+      jobIdRef.current = jobId;
 
       const eventSource = new EventSource(`/api/trim/progress/${jobId}`);
+      eventSourceRef.current = eventSource;
 
       eventSource.onmessage = (event) => {
         const data = JSON.parse(event.data);
@@ -139,6 +156,8 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
 
         if (data.status === 'ready') {
           eventSource.close();
+          eventSourceRef.current = null;
+          jobIdRef.current = null;
           setStatus('downloading');
 
           fetch(`/api/trim/download/${jobId}`)
@@ -166,12 +185,16 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
             });
         } else if (data.status === 'error') {
           eventSource.close();
+          eventSourceRef.current = null;
+          jobIdRef.current = null;
           throw new Error(data.error || 'Processing failed');
         }
       };
 
       eventSource.onerror = () => {
         eventSource.close();
+        eventSourceRef.current = null;
+        jobIdRef.current = null;
         throw new Error('Connection lost');
       };
     } catch (e) {
@@ -288,6 +311,12 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
                 style={{ width: `${progress * 100}%` }}
               />
             </div>
+            <button
+              onClick={cancelExport}
+              className="mt-1 w-full px-2 py-1 rounded bg-red-600/80 hover:bg-red-600 text-[10px] text-white font-medium transition-colors"
+            >
+              Cancel
+            </button>
           </div>
         )}
       </div>
@@ -395,6 +424,12 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
             <span>Processing video</span>
             <span>{Math.round(progress * 100)}%</span>
           </div>
+          <button
+            onClick={cancelExport}
+            className="mt-2 w-full px-3 py-1.5 rounded-lg bg-red-600/80 hover:bg-red-600 text-xs text-white font-medium transition-colors"
+          >
+            Cancel Export
+          </button>
         </div>
       )}
 

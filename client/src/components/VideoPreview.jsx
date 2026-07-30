@@ -36,6 +36,7 @@ const VideoPreview = forwardRef(function VideoPreview(
   const endedRef = useRef(false);
   const isPlayingRef = useRef(isPlaying);
   const rewindRef = useRef(null);
+  const seekTargetRef = useRef(null);
   isPlayingRef.current = isPlaying;
 
   const [handles, setHandles] = useState(null);
@@ -65,6 +66,7 @@ const VideoPreview = forwardRef(function VideoPreview(
       const v = videoRef.current;
       const bg = bgVideoRef.current;
       const tt = clip ? clip.sourceStart + Math.max(0, offsetWithinClip) : 0;
+      seekTargetRef.current = tt;
       if (v) v.currentTime = tt;
       if (bg) bg.currentTime = tt;
     },
@@ -74,10 +76,9 @@ const VideoPreview = forwardRef(function VideoPreview(
       if (!v || !clip) return;
       const frameDuration = 1 / OUTPUT_FPS;
       const newTime = Math.max(clip.sourceStart, Math.min(clip.sourceEnd - 0.01, v.currentTime + direction * frameDuration));
+      seekTargetRef.current = newTime;
       v.currentTime = newTime;
       if (bg) bg.currentTime = newTime;
-      const offset = newTime - clip.sourceStart;
-      if (offset >= 0) onTimeUpdate?.(offset);
     },
     startRewind: (speedMultiplier = 1) => {
       if (rewindRef.current) clearInterval(rewindRef.current);
@@ -93,8 +94,6 @@ const VideoPreview = forwardRef(function VideoPreview(
         const newTime = Math.max(clip.sourceStart, v.currentTime - step);
         v.currentTime = newTime;
         if (bg) bg.currentTime = newTime;
-        const offset = newTime - clip.sourceStart;
-        if (offset >= 0) onTimeUpdate?.(offset);
         if (newTime <= clip.sourceStart + 0.01) {
           clearInterval(rewindRef.current);
           rewindRef.current = null;
@@ -113,10 +112,11 @@ const VideoPreview = forwardRef(function VideoPreview(
       const safeRate = Math.max(0.0625, Math.min(16, rate));
       v.playbackRate = safeRate;
     },
-  }), [clip, onTimeUpdate]);
+  }), [clip]);
 
   useEffect(() => {
     endedRef.current = false;
+    seekTargetRef.current = null;
     const v = videoRef.current;
     const bg = bgVideoRef.current;
     if (!v || !clip) return;
@@ -138,7 +138,7 @@ const VideoPreview = forwardRef(function VideoPreview(
       v.addEventListener('loadedmetadata', applySeek, { once: true });
       return () => v.removeEventListener('loadedmetadata', applySeek);
     }
-  }, [clip && clip.id, clip && clip.sourceStart]);
+  }, [clip?.id, clip?.sourceStart]);
 
   useEffect(() => {
     const v = videoRef.current;
@@ -163,6 +163,11 @@ const VideoPreview = forwardRef(function VideoPreview(
     const v = videoRef.current;
     if (!v || !clip) return undefined;
     const onTime = () => {
+      if (seekTargetRef.current !== null) {
+        const diff = Math.abs(v.currentTime - seekTargetRef.current);
+        if (diff > 0.05) return;
+        seekTargetRef.current = null;
+      }
       const offset = v.currentTime - clip.sourceStart;
       if (offset >= 0) onTimeUpdate?.(offset);
       if (!endedRef.current && v.currentTime >= clip.sourceEnd - 0.03) {
@@ -177,7 +182,7 @@ const VideoPreview = forwardRef(function VideoPreview(
   useEffect(() => {
     const v = videoRef.current;
     const bg = bgVideoRef.current;
-    if (!v) return;
+    if (!v || !clip) return;
     if (isPlaying && v.paused) {
       v.play().catch(() => {});
       if (bg) bg.play().catch(() => {});
@@ -185,7 +190,7 @@ const VideoPreview = forwardRef(function VideoPreview(
       v.pause();
       if (bg) bg.pause();
     }
-  }, [isPlaying]);
+  }, [isPlaying, clip?.id]);
 
   useEffect(() => {
     const card = cardRef.current;
@@ -232,7 +237,7 @@ const VideoPreview = forwardRef(function VideoPreview(
       }
       return next;
     });
-  });
+  }, [selectedTextId, currentOffset, texts.length]);
 
   const startVideoDrag = (e) => {
     onSelectText?.(null);

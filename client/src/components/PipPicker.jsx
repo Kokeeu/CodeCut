@@ -17,7 +17,7 @@ export default function PipPicker({ pip, files, onChange }) {
 
   const set = (key, val) => onChange({ ...pip, [key]: val });
 
-  const availableFiles = files.filter((f) => f.url && f.duration > 0);
+  const availableFiles = files.filter((f) => f.url && f.duration > 0 && !f._pending);
 
   return (
     <div className="flex flex-col gap-2">

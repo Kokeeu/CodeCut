@@ -15,12 +15,19 @@ import LeftSidebar from './components/LeftSidebar.jsx';
 import PropertiesPanel from './components/PropertiesPanel.jsx';
 import TransportBar from './components/TransportBar.jsx';
 import TimelineRuler from './components/TimelineRuler.jsx';
+import RestoreBanner from './components/RestoreBanner.jsx';
+import ConfirmDialog from './components/ConfirmDialog.jsx';
 import useUndoableState from './hooks/useUndoableState.js';
+import useEditor from './hooks/useEditor.js';
+import useProjectAutosave from './hooks/useProjectAutosave.js';
 
-let idCounter = 0;
+const idCounter = { value: 0 };
 function nextId(prefix) {
-  idCounter += 1;
-  return `${prefix}-${Date.now().toString(36)}-${idCounter.toString(36)}`;
+  idCounter.value += 1;
+  const uniq = typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID().slice(0, 8)
+    : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  return `${prefix}-${uniq}-${idCounter.value.toString(36)}`;
 }
 
 const DEFAULT_TRANSITION = { type: 'none', durationSec: 0 };
@@ -101,6 +108,7 @@ export default function App() {
   const [selectedTextId, setSelectedTextId] = useState(null);
   const [timelineZoom, setTimelineZoom] = useState(1);
   const [showGuides, setShowGuides] = useState(false);
+  const [confirmAction, setConfirmAction] = useState(null);
   const [exportConfig, setExportConfig] = useState({ resolution: '1080', fps: 30, quality: 'high', platform: 'tiktok' });
   const previewRef = useRef(null);
   const shuttleRef = useRef({ direction: 0, level: 0 });
@@ -122,13 +130,11 @@ export default function App() {
     return Math.max(0, activeClip.sourceEnd - activeClip.sourceStart);
   }, [activeClip]);
 
-  const totalDuration = useMemo(() => {
-    let total = clips.reduce((s, c) => s + (c.sourceEnd - c.sourceStart) / (c.speed || 1), 0);
-    transitions.forEach((t) => {
-      if (t && t.type && t.type !== 'none') total -= Number(t.durationSec) || 0;
-    });
-    return Math.max(0, total);
-  }, [clips, transitions]);
+  const { totalDuration, cumulativeStarts, snapPoints, currentGlobalTime: getGlobalTime } = useEditor(clips, transitions);
+
+  const currentGlobalTime = useMemo(() => {
+    return getGlobalTime(activeClipId) + currentOffset;
+  }, [getGlobalTime, activeClipId, currentOffset]);
 
   const handleFilesAdded = useCallback((metas) => {
     const newFiles = metas.map((m) => ({
@@ -150,6 +156,7 @@ export default function App() {
       const updatedPending = pendingFiles.map((pf) => {
         const match = newFiles.find((nf) => nf.name === pf.name);
         if (match) {
+          if (pf.url) URL.revokeObjectURL(pf.url);
           return { ...match, id: pf.id };
         }
         return pf;
@@ -174,7 +181,7 @@ export default function App() {
           pip: { ...DEFAULT_PIP },
           texts: [],
         };
-        setClips([clip]);
+        setClips([clip], 'add-first-clip');
         setActiveClipId(clip.id);
       }
     }
@@ -242,36 +249,51 @@ export default function App() {
 
   const handleReorder = useCallback((newClips) => {
     setClips(newClips);
-  }, []);
+    const oldIds = clips.map((c) => c.id);
+    const newIds = newClips.map((c) => c.id);
+    if (oldIds.length !== newIds.length) return;
+    const oldTransitions = [...transitions];
+    const newTransitions = [];
+    for (let i = 0; i < newIds.length - 1; i++) {
+      const oldIdx = oldIds.indexOf(newIds[i]);
+      const nextOldIdx = oldIds.indexOf(newIds[i + 1]);
+      if (oldIdx >= 0 && nextOldIdx >= 0 && oldIdx < oldTransitions.length) {
+        newTransitions.push(oldTransitions[oldIdx] || { ...DEFAULT_TRANSITION });
+      } else {
+        newTransitions.push({ ...DEFAULT_TRANSITION });
+      }
+    }
+    setTransitions(newTransitions, 'reorder');
+  }, [clips, transitions]);
 
   const handleTrimChange = useCallback(({ sourceStart, sourceEnd }) => {
     setClips((prev) =>
       prev.map((c) => (c.id === activeClipId ? { ...c, sourceStart, sourceEnd } : c))
-    );
+    , 'trim');
   }, [activeClipId]);
 
   const handleTransformChange = useCallback((transform) => {
     setClips((prev) =>
       prev.map((c) => (c.id === activeClipId ? { ...c, transform } : c))
-    );
+    , 'transform');
   }, [activeClipId]);
 
   const handleSpeedChange = useCallback((speed) => {
     setClips((prev) =>
       prev.map((c) => (c.id === activeClipId ? { ...c, speed } : c))
-    );
+    , 'speed');
   }, [activeClipId]);
 
   const handleAudioChange = useCallback((audio) => {
     setClips((prev) =>
       prev.map((c) => (c.id === activeClipId ? { ...c, audio } : c))
-    );
+    , 'audio');
   }, [activeClipId]);
 
   const handlePipChange = useCallback((pip) => {
     setClips((prev) =>
       prev.map((c) => (c.id === activeClipId ? { ...c, pip } : c))
-    );
+    , 'pip');
   }, [activeClipId]);
 
   const handleAddText = useCallback(() => {
@@ -303,7 +325,7 @@ export default function App() {
           ? { ...c, texts: (c.texts || []).map((t) => (t.id === id ? { ...t, ...partial } : t)) }
           : c
       )
-    );
+    , 'text-update');
   }, [activeClipId]);
 
   const handleDeleteText = useCallback((id) => {
@@ -333,16 +355,21 @@ export default function App() {
       speed: activeClip.speed || 1,
       transform: { ...(activeClip.transform || DEFAULT_TRANSFORM) },
       audio: { ...(activeClip.audio || DEFAULT_AUDIO) },
-      texts: (activeClip.texts || []).map((t) => ({ ...t, id: t.id, endOffset: t.endOffset ? t.endOffset : (activeClip.sourceEnd - cut) })),
+      pip: { ...(activeClip.pip || DEFAULT_PIP) },
+      texts: (activeClip.texts || []).map((t) => ({
+        ...t,
+        id: nextId('text'),
+        endOffset: t.endOffset != null ? t.endOffset : (activeClip.sourceEnd - cut),
+      })),
     };
     const next = [...clips];
     next.splice(idx, 1, clipA, clipB);
-    setClips(next);
+    setClips(next, 'split');
     setTransitions((prev) => {
       const t = [...prev];
       t.splice(idx, 0, { ...DEFAULT_TRANSITION });
       return t;
-    });
+    }, 'split');
     setActiveClipId(clipB.id);
     setCurrentOffset(0);
   }, [activeClip, currentOffset, clips]);
@@ -437,7 +464,7 @@ export default function App() {
   }, [clips, activeClipId]);
 
   const handleReset = useCallback(() => {
-    files.forEach((f) => URL.revokeObjectURL(f.url));
+    files.forEach((f) => { if (f.url) URL.revokeObjectURL(f.url); });
     setFiles([]);
     setClips([]);
     setTransitions([]);
@@ -487,15 +514,8 @@ export default function App() {
   }, [files, clips, transitions, meta]);
 
   const handleLoadProject = useCallback((data) => {
-    files.forEach((f) => URL.revokeObjectURL(f.url));
-    setFiles([]);
-    setClips([]);
-    setTransitions([]);
-    setActiveClipId(null);
-    setCurrentOffset(0);
-    setIsPlaying(false);
-    setSelectedTextId(null);
-
+    if (!data || !data.clips) return;
+    
     const newFiles = [];
     const fileIdMap = {};
     const newClips = (data.clips || []).map((c) => {
@@ -513,6 +533,7 @@ export default function App() {
         speed: c.speed || 1,
         transform: c.transform || { ...DEFAULT_TRANSFORM },
         audio: c.audio || { ...DEFAULT_AUDIO },
+        pip: c.pip || { ...DEFAULT_PIP },
         texts: (c.texts || []).map((t) => ({
           id: nextId('text'),
           text: t.text,
@@ -543,6 +564,7 @@ export default function App() {
       durationSec: t.durationSec || 0,
     }));
 
+    files.forEach((f) => { if (f.url) URL.revokeObjectURL(f.url); });
     setFiles(newFiles.map((f) => ({
       ...f,
       file: null,
@@ -550,15 +572,15 @@ export default function App() {
       duration: 0,
       thumbnail: null,
     })));
-    setClips(newClips);
-    setTransitions(newTransitions);
+    setClips(newClips, 'load-project');
+    setTransitions(newTransitions, 'load-project');
     setMeta(data.meta || { ...DEFAULT_META });
     if (newClips.length > 0) setActiveClipId(newClips[0].id);
   }, [files]);
 
   useEffect(() => {
     const onKey = (e) => {
-      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA')) return;
+      if (e.target && e.target.closest && e.target.closest('input,select,textarea,[contenteditable]')) return;
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
         undo.undo();
@@ -618,44 +640,37 @@ export default function App() {
 
   const hasFiles = files.length > 0;
 
-  const cumulativeStarts = useMemo(() => {
-    const starts = [];
-    let cum = 0;
-    for (let i = 0; i < clips.length; i++) {
-      starts.push(cum);
-      const dur = (clips[i].sourceEnd - clips[i].sourceStart) / (clips[i].speed || 1);
-      cum += dur;
-      if (i < clips.length - 1) {
-        const t = transitions[i];
-        if (t && t.type && t.type !== 'none') cum -= Number(t.durationSec) || 0;
-      }
-    }
-    return starts;
-  }, [clips, transitions]);
+  const autosaveState = useProjectAutosave({
+    files: files.map((f) => ({ id: f.id, name: f.name, duration: f.duration, waveform: f.waveform, filmstrip: f.filmstrip })),
+    clips,
+    transitions,
+    meta,
+  });
 
-  const currentGlobalTime = useMemo(() => {
-    const idx = clips.findIndex((c) => c.id === activeClipId);
-    if (idx < 0) return 0;
-    return cumulativeStarts[idx] + currentOffset;
-  }, [clips, activeClipId, cumulativeStarts, currentOffset]);
-
-  const snapPoints = useMemo(() => {
-    const points = [0];
-    let cum = 0;
-    for (let i = 0; i < clips.length; i++) {
-      const dur = (clips[i].sourceEnd - clips[i].sourceStart) / (clips[i].speed || 1);
-      cum += dur;
-      points.push(cum);
-      if (i < clips.length - 1) {
-        const t = transitions[i];
-        if (t && t.type && t.type !== 'none') cum -= Number(t.durationSec) || 0;
-      }
-    }
-    return points;
-  }, [clips, transitions]);
+  const handleRestore = useCallback(() => {
+    const data = autosaveState.restore();
+    if (!data) return;
+    const newFiles = (data.files || []).map((f) => ({
+      id: f.id,
+      name: f.name,
+      duration: f.duration || 0,
+      waveform: f.waveform || null,
+      filmstrip: f.filmstrip || null,
+      file: null,
+      url: null,
+      thumbnail: null,
+      _pending: true,
+    }));
+    setFiles(newFiles);
+    setClips(data.clips || [], 'restore');
+    setTransitions(data.transitions || [], 'restore');
+    setMeta(data.meta || { ...DEFAULT_META });
+    if ((data.clips || []).length > 0) setActiveClipId(data.clips[0].id);
+  }, [autosaveState]);
 
   return (
     <div className="h-full flex flex-col bg-editor-bg">
+      <RestoreBanner onRestore={handleRestore} onDismiss={autosaveState.dismiss} hasData={autosaveState.hasSavedData} />
       <TopBar
         files={files}
         clips={clips}
@@ -733,8 +748,22 @@ export default function App() {
                 setIsPlaying((p) => !p);
               }}
               onSplit={handleSplit}
-              onDelete={() => activeClip && handleDeleteClip(activeClip.id)}
-              onReset={handleReset}
+              onDelete={() => {
+                if (activeClip && clips.length > 1) {
+                  setConfirmAction({
+                    title: 'Delete clip',
+                    message: `Are you sure you want to delete clip #${clips.findIndex(c => c.id === activeClip.id) + 1}?`,
+                    onConfirm: () => { handleDeleteClip(activeClip.id); setConfirmAction(null); },
+                  });
+                }
+              }}
+              onReset={() => {
+                setConfirmAction({
+                  title: 'Reset project',
+                  message: 'This will remove all clips and files. Are you sure?',
+                  onConfirm: () => { handleReset(); setConfirmAction(null); },
+                });
+              }}
               currentOffset={currentOffset}
               totalDuration={activeClipDuration}
               clipsCount={clips.length}
@@ -789,6 +818,13 @@ export default function App() {
           />
         </div>
       )}
+      <ConfirmDialog
+        open={!!confirmAction}
+        title={confirmAction?.title}
+        message={confirmAction?.message}
+        onConfirm={confirmAction?.onConfirm}
+        onCancel={() => setConfirmAction(null)}
+      />
     </div>
   );
 }

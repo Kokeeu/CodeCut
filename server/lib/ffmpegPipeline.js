@@ -393,8 +393,18 @@ function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog, 
   const crfMap = { medium: 23, high: 20, ultra: 16 };
   const crf = crfMap[quality] || 20;
 
+  const TIMEOUT_MS = 5 * 60 * 1000;
+
   return new Promise((resolve, reject) => {
     const command = ffmpeg();
+    let timeoutHandle = null;
+    let resolved = false;
+
+    const cleanup = () => {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+      cleanupTextFiles(textFiles);
+    };
+
     inputPaths.forEach((p) => command.input(p));
 
     command
@@ -413,6 +423,14 @@ function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog, 
       .on('start', (cmd) => {
         if (onLog) onLog('start', cmd);
         console.log('[pipeline] ffmpeg start:', cmd);
+        timeoutHandle = setTimeout(() => {
+          if (!resolved) {
+            resolved = true;
+            command.kill('SIGKILL');
+            cleanup();
+            reject(new Error('FFmpeg timeout: processing exceeded 5 minutes'));
+          }
+        }, TIMEOUT_MS);
       })
       .on('stderr', (line) => {
         if (onLog) onLog('stderr', line);
@@ -427,20 +445,32 @@ function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog, 
         }
       })
       .on('error', (err) => {
+        if (resolved) return;
+        resolved = true;
         if (onLog) onLog('error', err.message);
         console.error('[pipeline] ffmpeg error:', err.message);
         console.error('[pipeline] filter graph:', filterGraph);
-        cleanupTextFiles(textFiles);
+        cleanup();
         reject(err);
       })
       .on('end', () => {
+        if (resolved) return;
+        resolved = true;
         if (onLog) onLog('end', null);
         if (onProgress) onProgress(1);
         console.log('[pipeline] done ->', outputPath);
-        cleanupTextFiles(textFiles);
+        cleanup();
         resolve();
       })
       .save(outputPath);
+
+    command._kill = () => {
+      if (!resolved) {
+        resolved = true;
+        command.kill('SIGKILL');
+        cleanup();
+      }
+    };
   });
 }
 

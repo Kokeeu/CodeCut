@@ -32,6 +32,30 @@ const DEFAULT_META = {
 };
 
 const jobs = new Map();
+const ffmpegProcesses = new Map();
+
+function cleanupOldTempFiles() {
+  try {
+    const files = fs.readdirSync(TEMP_DIR);
+    const now = Date.now();
+    const MAX_AGE_MS = 60 * 60 * 1000;
+    for (const file of files) {
+      const filePath = path.join(TEMP_DIR, file);
+      try {
+        const stat = fs.statSync(filePath);
+        if (now - stat.mtimeMs > MAX_AGE_MS) {
+          safeUnlink(filePath);
+        }
+      } catch {
+        // ignore
+      }
+    }
+  } catch {
+    // ignore
+  }
+}
+
+cleanupOldTempFiles();
 
 router.post('/', upload.array('videos', MAX_FILES), async (req, res) => {
   const files = req.files || [];
@@ -90,7 +114,7 @@ router.post('/', upload.array('videos', MAX_FILES), async (req, res) => {
   res.status(202).json({ jobId });
 
   try {
-    await runPipeline({
+    const pipelinePromise = runPipeline({
       inputPaths,
       clips: normalizedClips,
       transitions,
@@ -101,11 +125,17 @@ router.post('/', upload.array('videos', MAX_FILES), async (req, res) => {
         job.progress = progress;
       },
     });
+    
+    pipelinePromise._ffmpegCommand && ffmpegProcesses.set(jobId, () => pipelinePromise._ffmpegCommand._kill());
+    
+    await pipelinePromise;
     job.status = 'ready';
   } catch (err) {
     job.status = 'error';
     job.error = err.message || String(err);
     safeUnlinkAll([...inputPaths, outputPath]);
+  } finally {
+    ffmpegProcesses.delete(jobId);
   }
 
   setTimeout(() => {
@@ -174,6 +204,27 @@ router.get('/progress/:jobId', (req, res) => {
   req.on('close', () => {
     clearInterval(interval);
   });
+});
+
+router.delete('/:jobId', (req, res) => {
+  const job = jobs.get(req.params.jobId);
+  if (!job) {
+    return res.status(404).json({ error: 'Job not found.' });
+  }
+  
+  const killFn = ffmpegProcesses.get(req.params.jobId);
+  if (killFn) {
+    killFn();
+    ffmpegProcesses.delete(req.params.jobId);
+  }
+  
+  if (job.status === 'processing') {
+    job.status = 'cancelled';
+    safeUnlinkAll([...job.inputPaths, job.outputPath]);
+  }
+  
+  jobs.delete(req.params.jobId);
+  res.json({ status: 'cancelled' });
 });
 
 module.exports = router;

@@ -8,10 +8,11 @@ import { getAnimationTypes } from '../lib/textAnimations.js';
 
 function DualRangeSlider({ min, max, step, valueStart, valueEnd, onChange }) {
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const safeMax = Math.max(max, step * 2);
   const onStartChange = (v) => onChange(clamp(Number(v), 0, valueEnd - step), valueEnd);
-  const onEndChange = (v) => onChange(valueStart, clamp(Number(v), valueStart + step, max));
-  const startPct = max > 0 ? (valueStart / max) * 100 : 0;
-  const endPct = max > 0 ? (valueEnd / max) * 100 : 100;
+  const onEndChange = (v) => onChange(valueStart, clamp(Number(v), valueStart + step, safeMax));
+  const startPct = safeMax > 0 ? (valueStart / safeMax) * 100 : 0;
+  const endPct = safeMax > 0 ? (valueEnd / safeMax) * 100 : 100;
 
   return (
     <div className="flex flex-col gap-1">
