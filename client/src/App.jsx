@@ -17,6 +17,8 @@ import TransportBar from './components/TransportBar.jsx';
 import TimelineRuler from './components/TimelineRuler.jsx';
 import RestoreBanner from './components/RestoreBanner.jsx';
 import ConfirmDialog from './components/ConfirmDialog.jsx';
+import ToastContainer from './components/ToastContainer.jsx';
+import ShortcutOverlay from './components/ShortcutOverlay.jsx';
 import useUndoableState from './hooks/useUndoableState.js';
 import useEditor from './hooks/useEditor.js';
 import useProjectAutosave from './hooks/useProjectAutosave.js';
@@ -47,11 +49,11 @@ const TEMPLATES = [
     blur: 30,
     blurEnabled: true,
     texts: [
-      { text: 'Openings favs', x: 285, y: 180, size: 75, align: 'center' },
-      { text: 'ANIME TITLE', x: 70, y: 980, size: 67, align: 'left' },
-      { text: 'Opening: 1', x: 70, y: 1080, size: 67, align: 'left' },
-      { text: 'Canción: Song', x: 70, y: 1180, size: 67, align: 'left' },
-      { text: 'Artistas: Artist', x: 70, y: 1280, size: 67, align: 'left' },
+      { id: 'tpl-1-text-1', text: 'Openings favs', x: 285, y: 180, size: 75, align: 'center' },
+      { id: 'tpl-1-text-2', text: 'ANIME TITLE', x: 70, y: 980, size: 67, align: 'left' },
+      { id: 'tpl-1-text-3', text: 'Opening: 1', x: 70, y: 1080, size: 67, align: 'left' },
+      { id: 'tpl-1-text-4', text: 'Canción: Song', x: 70, y: 1180, size: 67, align: 'left' },
+      { id: 'tpl-1-text-5', text: 'Artistas: Artist', x: 70, y: 1280, size: 67, align: 'left' },
     ],
   },
   {
@@ -62,9 +64,9 @@ const TEMPLATES = [
     blur: 40,
     blurEnabled: true,
     texts: [
-      { text: 'OPENINGS', x: 540, y: 120, size: 84, align: 'center' },
-      { text: 'ANIME TITLE', x: 70, y: 1080, size: 67, align: 'left' },
-      { text: 'Song — Artist', x: 70, y: 1200, size: 60, align: 'left' },
+      { id: 'tpl-2-text-1', text: 'OPENINGS', x: 540, y: 120, size: 84, align: 'center' },
+      { id: 'tpl-2-text-2', text: 'ANIME TITLE', x: 70, y: 1080, size: 67, align: 'left' },
+      { id: 'tpl-2-text-3', text: 'Song — Artist', x: 70, y: 1200, size: 60, align: 'left' },
     ],
   },
   {
@@ -75,9 +77,9 @@ const TEMPLATES = [
     blur: 60,
     blurEnabled: true,
     texts: [
-      { text: 'Openings favs', x: 540, y: 130, size: 56, align: 'center' },
-      { text: 'ANIME TITLE', x: 70, y: 1080, size: 67, align: 'left' },
-      { text: 'Ep 1', x: 70, y: 1180, size: 67, align: 'left' },
+      { id: 'tpl-3-text-1', text: 'Openings favs', x: 540, y: 130, size: 56, align: 'center' },
+      { id: 'tpl-3-text-2', text: 'ANIME TITLE', x: 70, y: 1080, size: 67, align: 'left' },
+      { id: 'tpl-3-text-3', text: 'Ep 1', x: 70, y: 1180, size: 67, align: 'left' },
     ],
   },
   {
@@ -88,8 +90,8 @@ const TEMPLATES = [
     blur: 25,
     blurEnabled: true,
     texts: [
-      { text: 'ANIME TITLE', x: 70, y: 1080, size: 67, align: 'left' },
-      { text: 'Ep 1 · Song — Artist', x: 70, y: 1180, size: 60, align: 'left' },
+      { id: 'tpl-4-text-1', text: 'ANIME TITLE', x: 70, y: 1080, size: 67, align: 'left' },
+      { id: 'tpl-4-text-2', text: 'Ep 1 · Song — Artist', x: 70, y: 1180, size: 60, align: 'left' },
     ],
   },
 ];
@@ -109,6 +111,7 @@ export default function App() {
   const [timelineZoom, setTimelineZoom] = useState(1);
   const [showGuides, setShowGuides] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const [exportConfig, setExportConfig] = useState({ resolution: '1080', fps: 30, quality: 'high', platform: 'tiktok' });
   const previewRef = useRef(null);
   const shuttleRef = useRef({ direction: 0, level: 0 });
@@ -136,6 +139,24 @@ export default function App() {
     return getGlobalTime(activeClipId) + currentOffset;
   }, [getGlobalTime, activeClipId, currentOffset]);
 
+  const base64ToBlobUrl = (base64) => {
+    if (!base64) return null;
+    try {
+      const byteString = atob(base64.split(',')[1]);
+      const mimeString = base64.split(',')[0].split(':')[1].split(';')[0];
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+      }
+      const blob = new Blob([ab], { type: mimeString });
+      return URL.createObjectURL(blob);
+    } catch (err) {
+      console.error('Error converting base64 to blob:', err);
+      return null;
+    }
+  };
+
   const handleFilesAdded = useCallback((metas) => {
     const newFiles = metas.map((m) => ({
       id: nextId('file'),
@@ -145,7 +166,8 @@ export default function App() {
       duration: m.duration || 0,
       thumbnail: m.thumbnail || null,
       waveform: m.waveform || null,
-      filmstrip: m.filmstrip || null,
+      filmstrip: m.filmstrip ? base64ToBlobUrl(m.filmstrip) : null,
+      filmstripBase64: m.filmstrip || null,
     }));
     if (newFiles.length === 0) return;
     
@@ -632,6 +654,11 @@ export default function App() {
           setIsPlaying(true);
           previewRef.current?.setPlaybackSpeed(1);
         }
+      } else if (e.key === '?') {
+        e.preventDefault();
+        setShowShortcuts((s) => !s);
+      } else if (e.key === 'Escape') {
+        setShowShortcuts(false);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -641,7 +668,7 @@ export default function App() {
   const hasFiles = files.length > 0;
 
   const autosaveState = useProjectAutosave({
-    files: files.map((f) => ({ id: f.id, name: f.name, duration: f.duration, waveform: f.waveform, filmstrip: f.filmstrip })),
+    files: files.map((f) => ({ id: f.id, name: f.name, duration: f.duration, waveform: f.waveform, filmstripBase64: f.filmstripBase64 })),
     clips,
     transitions,
     meta,
@@ -655,7 +682,8 @@ export default function App() {
       name: f.name,
       duration: f.duration || 0,
       waveform: f.waveform || null,
-      filmstrip: f.filmstrip || null,
+      filmstrip: f.filmstripBase64 ? base64ToBlobUrl(f.filmstripBase64) : null,
+      filmstripBase64: f.filmstripBase64 || null,
       file: null,
       url: null,
       thumbnail: null,
@@ -681,6 +709,10 @@ export default function App() {
         onLoad={handleLoadProject}
         exportConfig={exportConfig}
         onExportConfigChange={setExportConfig}
+        canUndo={undo.canUndo}
+        canRedo={undo.canRedo}
+        onUndo={undo.undo}
+        onRedo={undo.redo}
       />
 
       {!hasFiles ? (
@@ -826,6 +858,8 @@ export default function App() {
         onConfirm={confirmAction?.onConfirm}
         onCancel={() => setConfirmAction(null)}
       />
+      <ShortcutOverlay isOpen={showShortcuts} onClose={() => setShowShortcuts(false)} />
+      <ToastContainer />
     </div>
   );
 }

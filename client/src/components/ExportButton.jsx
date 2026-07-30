@@ -48,6 +48,15 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showSettings]);
 
+  useEffect(() => {
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+    };
+  }, []);
+
   const updateConfig = (partial) => {
     const next = { ...config, ...partial };
     onExportConfigChange?.(next);
@@ -181,21 +190,31 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
               }, 2500);
             })
             .catch((err) => {
-              throw err;
+              console.error('Download error:', err);
+              setError(err.message || 'Download failed');
+              setStatus('idle');
+              setProgress(0);
             });
         } else if (data.status === 'error') {
           eventSource.close();
           eventSourceRef.current = null;
           jobIdRef.current = null;
-          throw new Error(data.error || 'Processing failed');
+          setError(data.error || 'Processing failed');
+          setStatus('idle');
+          setProgress(0);
         }
       };
 
       eventSource.onerror = () => {
+        if (eventSource.readyState === EventSource.CLOSED) {
+          return;
+        }
         eventSource.close();
         eventSourceRef.current = null;
         jobIdRef.current = null;
-        throw new Error('Connection lost');
+        setError('Connection lost');
+        setStatus('idle');
+        setProgress(0);
       };
     } catch (e) {
       console.error(e);

@@ -4,6 +4,7 @@ import AudioPanel from './AudioPanel.jsx';
 import PipPicker from './PipPicker.jsx';
 import ClipTrim from './ClipTrim.jsx';
 import ClipTransformControls from './ClipTransformControls.jsx';
+import TextContentInput from './TextContentInput.jsx';
 import { FONT_OPTIONS, FONT_CSS } from './CardMetadata.jsx';
 import { getAnimationTypes } from '../lib/textAnimations.js';
 
@@ -155,7 +156,7 @@ export default function PropertiesPanel({
                     <button onClick={(e) => { e.stopPropagation(); onDeleteText(t.id); }}
                       className="w-4 h-4 rounded bg-editor-border hover:bg-red-600 text-[10px] leading-none text-neutral-300 transition-colors">×</button>
                   </div>
-                  <input value={t.text} onChange={(e) => onUpdateText(t.id, { text: e.target.value })}
+                  <TextContentInput value={t.text} onChange={(newValue) => onUpdateText(t.id, { text: newValue })}
                     onClick={(e) => e.stopPropagation()} placeholder="Text content" maxLength={100}
                     className="w-full px-2 py-1 rounded text-[11px] mb-1.5" />
                   <div className="grid grid-cols-2 gap-1.5 mb-1.5">

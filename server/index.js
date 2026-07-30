@@ -1,17 +1,27 @@
 const express = require('express');
 const cors = require('cors');
+const compression = require('compression');
 const path = require('path');
 const fs = require('fs');
 const ffmpegStatic = require('ffmpeg-static');
+const ffprobeStatic = require('ffprobe-static');
 const ffmpeg = require('fluent-ffmpeg');
 
 const trimRoute = require('./routes/trim');
+const { startCleanupCron } = require('./lib/cron');
 
 if (ffmpegStatic) {
   ffmpeg.setFfmpegPath(ffmpegStatic);
   console.log(`[server] FFmpeg binary: ${ffmpegStatic}`);
 } else {
   console.warn('[server] ffmpeg-static did not provide a binary path.');
+}
+
+if (ffprobeStatic) {
+  ffmpeg.setFfprobePath(ffprobeStatic.path);
+  console.log(`[server] FFprobe binary: ${ffprobeStatic.path}`);
+} else {
+  console.warn('[server] ffprobe-static did not provide a binary path.');
 }
 
 const app = express();
@@ -23,6 +33,7 @@ if (!fs.existsSync(TEMP_DIR)) {
 }
 
 app.use(cors());
+app.use(compression());
 app.use(express.json());
 
 app.get('/api/health', (_req, res) => {
@@ -38,4 +49,5 @@ app.use((err, _req, res, _next) => {
 
 app.listen(PORT, () => {
   console.log(`[server] Listening on http://localhost:${PORT}`);
+  startCleanupCron();
 });

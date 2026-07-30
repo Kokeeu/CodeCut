@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, memo } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
@@ -9,7 +9,7 @@ function formatTime(seconds) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export default function ClipBlock({ clip, index, width, file, isActive, canDelete, onSelect, onDelete, onDuplicate }) {
+const ClipBlock = memo(function ClipBlock({ clip, index, width, file, isActive, canDelete, onSelect, onDelete, onDuplicate }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: clip.id });
 
   const style = {
@@ -104,4 +104,6 @@ export default function ClipBlock({ clip, index, width, file, isActive, canDelet
       )}
     </div>
   );
-}
+});
+
+export default ClipBlock;

@@ -451,6 +451,8 @@ function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog, 
   const crfMap = { medium: 23, high: 20, ultra: 16 };
   const crf = crfMap[quality] || 20;
 
+  const preset = totalDuration < 30 ? 'medium' : 'veryfast';
+
   const TIMEOUT_MS = 5 * 60 * 1000;
 
   return new Promise((resolve, reject) => {
@@ -469,7 +471,7 @@ function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog, 
       .complexFilter(filterGraph, ['vout', 'aout'])
       .outputOptions([
         '-c:v libx264',
-        '-preset veryfast',
+        `-preset ${preset}`,
         `-crf ${crf}`,
         `-r ${fps}`,
         '-c:a aac',

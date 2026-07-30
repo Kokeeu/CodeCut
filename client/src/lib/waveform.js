@@ -1,4 +1,42 @@
 export async function extractWaveform(fileUrl, numPeaks = 200) {
+  if (typeof Worker !== 'undefined') {
+    try {
+      return await extractWaveformWithWorker(fileUrl, numPeaks);
+    } catch (err) {
+      if (err.message && err.message.includes('AudioContext not available')) {
+        console.info('Worker no soporta AudioContext, usando hilo principal');
+      } else {
+        console.warn('Worker failed, falling back to main thread:', err);
+      }
+    }
+  }
+  
+  return extractWaveformMainThread(fileUrl, numPeaks);
+}
+
+function extractWaveformWithWorker(fileUrl, numPeaks) {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(new URL('../workers/waveform.worker.js', import.meta.url), { type: 'module' });
+    
+    worker.onmessage = (e) => {
+      worker.terminate();
+      if (e.data.success) {
+        resolve(e.data.peaks);
+      } else {
+        reject(new Error(e.data.error));
+      }
+    };
+    
+    worker.onerror = (err) => {
+      worker.terminate();
+      reject(err);
+    };
+    
+    worker.postMessage({ fileUrl, numPeaks });
+  });
+}
+
+async function extractWaveformMainThread(fileUrl, numPeaks) {
   try {
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
     const response = await fetch(fileUrl);

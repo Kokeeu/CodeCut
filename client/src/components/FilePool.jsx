@@ -1,4 +1,5 @@
 import VideoUploader from './VideoUploader.jsx';
+import LazyImage from './LazyImage.jsx';
 
 function formatTime(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
@@ -15,7 +16,7 @@ export default function FilePool({ files, onAddClip, onFilesAdded, vertical }) {
           <div key={f.id} className="rounded-lg bg-editor-surface border border-editor-border overflow-hidden">
             <div className="flex gap-2 p-2">
               {f.thumbnail ? (
-                <img src={f.thumbnail} alt={f.name} className="w-16 h-10 object-cover rounded" />
+                <LazyImage src={f.thumbnail} alt={f.name} className="w-16 h-10 rounded overflow-hidden" />
               ) : (
                 <div className="w-16 h-10 bg-editor-border rounded flex items-center justify-center text-lg">🎞</div>
               )}
@@ -45,7 +46,7 @@ export default function FilePool({ files, onAddClip, onFilesAdded, vertical }) {
           className="shrink-0 w-36 rounded-lg bg-editor-surface border border-editor-border overflow-hidden"
         >
           {f.thumbnail ? (
-            <img src={f.thumbnail} alt={f.name} className="w-full h-20 object-cover" />
+            <LazyImage src={f.thumbnail} alt={f.name} className="w-full h-20 overflow-hidden" />
           ) : (
             <div className="w-full h-20 bg-editor-border flex items-center justify-center text-2xl">🎞</div>
           )}

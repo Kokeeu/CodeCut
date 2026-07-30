@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, arrayMove, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import ClipBlock from './ClipBlock.jsx';
@@ -21,6 +21,7 @@ export default function ClipTrack({
   onTimelineZoomChange,
 }) {
   const containerRef = useRef(null);
+  const [visibleRange, setVisibleRange] = useState({ start: 0, end: clips.length });
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
@@ -41,6 +42,44 @@ export default function ClipTrack({
     onTimelineZoomChange(timelineZoom + delta);
   };
 
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const updateVisibleRange = () => {
+      const scrollLeft = container.scrollLeft;
+      const clientWidth = container.clientWidth;
+      const effectivePxPerSec = PX_PER_SEC * Math.max(0.1, Math.min(20, timelineZoom || 1));
+      
+      let cumWidth = 0;
+      let startIdx = 0;
+      let endIdx = clips.length;
+
+      for (let i = 0; i < clips.length; i++) {
+        const dur = clips[i].sourceEnd - clips[i].sourceStart;
+        const width = Math.max(MIN_WIDTH, dur * effectivePxPerSec);
+        
+        if (cumWidth + width > scrollLeft - 200 && startIdx === 0) {
+          startIdx = Math.max(0, i - 2);
+        }
+        
+        if (cumWidth > scrollLeft + clientWidth + 200) {
+          endIdx = Math.min(clips.length, i + 2);
+          break;
+        }
+        
+        cumWidth += width;
+      }
+
+      setVisibleRange({ start: startIdx, end: endIdx });
+    };
+
+    updateVisibleRange();
+    container.addEventListener('scroll', updateVisibleRange);
+    
+    return () => container.removeEventListener('scroll', updateVisibleRange);
+  }, [clips, timelineZoom]);
+
   if (clips.length === 0) {
     return (
       <p className="text-xs text-neutral-500 py-6 text-center">
@@ -50,6 +89,7 @@ export default function ClipTrack({
   }
 
   const effectivePxPerSec = PX_PER_SEC * Math.max(0.1, Math.min(20, timelineZoom || 1));
+  const visibleClips = clips.slice(visibleRange.start, visibleRange.end);
 
   return (
     <div>
@@ -60,7 +100,8 @@ export default function ClipTrack({
             onWheel={handleWheel}
             className="flex items-stretch overflow-x-auto pb-2 pt-1"
           >
-            {clips.map((clip, i) => {
+            {visibleClips.map((clip, idx) => {
+              const i = visibleRange.start + idx;
               const dur = clip.sourceEnd - clip.sourceStart;
               const width = Math.max(MIN_WIDTH, dur * effectivePxPerSec);
               const nextClip = clips[i + 1];

@@ -1,5 +1,6 @@
 import ExportButton from './ExportButton.jsx';
 import ProjectIO from './ProjectIO.jsx';
+import UndoRedoButtons from './UndoRedoButtons.jsx';
 
 function formatTime(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
@@ -8,7 +9,7 @@ function formatTime(seconds) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export default function TopBar({ files, clips, transitions, meta, totalDuration, onSave, onLoad, exportConfig, onExportConfigChange }) {
+export default function TopBar({ files, clips, transitions, meta, totalDuration, onSave, onLoad, exportConfig, onExportConfigChange, canUndo, canRedo, onUndo, onRedo }) {
   return (
     <div className="h-12 bg-editor-panel border-b border-editor-border flex items-center px-4 gap-4 shrink-0">
       <div className="flex items-center gap-2">
@@ -16,6 +17,10 @@ export default function TopBar({ files, clips, transitions, meta, totalDuration,
         <span className="text-sm font-bold tracking-tight text-neutral-100">Codecut</span>
         <span className="text-[10px] text-neutral-500 font-mono">9:16</span>
       </div>
+
+      <div className="w-px h-5 bg-editor-border" />
+
+      <UndoRedoButtons canUndo={canUndo} canRedo={canRedo} onUndo={onUndo} onRedo={onRedo} />
 
       <div className="w-px h-5 bg-editor-border" />
 

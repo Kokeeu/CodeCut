@@ -3,6 +3,8 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { runPipeline, validateClips, safeUnlink, OUTPUT_W, OUTPUT_H } = require('../lib/ffmpegPipeline');
+const { validateInputVideos } = require('../lib/validateInputs');
+const { jobQueue } = require('../lib/queue');
 
 const router = express.Router();
 
@@ -96,13 +98,25 @@ router.post('/', upload.array('videos', MAX_FILES), async (req, res) => {
   }));
 
   const inputPaths = normalizedClips.map((c) => files[c.fileIndex].path);
+
+  try {
+    const validation = await validateInputVideos(inputPaths, normalizedClips);
+    if (!validation.valid) {
+      safeUnlinkAll(files.map((f) => f.path));
+      return res.status(400).json({ error: validation.errors.join('; ') });
+    }
+  } catch (err) {
+    safeUnlinkAll(files.map((f) => f.path));
+    return res.status(400).json({ error: `Video validation failed: ${err.message}` });
+  }
+
   const outputName = `composed-${Date.now()}.mp4`;
   const outputPath = path.join(TEMP_DIR, outputName);
   const jobId = `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
   const job = {
     id: jobId,
-    status: 'processing',
+    status: 'queued',
     progress: 0,
     outputPath,
     outputName,
@@ -111,32 +125,40 @@ router.post('/', upload.array('videos', MAX_FILES), async (req, res) => {
   };
   jobs.set(jobId, job);
 
-  res.status(202).json({ jobId });
+  res.status(202).json({ jobId, status: 'queued' });
 
-  try {
-    const pipelinePromise = runPipeline({
-      inputPaths,
-      clips: normalizedClips,
-      transitions,
-      meta,
-      outputPath,
-      exportConfig,
-      onProgress: (progress) => {
-        job.progress = progress;
-      },
-    });
+  jobQueue.enqueue(jobId, async () => {
+    job.status = 'processing';
     
-    pipelinePromise._ffmpegCommand && ffmpegProcesses.set(jobId, () => pipelinePromise._ffmpegCommand._kill());
-    
-    await pipelinePromise;
-    job.status = 'ready';
-  } catch (err) {
+    try {
+      const pipelinePromise = runPipeline({
+        inputPaths,
+        clips: normalizedClips,
+        transitions,
+        meta,
+        outputPath,
+        exportConfig,
+        onProgress: (progress) => {
+          job.progress = progress;
+        },
+      });
+      
+      pipelinePromise._ffmpegCommand && ffmpegProcesses.set(jobId, () => pipelinePromise._ffmpegCommand._kill());
+      
+      await pipelinePromise;
+      job.status = 'ready';
+    } catch (err) {
+      job.status = 'error';
+      job.error = err.message || String(err);
+      safeUnlinkAll([...inputPaths, outputPath]);
+    } finally {
+      ffmpegProcesses.delete(jobId);
+    }
+  }).catch((err) => {
     job.status = 'error';
     job.error = err.message || String(err);
     safeUnlinkAll([...inputPaths, outputPath]);
-  } finally {
-    ffmpegProcesses.delete(jobId);
-  }
+  });
 
   setTimeout(() => {
     const j = jobs.get(jobId);
@@ -179,10 +201,20 @@ router.get('/progress/:jobId', (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
+  let lastSentProgress = -1;
+  let lastSentStatus = null;
+
   const sendUpdate = () => {
-    const data = { progress: job.progress, status: job.status };
-    if (job.error) data.error = job.error;
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
+    const progressChanged = Math.abs(job.progress - lastSentProgress) > 0.01;
+    const statusChanged = job.status !== lastSentStatus;
+    
+    if (progressChanged || statusChanged) {
+      const data = { progress: job.progress, status: job.status };
+      if (job.error) data.error = job.error;
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+      lastSentProgress = job.progress;
+      lastSentStatus = job.status;
+    }
   };
 
   sendUpdate();
@@ -199,7 +231,7 @@ router.get('/progress/:jobId', (req, res) => {
       clearInterval(interval);
       setTimeout(() => res.end(), 1000);
     }
-  }, 200);
+  }, 100);
 
   req.on('close', () => {
     clearInterval(interval);

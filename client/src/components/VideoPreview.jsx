@@ -1,6 +1,7 @@
-import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, useMemo } from 'react';
 import { FONT_CSS } from './CardMetadata.jsx';
 import { getPreviewAnimationStyle, getAnimation } from '../lib/textAnimations.js';
+import useThrottledCallback from '../hooks/useThrottledCallback.js';
 
 function formatTime(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
@@ -60,6 +61,10 @@ const VideoPreview = forwardRef(function VideoPreview(
 
   const t = clip?.transform || { x: 0, y: 0, scale: 1 };
   const texts = clip?.texts || [];
+
+  const throttledTimeUpdate = useThrottledCallback((offset) => {
+    onTimeUpdate?.(offset);
+  }, 33);
 
   useImperativeHandle(ref, () => ({
     seekTo: (offsetWithinClip) => {
@@ -160,6 +165,24 @@ const VideoPreview = forwardRef(function VideoPreview(
   }, [clip?.audio?.volume, clip?.audio?.mute]);
 
   useEffect(() => {
+    if (!clip || !files || files.length === 0) return;
+    
+    const currentClipIndex = files.findIndex((f) => f.id === clip.fileId);
+    if (currentClipIndex < 0 || currentClipIndex >= files.length - 1) return;
+    
+    const nextClip = files[currentClipIndex + 1];
+    if (!nextClip?.url) return;
+    
+    const preloadVideo = document.createElement('video');
+    preloadVideo.preload = 'metadata';
+    preloadVideo.src = nextClip.url;
+    
+    return () => {
+      preloadVideo.src = '';
+    };
+  }, [clip, files]);
+
+  useEffect(() => {
     const v = videoRef.current;
     if (!v || !clip) return undefined;
     const onTime = () => {
@@ -169,7 +192,7 @@ const VideoPreview = forwardRef(function VideoPreview(
         seekTargetRef.current = null;
       }
       const offset = v.currentTime - clip.sourceStart;
-      if (offset >= 0) onTimeUpdate?.(offset);
+      if (offset >= 0) throttledTimeUpdate(offset);
       if (!endedRef.current && v.currentTime >= clip.sourceEnd - 0.03) {
         endedRef.current = true;
         onClipEnded?.();
@@ -177,7 +200,7 @@ const VideoPreview = forwardRef(function VideoPreview(
     };
     v.addEventListener('timeupdate', onTime);
     return () => v.removeEventListener('timeupdate', onTime);
-  }, [clip, onTimeUpdate, onClipEnded]);
+  }, [clip, throttledTimeUpdate, onClipEnded]);
 
   useEffect(() => {
     const v = videoRef.current;

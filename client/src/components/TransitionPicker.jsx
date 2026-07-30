@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, memo } from 'react';
 
 export const TRANSITION_TYPES = [
   { value: 'none', label: 'Cut (none)' },
@@ -13,7 +13,7 @@ export const TRANSITION_TYPES = [
   { value: 'circleclose', label: 'Circle close' },
 ];
 
-export default function TransitionPicker({ value, maxDuration, onChange }) {
+const TransitionPicker = memo(function TransitionPicker({ value, maxDuration, onChange }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
 
@@ -88,4 +88,6 @@ export default function TransitionPicker({ value, maxDuration, onChange }) {
       )}
     </div>
   );
-}
+});
+
+export default TransitionPicker;
