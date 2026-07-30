@@ -1,5 +1,5 @@
 const { getAtempoChain } = require('./speed.js');
-const { getAnimation } = require('./textAnimations.js');
+const { getAnimation, getTypewriterSegments } = require('./textAnimations.js');
 
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegStatic = require('ffmpeg-static');
@@ -125,13 +125,30 @@ function resolveFont(family) {
 function writeTextFiles(clips, runId) {
   const map = {};
   clips.forEach((clip, ci) => {
+    const speed = Number(clip.speed) || 1;
     (clip.texts || []).forEach((t, ti) => {
       const content = t && t.text != null ? String(t.text) : '';
       if (!content.trim()) return;
-      const key = `c${ci}-t${ti}`;
-      const p = path.join(TEMP_DIR, `text-${runId}-${key}.txt`);
-      fs.writeFileSync(p, content, 'utf8');
-      map[key] = p;
+      
+      if (t.animation && t.animation.type === 'typewriter') {
+        const animDur = Number(t.animation.duration) || 0.5;
+        const startOff = (Number(t.startOffset) || 0) / speed;
+        const endOff = (Number(t.endOffset) || (clip.sourceEnd - clip.sourceStart)) / speed;
+        const totalDur = endOff - startOff;
+        const segments = getTypewriterSegments(content, startOff, animDur, totalDur);
+        
+        segments.forEach((seg, si) => {
+          const key = `c${ci}-t${ti}-s${si}`;
+          const p = path.join(TEMP_DIR, `text-${runId}-${key}.txt`);
+          fs.writeFileSync(p, seg.text, 'utf8');
+          map[key] = p;
+        });
+      } else {
+        const key = `c${ci}-t${ti}`;
+        const p = path.join(TEMP_DIR, `text-${runId}-${key}.txt`);
+        fs.writeFileSync(p, content, 'utf8');
+        map[key] = p;
+      }
     });
   });
   return map;
@@ -274,28 +291,23 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig) {
     (clip.texts || []).forEach((t) => {
       const content = t && t.text != null ? String(t.text) : '';
       if (!content.trim()) { ti++; return; }
-      const key = `c${ci}-t${ti}`;
-      ti++;
-      const fp = textFiles && textFiles[key];
-      if (!fp) return;
+      
+      const startOff = (Number(t.startOffset) || 0) / speed;
+      const endOff = (Number(t.endOffset) || (clip.sourceEnd - clip.sourceStart)) / speed;
+      const enableStart = (clipStart + startOff).toFixed(3);
+      const enableEnd = (clipStart + endOff).toFixed(3);
       const size = Math.max(8, Math.min(400, Number(t.size) || 60)) * scaleFactor;
       const tx = Math.round((Number(t.x) || 0) * scaleFactor);
       const ty = Math.round((Number(t.y) || 0) * scaleFactor);
       const fcolor = colorToHex(t.color);
       const ffile = escapeFilterPathQuoted(resolveFont(t.font));
-      const out = `vt${ti}`;
-      const startOff = (Number(t.startOffset) || 0) / speed;
-      const endOff = (Number(t.endOffset) || (clip.sourceEnd - clip.sourceStart)) / speed;
-      const enableStart = (clipStart + startOff).toFixed(3);
-      const enableEnd = (clipStart + endOff).toFixed(3);
       const align = t.align || 'left';
-
+      
       let xExpr = align === 'center' ? '(w-text_w)/2' : String(tx);
       let yExpr = String(ty);
       let sizeExpr = String(size);
-      let alphaExpr = '1';
-
-      if (t.animation && t.animation.type) {
+      
+      if (t.animation && t.animation.type && t.animation.type !== 'typewriter') {
         const animDur = Number(t.animation.duration) || 0.5;
         const animDef = getAnimation(t.animation.type);
         const sExpr = enableStart;
@@ -309,40 +321,86 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig) {
         if (animDef.getFfmpegFontSize) {
           sizeExpr = animDef.getFfmpegFontSize(size, animDur, sExpr);
         }
-        if (animDef.getFfmpegEnable) {
-          alphaExpr = animDef.getFfmpegEnable(animDur, sExpr);
-        }
       }
 
-      const enableExpr = `between(t,${enableStart},${enableEnd})`;
-      const fullEnable = alphaExpr !== '1'
-        ? `if(${enableExpr},${alphaExpr},0)`
-        : enableExpr;
+      if (t.animation && t.animation.type === 'typewriter') {
+        const animDur = Number(t.animation.duration) || 0.5;
+        const totalDur = endOff - startOff;
+        const segments = getTypewriterSegments(content, startOff, animDur, totalDur);
+        
+        segments.forEach((seg, si) => {
+          const key = `c${ci}-t${ti}-s${si}`;
+          const fp = textFiles && textFiles[key];
+          if (!fp) return;
+          
+          const segStart = (clipStart + seg.startTime).toFixed(3);
+          const segEnd = (clipStart + seg.endTime).toFixed(3);
+          const out = `vt${ti}_${si}`;
+          const enableExpr = `between(t,${segStart},${segEnd})`;
+          
+          let drawtextOpts = `textfile='${escapeFilterPath(fp)}':x=${escapeDrawtextExpr(xExpr)}:y=${escapeDrawtextExpr(yExpr)}:fontsize=${escapeDrawtextExpr(sizeExpr)}:fontcolor=${fcolor}:fontfile='${ffile}':alpha='${escapeDrawtextExpr(enableExpr)}'`;
 
-      let drawtextOpts = `text='${escapeDrawtextString(content)}':x=${escapeDrawtextExpr(xExpr)}:y=${escapeDrawtextExpr(yExpr)}:fontsize=${escapeDrawtextExpr(sizeExpr)}:fontcolor=${fcolor}:fontfile='${ffile}':alpha='${escapeDrawtextExpr(fullEnable)}'`;
+          if (t.strokeEnabled && t.strokeWidth > 0) {
+            drawtextOpts += `:borderw=${Math.round((Number(t.strokeWidth) || 2) * scaleFactor)}:bordercolor=${colorToHex(t.strokeColor)}`;
+          } else {
+            drawtextOpts += `:shadowcolor=black@0.75:shadowx=${Math.round(3 * scaleFactor)}:shadowy=${Math.round(3 * scaleFactor)}`;
+          }
 
-      if (t.strokeEnabled && t.strokeWidth > 0) {
-        drawtextOpts += `:borderw=${Math.round((Number(t.strokeWidth) || 2) * scaleFactor)}:bordercolor=${colorToHex(t.strokeColor)}`;
+          if (t.bgEnabled) {
+            const bgPadding = Math.round((Number(t.bgPadding) || 12) * scaleFactor);
+            const bgOpacity = Number(t.bgOpacity ?? 0.7);
+            const bgColorHex = colorToHex(t.bgColor).replace('0x', '');
+            const bgAlpha = Math.round(bgOpacity * 255).toString(16).padStart(2, '0');
+            drawtextOpts += `:box=1:boxborderw=${bgPadding}:boxcolor=0x${bgColorHex}${bgAlpha}`;
+          }
+
+          filters.push(`[${prevLabel}]drawtext=${drawtextOpts}[${out}]`);
+          prevLabel = out;
+        });
       } else {
-        drawtextOpts += `:shadowcolor=black@0.75:shadowx=${Math.round(3 * scaleFactor)}:shadowy=${Math.round(3 * scaleFactor)}`;
+        const key = `c${ci}-t${ti}`;
+        const fp = textFiles && textFiles[key];
+        if (!fp) { ti++; return; }
+        
+        const out = `vt${ti}`;
+        let alphaExpr = '1';
+        
+        if (t.animation && t.animation.type) {
+          const animDur = Number(t.animation.duration) || 0.5;
+          const animDef = getAnimation(t.animation.type);
+          const sExpr = enableStart;
+          
+          if (animDef.getFfmpegEnable) {
+            alphaExpr = animDef.getFfmpegEnable(animDur, sExpr);
+          }
+        }
+        
+        const enableExpr = `between(t,${enableStart},${enableEnd})`;
+        const fullEnable = alphaExpr !== '1'
+          ? `if(${enableExpr},${alphaExpr},0)`
+          : enableExpr;
+
+        let drawtextOpts = `textfile='${escapeFilterPath(fp)}':x=${escapeDrawtextExpr(xExpr)}:y=${escapeDrawtextExpr(yExpr)}:fontsize=${escapeDrawtextExpr(sizeExpr)}:fontcolor=${fcolor}:fontfile='${ffile}':alpha='${escapeDrawtextExpr(fullEnable)}'`;
+
+        if (t.strokeEnabled && t.strokeWidth > 0) {
+          drawtextOpts += `:borderw=${Math.round((Number(t.strokeWidth) || 2) * scaleFactor)}:bordercolor=${colorToHex(t.strokeColor)}`;
+        } else {
+          drawtextOpts += `:shadowcolor=black@0.75:shadowx=${Math.round(3 * scaleFactor)}:shadowy=${Math.round(3 * scaleFactor)}`;
+        }
+
+        if (t.bgEnabled) {
+          const bgPadding = Math.round((Number(t.bgPadding) || 12) * scaleFactor);
+          const bgOpacity = Number(t.bgOpacity ?? 0.7);
+          const bgColorHex = colorToHex(t.bgColor).replace('0x', '');
+          const bgAlpha = Math.round(bgOpacity * 255).toString(16).padStart(2, '0');
+          drawtextOpts += `:box=1:boxborderw=${bgPadding}:boxcolor=0x${bgColorHex}${bgAlpha}`;
+        }
+
+        filters.push(`[${prevLabel}]drawtext=${drawtextOpts}[${out}]`);
+        prevLabel = out;
       }
-
-      if (t.bgEnabled) {
-        const bgPadding = Math.round((Number(t.bgPadding) || 12) * scaleFactor);
-        const bgOpacity = Number(t.bgOpacity ?? 0.7);
-        const bgColorHex = colorToHex(t.bgColor).replace('0x', '');
-        const bgAlpha = Math.round(bgOpacity * 255).toString(16).padStart(2, '0');
-        drawtextOpts += `:box=1:boxborderw=${bgPadding}:boxcolor=0x${bgColorHex}${bgAlpha}`;
-      }
-
-      // Rotation via 'angle' is not available in all FFmpeg builds
-      // if (t.rotation) {
-      //   const angleRad = (Number(t.rotation) || 0) * Math.PI / 180;
-      //   drawtextOpts += `:angle=${angleRad.toFixed(4)}`;
-      // }
-
-      filters.push(`[${prevLabel}]drawtext=${drawtextOpts}[${out}]`);
-      prevLabel = out;
+      
+      ti++;
     });
   });
 

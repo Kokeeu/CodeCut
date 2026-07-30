@@ -36,4 +36,27 @@ function getAnimation(type) {
   return ANIMATIONS[type] || ANIMATIONS['fade-in'];
 }
 
-module.exports = { getAnimation };
+function getTypewriterSegments(text, startTime, animDuration, totalDuration) {
+  if (!text || text.length === 0) return [];
+  
+  const chars = text.split('');
+  const numChars = chars.length;
+  const segmentDuration = animDuration / numChars;
+  const segments = [];
+  
+  for (let i = 0; i < numChars; i++) {
+    const segmentStart = startTime + (i * segmentDuration);
+    const segmentEnd = i === numChars - 1 ? startTime + totalDuration : startTime + animDuration;
+    const segmentText = chars.slice(0, i + 1).join('');
+    
+    segments.push({
+      text: segmentText,
+      startTime: segmentStart,
+      endTime: segmentEnd,
+    });
+  }
+  
+  return segments;
+}
+
+module.exports = { getAnimation, getTypewriterSegments };

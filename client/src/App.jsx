@@ -812,6 +812,7 @@ export default function App() {
             onAudioChange={handleAudioChange}
             onPipChange={handlePipChange}
             onTrimChange={handleTrimChange}
+            onTransformChange={handleTransformChange}
             onSeek={handleSeek}
             files={files}
             currentOffset={currentOffset}

@@ -3,6 +3,7 @@ import SpeedPicker from './SpeedPicker.jsx';
 import AudioPanel from './AudioPanel.jsx';
 import PipPicker from './PipPicker.jsx';
 import ClipTrim from './ClipTrim.jsx';
+import ClipTransformControls from './ClipTransformControls.jsx';
 import { FONT_OPTIONS, FONT_CSS } from './CardMetadata.jsx';
 import { getAnimationTypes } from '../lib/textAnimations.js';
 
@@ -46,7 +47,7 @@ const TABS = [
 export default function PropertiesPanel({
   meta, onMetaChange, activeClip, activeFile, selectedTextId, onSelectText,
   onAddText, onUpdateText, onDeleteText, onSpeedChange, onAudioChange,
-  onPipChange, onTrimChange, onSeek, files, currentOffset,
+  onPipChange, onTrimChange, onTransformChange, onSeek, files, currentOffset,
 }) {
   const [activeTab, setActiveTab] = useState('video');
   const texts = activeClip?.texts || [];
@@ -276,6 +277,12 @@ export default function PropertiesPanel({
 
         {activeTab === 'clip' && (
           <div className="flex flex-col gap-3">
+            {activeClip && (
+              <ClipTransformControls
+                transform={activeClip.transform || { x: 0, y: 0, scale: 1 }}
+                onTransformChange={onTransformChange}
+              />
+            )}
             {activeClip && activeFile ? (
               <ClipTrim clip={activeClip} file={activeFile} currentOffset={currentOffset}
                 onChange={onTrimChange} onSeek={onSeek} />
