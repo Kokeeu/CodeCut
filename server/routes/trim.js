@@ -205,7 +205,7 @@ router.get('/progress/:jobId', (req, res) => {
   let lastSentStatus = null;
 
   const sendUpdate = () => {
-    const progressChanged = Math.abs(job.progress - lastSentProgress) > 0.01;
+    const progressChanged = Math.abs(job.progress - lastSentProgress) >= 0.005;
     const statusChanged = job.status !== lastSentStatus;
     
     if (progressChanged || statusChanged) {
@@ -231,7 +231,7 @@ router.get('/progress/:jobId', (req, res) => {
       clearInterval(interval);
       setTimeout(() => res.end(), 1000);
     }
-  }, 100);
+  }, 500);
 
   req.on('close', () => {
     clearInterval(interval);

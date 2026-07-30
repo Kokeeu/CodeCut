@@ -71,17 +71,90 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
     }
   };
 
+  const resetExport = () => {
+    setStatus('idle');
+    setProgress(0);
+    setError(null);
+  };
+
   const cancelExport = () => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
     if (jobIdRef.current) {
       fetch(`/api/trim/${jobIdRef.current}`, { method: 'DELETE' }).catch(() => {});
       jobIdRef.current = null;
     }
-    setStatus('idle');
+    resetExport();
+  };
+
+  const handleDownload = (jobId) => {
+    setStatus('downloading');
+    fetch(`/api/trim/download/${jobId}`)
+      .then((dlRes) => {
+        if (!dlRes.ok) throw new Error('Download failed');
+        return dlRes.blob();
+      })
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `codecut-${config.resolution}p-${Date.now()}.mp4`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        setStatus('done');
+        setTimeout(() => {
+          resetExport();
+        }, 2500);
+      })
+      .catch((err) => {
+        console.error('Download error:', err);
+        setError(err.message || 'Download failed');
+        resetExport();
+      });
+  };
+
+  const setupEventSource = (jobId) => {
+    setStatus('processing');
     setProgress(0);
+
+    const eventSource = new EventSource(`/api/trim/progress/${jobId}`);
+    eventSourceRef.current = eventSource;
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        const newProgress = Number(data.progress);
+        if (Number.isFinite(newProgress)) {
+          setProgress(newProgress);
+        }
+
+        if (data.status === 'ready') {
+          eventSource.close();
+          eventSourceRef.current = null;
+          jobIdRef.current = null;
+          handleDownload(jobId);
+        } else if (data.status === 'error') {
+          eventSource.close();
+          eventSourceRef.current = null;
+          jobIdRef.current = null;
+          setError(data.error || 'Processing failed');
+          resetExport();
+        }
+      } catch (err) {
+        console.error('Error parsing progress data:', err);
+      }
+    };
+
+    eventSource.onerror = () => {
+      if (eventSource.readyState === EventSource.CLOSED) {
+        return;
+      }
+      eventSource.close();
+      eventSourceRef.current = null;
+      jobIdRef.current = null;
+      setError('Connection lost');
+      resetExport();
+    };
   };
 
   const onExport = async () => {
@@ -138,7 +211,6 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
       form.append('meta', JSON.stringify(meta || {}));
       form.append('exportConfig', JSON.stringify(config));
 
-      setStatus('processing');
       const res = await fetch('/api/trim', { method: 'POST', body: form });
 
       if (!res.ok) {
@@ -155,72 +227,11 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
 
       const { jobId } = await res.json();
       jobIdRef.current = jobId;
-
-      const eventSource = new EventSource(`/api/trim/progress/${jobId}`);
-      eventSourceRef.current = eventSource;
-
-      eventSource.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        setProgress(data.progress);
-
-        if (data.status === 'ready') {
-          eventSource.close();
-          eventSourceRef.current = null;
-          jobIdRef.current = null;
-          setStatus('downloading');
-
-          fetch(`/api/trim/download/${jobId}`)
-            .then((dlRes) => {
-              if (!dlRes.ok) throw new Error('Download failed');
-              return dlRes.blob();
-            })
-            .then((blob) => {
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `codecut-${config.resolution}p-${Date.now()}.mp4`;
-              document.body.appendChild(a);
-              a.click();
-              a.remove();
-              URL.revokeObjectURL(url);
-              setStatus('done');
-              setTimeout(() => {
-                setStatus('idle');
-                setProgress(0);
-              }, 2500);
-            })
-            .catch((err) => {
-              console.error('Download error:', err);
-              setError(err.message || 'Download failed');
-              setStatus('idle');
-              setProgress(0);
-            });
-        } else if (data.status === 'error') {
-          eventSource.close();
-          eventSourceRef.current = null;
-          jobIdRef.current = null;
-          setError(data.error || 'Processing failed');
-          setStatus('idle');
-          setProgress(0);
-        }
-      };
-
-      eventSource.onerror = () => {
-        if (eventSource.readyState === EventSource.CLOSED) {
-          return;
-        }
-        eventSource.close();
-        eventSourceRef.current = null;
-        jobIdRef.current = null;
-        setError('Connection lost');
-        setStatus('idle');
-        setProgress(0);
-      };
+      setupEventSource(jobId);
     } catch (e) {
       console.error(e);
       setError(e.message || 'Export failed');
-      setStatus('idle');
-      setProgress(0);
+      resetExport();
     }
   };
 
@@ -231,6 +242,23 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
     downloading: 'Preparing download...',
     done: 'Done ✓',
   };
+
+  const renderProgressBar = (showLabel = true) => (
+    <div className="w-full">
+      <div className="relative h-2 bg-editor-border rounded-full overflow-hidden">
+        <div
+          className="absolute left-0 top-0 h-full bg-gradient-to-r from-accent-dim to-accent transition-all duration-200"
+          style={{ width: `${progress * 100}%` }}
+        />
+      </div>
+      {showLabel && (
+        <div className="flex justify-between mt-1 text-xs text-neutral-400">
+          <span>{status === 'uploading' ? 'Uploading' : 'Processing'}</span>
+          <span>{Math.round(progress * 100)}%</span>
+        </div>
+      )}
+    </div>
+  );
 
   if (compact) {
     return (
@@ -244,7 +272,7 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
             'disabled:bg-editor-surface disabled:text-neutral-500 disabled:cursor-not-allowed',
           ].join(' ')}
         >
-          {status === 'processing' ? `${Math.round(progress * 100)}%` : labels[status] || labels.idle}
+          {(status === 'uploading' || status === 'processing') ? `${Math.round(progress * 100)}%` : labels[status] || labels.idle}
         </button>
 
         {showSettings && status === 'idle' && (
@@ -322,19 +350,28 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
           </div>
         )}
 
-        {status === 'processing' && (
-          <div className="absolute left-0 right-0 top-full mt-1">
-            <div className="relative h-1 bg-editor-border rounded-full overflow-hidden">
+        {(status === 'uploading' || status === 'processing') && (
+          <div className="absolute right-0 top-full mt-2 w-72 p-3 rounded-xl bg-editor-panel border border-editor-border shadow-2xl z-50">
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="text-[11px] font-semibold text-neutral-200">
+                {status === 'uploading' ? 'Uploading' : 'Processing'}
+              </div>
+              <div className="text-[11px] font-mono text-accent">
+                {Math.round(progress * 100)}%
+              </div>
+            </div>
+            <div className="relative h-1.5 bg-editor-border rounded-full overflow-hidden">
               <div
-                className="absolute left-0 top-0 h-full bg-accent transition-all duration-200"
+                className="absolute left-0 top-0 h-full bg-gradient-to-r from-accent-dim to-accent transition-all duration-200"
                 style={{ width: `${progress * 100}%` }}
               />
             </div>
             <button
               onClick={cancelExport}
-              className="mt-1 w-full px-2 py-1 rounded bg-red-600/80 hover:bg-red-600 text-[10px] text-white font-medium transition-colors"
+              className="mt-2.5 w-full py-1.5 rounded-lg bg-red-600/90 hover:bg-red-600 text-[11px] font-semibold text-white transition-colors flex items-center justify-center gap-1.5"
             >
-              Cancel
+              <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+              Cancel Export
             </button>
           </div>
         )}
@@ -431,18 +468,9 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
         </div>
       )}
 
-      {status === 'processing' && (
+      {(status === 'uploading' || status === 'processing') && (
         <div className="w-full max-w-md">
-          <div className="relative h-2 bg-editor-border rounded-full overflow-hidden">
-            <div
-              className="absolute left-0 top-0 h-full bg-gradient-to-r from-accent-dim to-accent transition-all duration-200"
-              style={{ width: `${progress * 100}%` }}
-            />
-          </div>
-          <div className="flex justify-between mt-1 text-xs text-neutral-400">
-            <span>Processing video</span>
-            <span>{Math.round(progress * 100)}%</span>
-          </div>
+          {renderProgressBar(true)}
           <button
             onClick={cancelExport}
             className="mt-2 w-full px-3 py-1.5 rounded-lg bg-red-600/80 hover:bg-red-600 text-xs text-white font-medium transition-colors"

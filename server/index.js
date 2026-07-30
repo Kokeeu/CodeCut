@@ -33,7 +33,12 @@ if (!fs.existsSync(TEMP_DIR)) {
 }
 
 app.use(cors());
-app.use(compression());
+app.use(compression({
+  filter: (req, res) => {
+    if (req.path.includes('/progress/')) return false;
+    return compression.filter(req, res);
+  },
+}));
 app.use(express.json());
 
 app.get('/api/health', (_req, res) => {
