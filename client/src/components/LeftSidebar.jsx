@@ -100,7 +100,14 @@ export default function LeftSidebar({
   }
 
   return (
-    <aside className="w-full md:w-72 h-full flex flex-col bg-editor-panel/60 backdrop-blur-xl border-r border-glass-border shrink-0">
+    <aside
+      className={[
+        'flex flex-col bg-editor-panel/60 backdrop-blur-xl border-glass-border',
+        embedded
+          ? 'w-full h-full border-r-0'
+          : 'w-full md:w-72 h-full border-r',
+      ].join(' ')}
+    >
       <div className="flex border-b border-glass-border shrink-0">
         {TABS.map((tab) => {
           const Icon = tabIcons[tab.id];
