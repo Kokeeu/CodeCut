@@ -7,6 +7,24 @@ import TransitionPicker from './TransitionPicker.jsx';
 const PX_PER_SEC = 26;
 const MIN_WIDTH = 72;
 
+function ZoomInIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+      <circle cx="5" cy="5" r="3.5" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M7.5 7.5L10 10M5 3.5v3M3.5 5h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function ZoomOutIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+      <circle cx="5" cy="5" r="3.5" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M7.5 7.5L10 10M3.5 5h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export default function ClipTrack({
   clips,
   activeClipId,
@@ -50,7 +68,7 @@ export default function ClipTrack({
       const scrollLeft = container.scrollLeft;
       const clientWidth = container.clientWidth;
       const effectivePxPerSec = PX_PER_SEC * Math.max(0.1, Math.min(20, timelineZoom || 1));
-      
+
       let cumWidth = 0;
       let startIdx = 0;
       let endIdx = clips.length;
@@ -58,16 +76,16 @@ export default function ClipTrack({
       for (let i = 0; i < clips.length; i++) {
         const dur = clips[i].sourceEnd - clips[i].sourceStart;
         const width = Math.max(MIN_WIDTH, dur * effectivePxPerSec);
-        
+
         if (cumWidth + width > scrollLeft - 200 && startIdx === 0) {
           startIdx = Math.max(0, i - 2);
         }
-        
+
         if (cumWidth > scrollLeft + clientWidth + 200) {
           endIdx = Math.min(clips.length, i + 2);
           break;
         }
-        
+
         cumWidth += width;
       }
 
@@ -76,15 +94,19 @@ export default function ClipTrack({
 
     updateVisibleRange();
     container.addEventListener('scroll', updateVisibleRange);
-    
+
     return () => container.removeEventListener('scroll', updateVisibleRange);
   }, [clips, timelineZoom]);
 
   if (clips.length === 0) {
     return (
-      <p className="text-xs text-neutral-500 py-6 text-center">
-        Timeline is empty — add a clip from the media pool.
-      </p>
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-2xl mb-1.5 opacity-30">📽</div>
+          <p className="text-xs text-neutral-500">Timeline is empty</p>
+          <p className="text-[10px] text-neutral-600 mt-0.5">Add a clip from the media pool</p>
+        </div>
+      </div>
     );
   }
 
@@ -98,7 +120,11 @@ export default function ClipTrack({
           <div
             ref={containerRef}
             onWheel={handleWheel}
-            className="flex items-stretch overflow-x-auto pb-2 pt-1"
+            className="flex items-center overflow-x-auto pb-2 pt-2 px-1 scrollbar-thin"
+            style={{
+              backgroundImage: 'linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px)',
+              backgroundSize: '24px 24px',
+            }}
           >
             {visibleClips.map((clip, idx) => {
               const i = visibleRange.start + idx;
@@ -109,7 +135,7 @@ export default function ClipTrack({
                 ? Math.max(0, Math.min(dur, nextClip.sourceEnd - nextClip.sourceStart) - 0.1)
                 : 0;
               return (
-                <div key={clip.id} className="flex items-stretch shrink-0">
+                <div key={clip.id} className="flex items-center shrink-0">
                   <ClipBlock
                     clip={clip}
                     index={i}
@@ -134,8 +160,9 @@ export default function ClipTrack({
           </div>
         </SortableContext>
       </DndContext>
-      <div className="flex items-center gap-2 mt-2 px-1">
-        <span className="text-[10px] text-neutral-500">Zoom</span>
+
+      <div className="flex items-center gap-2 mt-1 px-1.5 py-1.5">
+        <ZoomOutIcon />
         <input
           type="range"
           min="1"
@@ -143,9 +170,10 @@ export default function ClipTrack({
           step="0.5"
           value={timelineZoom}
           onChange={(e) => onTimelineZoomChange?.(Number(e.target.value))}
-          className="flex-1 h-1"
+          className="flex-1"
         />
-        <span className="text-[10px] font-mono text-neutral-400 w-8 text-right">
+        <ZoomInIcon />
+        <span className="text-[10px] font-mono text-neutral-300 w-9 text-right tabular-nums">
           {timelineZoom.toFixed(1)}x
         </span>
       </div>

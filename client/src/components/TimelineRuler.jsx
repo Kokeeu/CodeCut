@@ -59,30 +59,43 @@ export default function TimelineRuler({ totalDuration, onSeek, currentGlobalTime
   }
 
   return (
-    <div className="relative h-6 bg-editor-surface border-b border-editor-border select-none">
+    <div className="relative h-7 bg-glass-panel border-b border-glass-border select-none backdrop-blur-sm">
       <div ref={rulerRef}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
         className="absolute inset-0 cursor-pointer touch-none overflow-hidden">
-        {ticks.map((t) => {
-          const pct = (t / totalDuration) * 100;
+        {ticks.map((t, i) => {
+          const pct = totalDuration > 0 ? (t / totalDuration) * 100 : 0;
+          const isMajor = i % 5 === 0;
           return (
             <div key={t} className="absolute top-0 bottom-0" style={{ left: `${pct}%` }}>
-              <div className="w-px h-full bg-editor-border" />
-              <span className="absolute top-0.5 left-1 text-[8px] font-mono text-neutral-500 whitespace-nowrap">
-                {formatTime(t)}
-              </span>
+              <div className={['w-px h-full', isMajor ? 'bg-white/15' : 'bg-white/5'].join(' ')} />
+              {isMajor && (
+                <span className="absolute top-1 left-1.5 text-[9px] font-mono text-neutral-400 whitespace-nowrap tracking-tight">
+                  {formatTime(t)}
+                </span>
+              )}
             </div>
           );
         })}
       </div>
 
-      <div className="absolute top-0 bottom-0 w-px bg-accent pointer-events-none z-10"
-        style={{ left: `${playheadPct}%` }} />
-      <div className="absolute -top-0.5 w-2 h-2 bg-accent rounded-full pointer-events-none z-10 -ml-1"
-        style={{ left: `${playheadPct}%` }} />
+      <div
+        className="absolute top-0 bottom-0 w-px bg-accent pointer-events-none z-10"
+        style={{
+          left: `${playheadPct}%`,
+          boxShadow: '0 0 8px rgba(168, 85, 247, 0.8)',
+        }}
+      />
+      <div
+        className="absolute -top-1 w-2.5 h-2.5 bg-accent rounded-full pointer-events-none z-10 -ml-1"
+        style={{
+          left: `${playheadPct}%`,
+          boxShadow: '0 0 12px rgba(168, 85, 247, 0.9), 0 0 4px rgba(192, 132, 252, 1)',
+        }}
+      />
     </div>
   );
 }

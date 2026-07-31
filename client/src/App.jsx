@@ -19,6 +19,8 @@ import RestoreBanner from './components/RestoreBanner.jsx';
 import ConfirmDialog from './components/ConfirmDialog.jsx';
 import ToastContainer from './components/ToastContainer.jsx';
 import ShortcutOverlay from './components/ShortcutOverlay.jsx';
+import MobileDrawer from './components/MobileDrawer.jsx';
+import BottomSheet from './components/BottomSheet.jsx';
 import useUndoableState from './hooks/useUndoableState.js';
 import useEditor from './hooks/useEditor.js';
 import useProjectAutosave from './hooks/useProjectAutosave.js';
@@ -113,6 +115,10 @@ export default function App() {
   const [confirmAction, setConfirmAction] = useState(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [exportConfig, setExportConfig] = useState({ resolution: '1080', fps: 30, quality: 'high', platform: 'tiktok' });
+  const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
+  const [mobileRightOpen, setMobileRightOpen] = useState(false);
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [rightCollapsed, setRightCollapsed] = useState(false);
   const previewRef = useRef(null);
   const shuttleRef = useRef({ direction: 0, level: 0 });
 
@@ -713,25 +719,32 @@ export default function App() {
         canRedo={undo.canRedo}
         onUndo={undo.undo}
         onRedo={undo.redo}
+        onToggleLeftSidebar={() => setMobileLeftOpen(true)}
+        onToggleRightSidebar={() => setMobileRightOpen(true)}
+        onToggleLeftCollapse={() => setLeftCollapsed((v) => !v)}
+        onToggleRightCollapse={() => setRightCollapsed((v) => !v)}
+        leftCollapsed={leftCollapsed}
+        rightCollapsed={rightCollapsed}
+        hasFiles={hasFiles}
       />
 
       {!hasFiles ? (
-        <div className="flex-1 flex items-center justify-center p-8">
-          <div className="w-full max-w-lg flex flex-col gap-6">
+        <div className="flex-1 flex items-center justify-center p-4 sm:p-8 overflow-y-auto">
+          <div className="w-full max-w-lg flex flex-col gap-6 animate-fade-in">
             <VideoUploader onFilesAdded={handleFilesAdded} compact={false} />
-            <div className="grid grid-cols-3 gap-3 text-sm text-neutral-400">
-              <div className="p-3 rounded-lg bg-editor-panel border border-editor-border">
-                <div className="text-xl mb-1">1</div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm text-neutral-400">
+              <div className="p-3 rounded-xl bg-glass-panel border border-glass-border">
+                <div className="text-xl mb-1 text-gradient-accent font-bold">1</div>
                 <div className="font-semibold text-neutral-200 text-xs">Upload</div>
                 <p className="text-[11px] mt-1">Sube uno o varios videos (hasta 10, 500 MB c/u).</p>
               </div>
-              <div className="p-3 rounded-lg bg-editor-panel border border-editor-border">
-                <div className="text-xl mb-1">2</div>
+              <div className="p-3 rounded-xl bg-glass-panel border border-glass-border">
+                <div className="text-xl mb-1 text-gradient-accent font-bold">2</div>
                 <div className="font-semibold text-neutral-200 text-xs">Edit</div>
                 <p className="text-[11px] mt-1">Corta con <span className="font-mono text-neutral-200">S</span>, reordena, ajusta trim y transiciones.</p>
               </div>
-              <div className="p-3 rounded-lg bg-editor-panel border border-editor-border">
-                <div className="text-xl mb-1">3</div>
+              <div className="p-3 rounded-xl bg-glass-panel border border-glass-border">
+                <div className="text-xl mb-1 text-gradient-accent font-bold">3</div>
                 <div className="font-semibold text-neutral-200 text-xs">Export</div>
                 <p className="text-[11px] mt-1">FFmpeg compone todo a un MP4 vertical 1080x1920.</p>
               </div>
@@ -739,20 +752,25 @@ export default function App() {
           </div>
         </div>
       ) : (
-        <div className="flex-1 flex overflow-hidden">
-          <LeftSidebar
-            files={files}
-            onAddClip={handleAddClip}
-            onFilesAdded={handleFilesAdded}
-            templates={TEMPLATES}
-            onApplyTemplate={handleApplyTemplate}
-            hasClips={clips.length > 0}
-            onAddText={handleAddText}
-            activeClip={activeClip}
-          />
+        <div className="flex-1 flex overflow-hidden relative">
+          <div className={['hidden md:flex shrink-0', leftCollapsed ? 'md:w-14' : 'md:w-[280px]'].join(' ')}>
+            <LeftSidebar
+              files={files}
+              onAddClip={handleAddClip}
+              onFilesAdded={handleFilesAdded}
+              templates={TEMPLATES}
+              onApplyTemplate={handleApplyTemplate}
+              hasClips={clips.length > 0}
+              onAddText={handleAddText}
+              activeClip={activeClip}
+              collapsed={leftCollapsed}
+              onToggleCollapse={() => setLeftCollapsed((v) => !v)}
+            />
+          </div>
 
           <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-            <div className="flex-1 flex items-center justify-center bg-editor-bg overflow-hidden">
+            <div className="flex-1 flex items-center justify-center bg-editor-bg overflow-hidden relative">
+              <div className="absolute inset-0 bg-gradient-radial from-accent/[0.04] via-transparent to-transparent pointer-events-none" />
               <VideoPreview
                 ref={previewRef}
                 clip={activeClip}
@@ -796,6 +814,8 @@ export default function App() {
                   onConfirm: () => { handleReset(); setConfirmAction(null); },
                 });
               }}
+              onOpenProperties={() => setMobileRightOpen(true)}
+              onOpenMedia={() => setMobileLeftOpen(true)}
               currentOffset={currentOffset}
               totalDuration={activeClipDuration}
               clipsCount={clips.length}
@@ -804,7 +824,7 @@ export default function App() {
               onToggleGuides={() => setShowGuides((g) => !g)}
             />
 
-            <div className="h-48 flex flex-col bg-editor-panel border-t border-editor-border shrink-0">
+            <div className="h-48 md:h-52 flex flex-col bg-editor-panel/60 border-t border-glass-border shrink-0 backdrop-blur-md">
               <TimelineRuler
                 totalDuration={totalDuration}
                 onSeek={handleGlobalSeek}
@@ -812,7 +832,7 @@ export default function App() {
                 timelineZoom={timelineZoom}
                 snapPoints={snapPoints}
               />
-              <div className="flex-1 overflow-x-auto overflow-y-hidden px-2 py-1">
+              <div className="flex-1 overflow-x-auto overflow-y-hidden px-2 py-2">
                 <ClipTrack
                   clips={clips}
                   activeClipId={activeClipId}
@@ -830,27 +850,82 @@ export default function App() {
             </div>
           </div>
 
-          <PropertiesPanel
-            meta={meta}
-            onMetaChange={setMeta}
-            activeClip={activeClip}
-            activeFile={activeFile}
-            selectedTextId={selectedTextId}
-            onSelectText={setSelectedTextId}
-            onAddText={handleAddText}
-            onUpdateText={handleUpdateText}
-            onDeleteText={handleDeleteText}
-            onSpeedChange={handleSpeedChange}
-            onAudioChange={handleAudioChange}
-            onPipChange={handlePipChange}
-            onTrimChange={handleTrimChange}
-            onTransformChange={handleTransformChange}
-            onSeek={handleSeek}
-            files={files}
-            currentOffset={currentOffset}
-          />
+          <div className={['hidden lg:flex shrink-0', rightCollapsed ? 'lg:w-14' : 'lg:w-[320px]'].join(' ')}>
+            <PropertiesPanel
+              meta={meta}
+              onMetaChange={setMeta}
+              activeClip={activeClip}
+              activeFile={activeFile}
+              selectedTextId={selectedTextId}
+              onSelectText={setSelectedTextId}
+              onAddText={handleAddText}
+              onUpdateText={handleUpdateText}
+              onDeleteText={handleDeleteText}
+              onSpeedChange={handleSpeedChange}
+              onAudioChange={handleAudioChange}
+              onPipChange={handlePipChange}
+              onTrimChange={handleTrimChange}
+              onTransformChange={handleTransformChange}
+              onSeek={handleSeek}
+              files={files}
+              currentOffset={currentOffset}
+              collapsed={rightCollapsed}
+              onToggleCollapse={() => setRightCollapsed((v) => !v)}
+            />
+          </div>
         </div>
       )}
+
+      {hasFiles && (
+        <>
+          <MobileDrawer
+            open={mobileLeftOpen}
+            onClose={() => setMobileLeftOpen(false)}
+            side="left"
+            title="Media & Tools"
+          >
+            <LeftSidebar
+              files={files}
+              onAddClip={handleAddClip}
+              onFilesAdded={handleFilesAdded}
+              templates={TEMPLATES}
+              onApplyTemplate={handleApplyTemplate}
+              hasClips={clips.length > 0}
+              onAddText={handleAddText}
+              activeClip={activeClip}
+              embedded
+            />
+          </MobileDrawer>
+
+          <BottomSheet
+            open={mobileRightOpen}
+            onClose={() => setMobileRightOpen(false)}
+            title="Properties"
+          >
+            <PropertiesPanel
+              meta={meta}
+              onMetaChange={setMeta}
+              activeClip={activeClip}
+              activeFile={activeFile}
+              selectedTextId={selectedTextId}
+              onSelectText={setSelectedTextId}
+              onAddText={handleAddText}
+              onUpdateText={handleUpdateText}
+              onDeleteText={handleDeleteText}
+              onSpeedChange={handleSpeedChange}
+              onAudioChange={handleAudioChange}
+              onPipChange={handlePipChange}
+              onTrimChange={handleTrimChange}
+              onTransformChange={handleTransformChange}
+              onSeek={handleSeek}
+              files={files}
+              currentOffset={currentOffset}
+              embedded
+            />
+          </BottomSheet>
+        </>
+      )}
+
       <ConfirmDialog
         open={!!confirmAction}
         title={confirmAction?.title}

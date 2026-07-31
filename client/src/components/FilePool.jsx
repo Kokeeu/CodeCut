@@ -8,56 +8,100 @@ function formatTime(seconds) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+function PlusIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+      <path d="M6 2v8M2 6h8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function VideoIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+      <rect x="2" y="4" width="16" height="12" rx="2" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M8 8l4 2-4 2V8z" fill="currentColor" />
+    </svg>
+  );
+}
+
 export default function FilePool({ files, onAddClip, onFilesAdded, vertical }) {
   if (vertical) {
     return (
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1.5">
         {files.map((f) => (
-          <div key={f.id} className="rounded-lg bg-editor-surface border border-editor-border overflow-hidden">
-            <div className="flex gap-2 p-2">
+          <div
+            key={f.id}
+            className="group rounded-xl bg-glass-panel border border-glass-border overflow-hidden card-hover"
+          >
+            <div className="flex gap-2 p-1.5">
               {f.thumbnail ? (
-                <LazyImage src={f.thumbnail} alt={f.name} className="w-16 h-10 rounded overflow-hidden" />
+                <LazyImage
+                  src={f.thumbnail}
+                  alt={f.name}
+                  className="w-16 h-10 rounded-lg overflow-hidden shrink-0"
+                />
               ) : (
-                <div className="w-16 h-10 bg-editor-border rounded flex items-center justify-center text-lg">🎞</div>
+                <div className="w-16 h-10 bg-glass-strong rounded-lg flex items-center justify-center text-neutral-500 shrink-0">
+                  <VideoIcon />
+                </div>
               )}
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] text-neutral-300 truncate" title={f.name}>{f.name}</p>
-                <p className="text-[9px] text-neutral-500 font-mono">{formatTime(f.duration)}</p>
-                <button onClick={() => onAddClip(f.id)}
-                  className="mt-1 w-full px-2 py-0.5 rounded bg-accent hover:bg-accent-hover text-[9px] font-medium transition-colors">
-                  + Timeline
+              <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+                <p className="text-[11px] text-neutral-200 font-medium truncate" title={f.name}>
+                  {f.name}
+                </p>
+                <p className="text-[10px] text-neutral-500 font-mono tracking-tight">
+                  {formatTime(f.duration)}
+                </p>
+                <button
+                  onClick={() => onAddClip(f.id)}
+                  className="inline-flex items-center justify-center gap-1 w-full px-2 py-1 rounded-md bg-accent/15 border border-accent/20 text-accent text-[10px] font-semibold hover:bg-accent/25 hover:border-accent/40 transition-all duration-150"
+                >
+                  <PlusIcon />
+                  Timeline
                 </button>
               </div>
             </div>
           </div>
         ))}
         {files.length === 0 && (
-          <p className="text-[10px] text-neutral-500 text-center py-4">No media yet</p>
+          <div className="p-4 rounded-xl bg-glass-panel border border-dashed border-glass-border text-center">
+            <p className="text-[11px] text-neutral-500 leading-relaxed">
+              No media yet. Add videos to start your project.
+            </p>
+          </div>
         )}
       </div>
     );
   }
 
   return (
-    <div className="flex gap-3 overflow-x-auto pb-1">
+    <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-thin">
       {files.map((f) => (
         <div
           key={f.id}
-          className="shrink-0 w-36 rounded-lg bg-editor-surface border border-editor-border overflow-hidden"
+          className="shrink-0 w-36 rounded-xl bg-glass-panel border border-glass-border overflow-hidden card-hover"
         >
           {f.thumbnail ? (
-            <LazyImage src={f.thumbnail} alt={f.name} className="w-full h-20 overflow-hidden" />
+            <LazyImage
+              src={f.thumbnail}
+              alt={f.name}
+              className="w-full h-20 overflow-hidden"
+            />
           ) : (
-            <div className="w-full h-20 bg-editor-border flex items-center justify-center text-2xl">🎞</div>
+            <div className="w-full h-20 bg-glass-strong flex items-center justify-center text-neutral-500">
+              <VideoIcon />
+            </div>
           )}
           <div className="p-2">
-            <p className="text-[11px] text-neutral-300 truncate" title={f.name}>{f.name}</p>
+            <p className="text-[11px] text-neutral-200 truncate" title={f.name}>{f.name}</p>
             <p className="text-[10px] text-neutral-500 font-mono">{formatTime(f.duration)}</p>
             <button
               onClick={() => onAddClip(f.id)}
-              className="mt-1.5 w-full px-2 py-1 rounded bg-accent hover:bg-accent-hover text-[11px] font-medium transition-colors"
+              className="mt-1.5 inline-flex items-center justify-center gap-1 w-full px-2 py-1 rounded-md bg-accent/15 border border-accent/20 text-accent text-[11px] font-semibold hover:bg-accent/25 hover:border-accent/40 transition-all duration-150"
             >
-              + Add to timeline
+              <PlusIcon />
+              Add to timeline
             </button>
           </div>
         </div>

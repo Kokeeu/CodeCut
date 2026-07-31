@@ -154,16 +154,21 @@ export default function VideoUploader({ onFilesAdded, compact }) {
 
   if (compact) {
     return (
-      <div>
+      <div className="relative">
         <button
           onClick={() => inputRef.current?.click()}
           disabled={busy}
-          className="px-3 py-2 rounded-lg border border-dashed border-editor-border hover:border-accent text-xs text-neutral-300 disabled:opacity-50 transition-colors"
+          className="group inline-flex items-center justify-center gap-1.5 w-full px-3 py-2 rounded-xl border border-dashed border-glass-border hover:border-accent/50 hover:bg-accent/5 text-xs text-neutral-300 disabled:opacity-50 transition-all duration-150 focus-ring"
         >
-          {busy ? 'Loading…' : '+ Add videos'}
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" className="text-accent/70 group-hover:text-accent transition-colors">
+            <path d="M6 2v8M2 6h8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          </svg>
+          {busy ? 'Loading…' : 'Add videos'}
         </button>
         <input ref={inputRef} type="file" accept="video/*" multiple onChange={onChange} className="hidden" />
-        {error && <p className="mt-1 text-xs text-red-400">{error}</p>}
+        {error && (
+          <p className="mt-1.5 text-[11px] text-red-400 px-1 leading-snug">{error}</p>
+        )}
       </div>
     );
   }
@@ -176,14 +181,36 @@ export default function VideoUploader({ onFilesAdded, compact }) {
         onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
         onDragLeave={() => setIsDragging(false)}
         className={[
-          'cursor-pointer rounded-lg border-2 border-dashed p-10 text-center transition-colors',
-          isDragging ? 'border-accent bg-accent/10' : 'border-editor-border bg-editor-panel hover:border-neutral-600',
+          'group relative cursor-pointer rounded-2xl border-2 border-dashed p-10 sm:p-12 text-center transition-all duration-200 overflow-hidden',
+          isDragging
+            ? 'border-accent bg-accent/10 shadow-glow-accent'
+            : 'border-glass-border bg-glass-panel hover:border-accent/40 hover:bg-glass-strong',
         ].join(' ')}
       >
-        <div className="text-4xl mb-3">🎬</div>
-        <p className="text-lg font-semibold">{busy ? 'Reading videos…' : 'Drag your videos here'}</p>
-        <p className="text-sm text-neutral-400 mt-1">or click to select (multiple allowed)</p>
-        <p className="text-xs text-neutral-500 mt-4">MP4, MOV, WebM, MKV · up to {MAX_FILES} files · {MAX_SIZE_MB} MB each</p>
+        <div className="absolute inset-0 bg-gradient-radial from-accent/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+        <div className="relative">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-accent-soft border border-accent/20 mb-4 group-hover:scale-110 transition-transform duration-300">
+            <svg width="28" height="28" viewBox="0 0 28 28" fill="none" className="text-accent">
+              <rect x="3" y="6" width="22" height="16" rx="2.5" stroke="currentColor" strokeWidth="1.6" />
+              <path d="M11 11l6 3-6 3v-6z" fill="currentColor" />
+              <path d="M19 19l3 2M19 21l3-2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" opacity="0.6" />
+            </svg>
+          </div>
+          <p className="text-base sm:text-lg font-semibold text-neutral-100">
+            {busy ? 'Reading videos…' : 'Drop your videos here'}
+          </p>
+          <p className="text-sm text-neutral-400 mt-1.5">
+            or click to select · multiple files allowed
+          </p>
+          <div className="flex items-center justify-center gap-1.5 mt-4 text-[10px] text-neutral-500">
+            <span className="px-1.5 py-0.5 rounded bg-glass-panel border border-glass-border font-mono">MP4</span>
+            <span className="px-1.5 py-0.5 rounded bg-glass-panel border border-glass-border font-mono">MOV</span>
+            <span className="px-1.5 py-0.5 rounded bg-glass-panel border border-glass-border font-mono">WebM</span>
+            <span className="px-1.5 py-0.5 rounded bg-glass-panel border border-glass-border font-mono">MKV</span>
+            <span className="mx-1 text-neutral-700">·</span>
+            <span>up to {MAX_FILES} files · {MAX_SIZE_MB} MB each</span>
+          </div>
+        </div>
         <input ref={inputRef} type="file" accept="video/*" multiple onChange={onChange} className="hidden" />
       </div>
       {error && <p className="mt-3 text-sm text-red-400 text-center">{error}</p>}

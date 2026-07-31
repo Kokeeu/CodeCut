@@ -358,8 +358,14 @@ const VideoPreview = forwardRef(function VideoPreview(
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
-        className="relative bg-black rounded-lg overflow-hidden shadow-2xl ring-1 ring-editor-border select-none"
-        style={{ aspectRatio: '9 / 16', height: `${cardH}px`, cursor: clip ? 'grab' : 'default', touchAction: 'none' }}
+        className="relative bg-black rounded-2xl overflow-hidden shadow-panel-lg ring-1 ring-white/[0.06] select-none"
+        style={{
+          aspectRatio: '9 / 16',
+          height: `${cardH}px`,
+          cursor: clip ? 'grab' : 'default',
+          touchAction: 'none',
+          boxShadow: '0 32px 80px -16px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.04), 0 0 60px -20px rgba(168, 85, 247, 0.15)',
+        }}
       >
         {fileUrl && meta?.blurEnabled !== false && (
           <video

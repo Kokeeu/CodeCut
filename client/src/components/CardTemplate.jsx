@@ -49,8 +49,13 @@ export default function CardTemplate({
   return (
     <div
       onClick={onClick}
-      className="relative bg-black rounded-2xl overflow-hidden shadow-2xl ring-1 ring-slate-800 shrink-0"
-      style={{ height: `${height}px`, width: `${cardW}px`, cursor: onClick ? 'pointer' : 'default' }}
+      className="relative bg-black rounded-2xl overflow-hidden ring-1 ring-white/10 shrink-0"
+      style={{
+        height: `${height}px`,
+        width: `${cardW}px`,
+        cursor: onClick ? 'pointer' : 'default',
+        boxShadow: '0 16px 48px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.04)',
+      }}
     >
       {videoUrl && blurEnabled !== false && (
         <video
