@@ -1,1 +1,4 @@
-﻿Test
+﻿Agregar controles con las teclas, por ejemplo:
+- Tocar ctrl o command y cursos para aumentar o disminuir el tamaño de la linea de tiempo.
+- Poder mover la linea del tiempo con el cursor.
+- La linea de tiempo tiene que poder quedar limpiar por si quiero eliminar todo lo arrastrado.

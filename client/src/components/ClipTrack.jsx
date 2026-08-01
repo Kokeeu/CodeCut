@@ -1,11 +1,16 @@
-import { useRef, useState, useEffect } from 'react';
+import { forwardRef, useRef, useState, useEffect } from 'react';
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, arrayMove, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import ClipBlock from './ClipBlock.jsx';
 import TransitionPicker from './TransitionPicker.jsx';
-
-const PX_PER_SEC = 26;
-const MIN_WIDTH = 72;
+import {
+  getEffectivePxPerSec,
+  MIN_CLIP_WIDTH,
+  MIN_ZOOM,
+  MAX_ZOOM,
+  ZOOM_STEP,
+  WHEEL_ZOOM_STEP,
+} from '../lib/timelineScale.js';
 
 function ZoomInIcon() {
   return (
@@ -25,19 +30,23 @@ function ZoomOutIcon() {
   );
 }
 
-export default function ClipTrack({
-  clips,
-  activeClipId,
-  transitions,
-  fileById,
-  onSelect,
-  onDelete,
-  onDuplicate,
-  onReorder,
-  onTransitionChange,
-  timelineZoom = 1,
-  onTimelineZoomChange,
-}) {
+const ClipTrack = forwardRef(function ClipTrack(
+  {
+    clips,
+    activeClipId,
+    transitions,
+    fileById,
+    onSelect,
+    onDelete,
+    onDuplicate,
+    onReorder,
+    onTransitionChange,
+    timelineZoom = 1,
+    trackWidth,
+    onTimelineZoomChange,
+  },
+  forwardedRef
+) {
   const containerRef = useRef(null);
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: clips.length });
   const sensors = useSensors(
@@ -56,7 +65,7 @@ export default function ClipTrack({
   const handleWheel = (e) => {
     if (!e.ctrlKey || !onTimelineZoomChange) return;
     e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.5 : 0.5;
+    const delta = e.deltaY > 0 ? -WHEEL_ZOOM_STEP : WHEEL_ZOOM_STEP;
     onTimelineZoomChange(timelineZoom + delta);
   };
 
@@ -67,7 +76,7 @@ export default function ClipTrack({
     const updateVisibleRange = () => {
       const scrollLeft = container.scrollLeft;
       const clientWidth = container.clientWidth;
-      const effectivePxPerSec = PX_PER_SEC * Math.max(0.1, Math.min(20, timelineZoom || 1));
+      const effectivePxPerSec = getEffectivePxPerSec(timelineZoom);
 
       let cumWidth = 0;
       let startIdx = 0;
@@ -75,7 +84,7 @@ export default function ClipTrack({
 
       for (let i = 0; i < clips.length; i++) {
         const dur = clips[i].sourceEnd - clips[i].sourceStart;
-        const width = Math.max(MIN_WIDTH, dur * effectivePxPerSec);
+        const width = Math.max(MIN_CLIP_WIDTH, dur * effectivePxPerSec);
 
         if (cumWidth + width > scrollLeft - 200 && startIdx === 0) {
           startIdx = Math.max(0, i - 2);
@@ -98,6 +107,23 @@ export default function ClipTrack({
     return () => container.removeEventListener('scroll', updateVisibleRange);
   }, [clips, timelineZoom]);
 
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node || !forwardedRef) return;
+    if (typeof forwardedRef === 'function') {
+      forwardedRef(node);
+    } else {
+      forwardedRef.current = node;
+    }
+    return () => {
+      if (typeof forwardedRef === 'function') {
+        forwardedRef(null);
+      } else if (forwardedRef) {
+        forwardedRef.current = null;
+      }
+    };
+  }, [forwardedRef]);
+
   if (clips.length === 0) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -110,7 +136,7 @@ export default function ClipTrack({
     );
   }
 
-  const effectivePxPerSec = PX_PER_SEC * Math.max(0.1, Math.min(20, timelineZoom || 1));
+  const effectivePxPerSec = getEffectivePxPerSec(timelineZoom);
   const visibleClips = clips.slice(visibleRange.start, visibleRange.end);
 
   return (
@@ -122,6 +148,7 @@ export default function ClipTrack({
             onWheel={handleWheel}
             className="flex items-center overflow-x-auto pb-2 pt-2 px-1 scrollbar-thin"
             style={{
+              minWidth: trackWidth ? Math.max(0, trackWidth) : undefined,
               backgroundImage: 'linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px)',
               backgroundSize: '24px 24px',
             }}
@@ -129,7 +156,7 @@ export default function ClipTrack({
             {visibleClips.map((clip, idx) => {
               const i = visibleRange.start + idx;
               const dur = clip.sourceEnd - clip.sourceStart;
-              const width = Math.max(MIN_WIDTH, dur * effectivePxPerSec);
+              const width = Math.max(MIN_CLIP_WIDTH, dur * effectivePxPerSec);
               const nextClip = clips[i + 1];
               const seamMaxDur = nextClip
                 ? Math.max(0, Math.min(dur, nextClip.sourceEnd - nextClip.sourceStart) - 0.1)
@@ -165,9 +192,9 @@ export default function ClipTrack({
         <ZoomOutIcon />
         <input
           type="range"
-          min="1"
-          max="10"
-          step="0.5"
+          min={MIN_ZOOM}
+          max={MAX_ZOOM}
+          step={ZOOM_STEP}
           value={timelineZoom}
           onChange={(e) => onTimelineZoomChange?.(Number(e.target.value))}
           className="flex-1"
@@ -179,4 +206,6 @@ export default function ClipTrack({
       </div>
     </div>
   );
-}
+});
+
+export default ClipTrack;

@@ -25,6 +25,7 @@ import useUndoableState from './hooks/useUndoableState.js';
 import useEditor from './hooks/useEditor.js';
 import useProjectAutosave from './hooks/useProjectAutosave.js';
 import useExitConfirmation from './hooks/useExitConfirmation.js';
+import { getTrackWidth, clampZoom } from './lib/timelineScale.js';
 
 const idCounter = { value: 0 };
 function nextId(prefix) {
@@ -120,6 +121,7 @@ export default function App() {
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
+  const [timelineContainer, setTimelineContainer] = useState(null);
   const previewRef = useRef(null);
   const shuttleRef = useRef({ direction: 0, level: 0 });
 
@@ -141,6 +143,11 @@ export default function App() {
   }, [activeClip]);
 
   const { totalDuration, cumulativeStarts, snapPoints, currentGlobalTime: getGlobalTime } = useEditor(clips, transitions);
+
+  const trackWidth = useMemo(
+    () => getTrackWidth(clips, timelineZoom),
+    [clips, timelineZoom]
+  );
 
   const currentGlobalTime = useMemo(() => {
     return getGlobalTime(activeClipId) + currentOffset;
@@ -418,7 +425,7 @@ export default function App() {
   }, []);
 
   const handleTimelineZoomChange = useCallback((zoom) => {
-    setTimelineZoom(Math.max(1, Math.min(10, zoom)));
+    setTimelineZoom(clampZoom(zoom));
   }, []);
 
   const handleApplyTemplate = useCallback((template) => {
@@ -833,10 +840,15 @@ export default function App() {
                 onSeek={handleGlobalSeek}
                 currentGlobalTime={currentGlobalTime}
                 timelineZoom={timelineZoom}
+                trackWidth={trackWidth}
+                scrollContainer={timelineContainer}
                 snapPoints={snapPoints}
+                clips={clips}
+                transitions={transitions}
               />
-              <div className="flex-1 overflow-x-auto overflow-y-hidden px-2 py-2">
+              <div className="flex-1 overflow-y-hidden px-2 py-2">
                 <ClipTrack
+                  ref={setTimelineContainer}
                   clips={clips}
                   activeClipId={activeClipId}
                   transitions={transitions}
@@ -847,6 +859,7 @@ export default function App() {
                   onReorder={handleReorder}
                   onTransitionChange={handleTransitionChange}
                   timelineZoom={timelineZoom}
+                  trackWidth={trackWidth}
                   onTimelineZoomChange={handleTimelineZoomChange}
                 />
               </div>

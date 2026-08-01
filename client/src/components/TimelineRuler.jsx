@@ -1,4 +1,19 @@
-import { useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { getEffectivePxPerSec, getPlayheadLeft } from '../lib/timelineScale.js';
+
+function useSyncedScroll(scrollContainer) {
+  const [scrollLeft, setScrollLeft] = useState(0);
+
+  useEffect(() => {
+    if (!scrollContainer) return;
+    const sync = () => setScrollLeft(scrollContainer.scrollLeft);
+    scrollContainer.addEventListener('scroll', sync);
+    sync();
+    return () => scrollContainer.removeEventListener('scroll', sync);
+  }, [scrollContainer]);
+
+  return scrollLeft;
+}
 
 function formatTime(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
@@ -7,16 +22,28 @@ function formatTime(seconds) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export default function TimelineRuler({ totalDuration, onSeek, currentGlobalTime, timelineZoom, snapPoints }) {
+export default function TimelineRuler({
+  totalDuration,
+  onSeek,
+  currentGlobalTime,
+  timelineZoom,
+  trackWidth,
+  scrollContainer,
+  snapPoints,
+  clips,
+  transitions,
+}) {
   const rulerRef = useRef(null);
   const [dragging, setDragging] = useState(false);
+  const effectivePxPerSec = getEffectivePxPerSec(timelineZoom);
+  const scrollLeft = useSyncedScroll(scrollContainer);
 
   const getTimeFromX = useCallback((clientX) => {
     const el = rulerRef.current;
     if (!el || totalDuration <= 0) return 0;
     const rect = el.getBoundingClientRect();
-    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    let time = pct * totalDuration;
+    const x = clientX - rect.left + scrollLeft;
+    let time = Math.max(0, Math.min(totalDuration, (x / Math.max(1, trackWidth)) * totalDuration));
     if (snapPoints && snapPoints.length > 0) {
       const threshold = 0.15;
       for (const p of snapPoints) {
@@ -27,29 +54,35 @@ export default function TimelineRuler({ totalDuration, onSeek, currentGlobalTime
       }
     }
     return time;
-  }, [totalDuration, snapPoints]);
+  }, [totalDuration, trackWidth, scrollLeft, snapPoints]);
 
   const handlePointerDown = useCallback((e) => {
+    if (e.button !== 0) return;
     setDragging(true);
     rulerRef.current?.setPointerCapture(e.pointerId);
     onSeek(getTimeFromX(e.clientX));
   }, [getTimeFromX, onSeek]);
 
   const handlePointerMove = useCallback((e) => {
-    if (!dragging) return;
+    if (!dragging || e.buttons === 0) return;
     onSeek(getTimeFromX(e.clientX));
   }, [dragging, getTimeFromX, onSeek]);
 
   const handlePointerUp = useCallback(() => setDragging(false), []);
+  const handlePointerLeave = useCallback(() => setDragging(false), []);
 
-  const playheadPct = totalDuration > 0 ? ((currentGlobalTime || 0) / totalDuration) * 100 : 0;
+  const playheadLeft = clips && transitions
+    ? getPlayheadLeft(clips, transitions, currentGlobalTime || 0, timelineZoom) - scrollLeft
+    : (currentGlobalTime || 0) * effectivePxPerSec - scrollLeft;
 
   const tickInterval = (() => {
-    const visibleDuration = totalDuration / Math.max(1, timelineZoom);
-    if (visibleDuration <= 10) return 1;
-    if (visibleDuration <= 30) return 5;
-    if (visibleDuration <= 120) return 10;
-    if (visibleDuration <= 600) return 30;
+    const targetPx = 80;
+    const secondsPerTick = targetPx / effectivePxPerSec;
+    if (secondsPerTick <= 1) return 1;
+    if (secondsPerTick <= 2.5) return 2;
+    if (secondsPerTick <= 5) return 5;
+    if (secondsPerTick <= 15) return 10;
+    if (secondsPerTick <= 40) return 30;
     return 60;
   })();
 
@@ -59,18 +92,24 @@ export default function TimelineRuler({ totalDuration, onSeek, currentGlobalTime
   }
 
   return (
-    <div className="relative h-7 bg-glass-panel border-b border-glass-border select-none backdrop-blur-sm">
-      <div ref={rulerRef}
+    <div
+      ref={rulerRef}
+      className="relative h-7 bg-glass-panel border-b border-glass-border select-none backdrop-blur-sm overflow-x-hidden"
+    >
+      <div
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
-        className="absolute inset-0 cursor-pointer touch-none overflow-hidden">
+        onPointerLeave={handlePointerLeave}
+        className="absolute top-0 bottom-0 left-0 cursor-pointer touch-none"
+        style={{ width: Math.max(0, trackWidth), transform: `translateX(-${scrollLeft}px)` }}
+      >
         {ticks.map((t, i) => {
-          const pct = totalDuration > 0 ? (t / totalDuration) * 100 : 0;
+          const left = totalDuration > 0 ? (t / totalDuration) * trackWidth : 0;
           const isMajor = i % 5 === 0;
           return (
-            <div key={t} className="absolute top-0 bottom-0" style={{ left: `${pct}%` }}>
+            <div key={t} className="absolute top-0 bottom-0" style={{ left }}>
               <div className={['w-px h-full', isMajor ? 'bg-white/15' : 'bg-white/5'].join(' ')} />
               {isMajor && (
                 <span className="absolute top-1 left-1.5 text-[9px] font-mono text-neutral-400 whitespace-nowrap tracking-tight">
@@ -85,14 +124,14 @@ export default function TimelineRuler({ totalDuration, onSeek, currentGlobalTime
       <div
         className="absolute top-0 bottom-0 w-px bg-accent pointer-events-none z-10"
         style={{
-          left: `${playheadPct}%`,
+          left: playheadLeft,
           boxShadow: '0 0 8px rgba(168, 85, 247, 0.8)',
         }}
       />
       <div
         className="absolute -top-1 w-2.5 h-2.5 bg-accent rounded-full pointer-events-none z-10 -ml-1"
         style={{
-          left: `${playheadPct}%`,
+          left: playheadLeft,
           boxShadow: '0 0 12px rgba(168, 85, 247, 0.9), 0 0 4px rgba(192, 132, 252, 1)',
         }}
       />
