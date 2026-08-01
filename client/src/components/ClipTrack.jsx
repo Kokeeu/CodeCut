@@ -1,10 +1,11 @@
-import { forwardRef, useRef, useState, useEffect } from 'react';
+import { forwardRef, useRef, useState, useEffect, useCallback } from 'react';
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, arrayMove, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import ClipBlock from './ClipBlock.jsx';
 import TransitionPicker from './TransitionPicker.jsx';
 import {
   getEffectivePxPerSec,
+  getPlayheadLeft,
   MIN_CLIP_WIDTH,
   MIN_ZOOM,
   MAX_ZOOM,
@@ -42,39 +43,120 @@ const ClipTrack = forwardRef(function ClipTrack(
     onReorder,
     onTransitionChange,
     timelineZoom = 1,
-    trackWidth,
     onTimelineZoomChange,
+    currentGlobalTime = 0,
+    isPlaying = false,
   },
   forwardedRef
 ) {
   const containerRef = useRef(null);
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: clips.length });
+  const dragAutoScrollRef = useRef({ rafId: null, dir: 0, speed: 0 });
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
 
-  const handleDragEnd = (event) => {
+  const stopDragAutoScroll = useCallback(() => {
+    if (dragAutoScrollRef.current.rafId) {
+      cancelAnimationFrame(dragAutoScrollRef.current.rafId);
+      dragAutoScrollRef.current.rafId = null;
+    }
+    dragAutoScrollRef.current.dir = 0;
+    dragAutoScrollRef.current.speed = 0;
+  }, []);
+
+  const handleDragEnd = useCallback((event) => {
+    stopDragAutoScroll();
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const oldIndex = clips.findIndex((c) => c.id === active.id);
     const newIndex = clips.findIndex((c) => c.id === over.id);
     if (oldIndex < 0 || newIndex < 0) return;
     onReorder(arrayMove(clips, oldIndex, newIndex));
-  };
+  }, [clips, onReorder, stopDragAutoScroll]);
 
-  const handleWheel = (e) => {
+  const handleDragMove = useCallback((event) => {
     const container = containerRef.current;
     if (!container) return;
-    e.preventDefault();
 
-    if (e.ctrlKey && onTimelineZoomChange) {
-      const delta = e.deltaY > 0 ? -WHEEL_ZOOM_STEP : WHEEL_ZOOM_STEP;
-      onTimelineZoomChange(timelineZoom + delta);
+    const translated = event.active?.rect?.current?.translated;
+    if (!translated) return;
+
+    const pointerX = translated.left + translated.width / 2;
+    const rect = container.getBoundingClientRect();
+    const EDGE = 60;
+    const MAX_SPEED = 14;
+
+    let dir = 0;
+    let speed = 0;
+
+    if (pointerX < rect.left + EDGE) {
+      dir = -1;
+      const dist = rect.left + EDGE - pointerX;
+      speed = Math.max(1, MAX_SPEED * (dist / EDGE));
+    } else if (pointerX > rect.right - EDGE) {
+      dir = 1;
+      const dist = pointerX - (rect.right - EDGE);
+      speed = Math.max(1, MAX_SPEED * (dist / EDGE));
+    }
+
+    dragAutoScrollRef.current.dir = dir;
+    dragAutoScrollRef.current.speed = speed;
+
+    if (dir === 0) {
+      if (dragAutoScrollRef.current.rafId) {
+        cancelAnimationFrame(dragAutoScrollRef.current.rafId);
+        dragAutoScrollRef.current.rafId = null;
+      }
       return;
     }
 
-    container.scrollLeft += e.deltaY;
-  };
+    if (dragAutoScrollRef.current.rafId) return;
+
+    const tick = () => {
+      const s = dragAutoScrollRef.current;
+      const c = containerRef.current;
+      if (s.dir === 0 || !c) {
+        s.rafId = null;
+        return;
+      }
+      c.scrollLeft += s.dir * s.speed;
+      s.rafId = requestAnimationFrame(tick);
+    };
+    dragAutoScrollRef.current.rafId = requestAnimationFrame(tick);
+  }, []);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const handler = (e) => {
+      if (e.ctrlKey && onTimelineZoomChange) {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -WHEEL_ZOOM_STEP : WHEEL_ZOOM_STEP;
+        onTimelineZoomChange(timelineZoom + delta);
+        return;
+      }
+      e.preventDefault();
+      container.scrollLeft += e.deltaY + e.deltaX;
+    };
+    container.addEventListener('wheel', handler, { passive: false });
+    return () => container.removeEventListener('wheel', handler);
+  }, [timelineZoom, onTimelineZoomChange]);
+
+  useEffect(() => {
+    if (!isPlaying) return;
+    const container = containerRef.current;
+    if (!container || !clips.length) return;
+    const playheadX = getPlayheadLeft(clips, transitions || [], currentGlobalTime, timelineZoom);
+    const clientWidth = container.clientWidth;
+    const buffer = 80;
+
+    if (playheadX < container.scrollLeft + buffer) {
+      container.scrollLeft = Math.max(0, playheadX - buffer);
+    } else if (playheadX > container.scrollLeft + clientWidth - buffer) {
+      container.scrollLeft = playheadX - clientWidth + buffer;
+    }
+  }, [currentGlobalTime, isPlaying, clips, transitions, timelineZoom]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -86,14 +168,14 @@ const ClipTrack = forwardRef(function ClipTrack(
       const effectivePxPerSec = getEffectivePxPerSec(timelineZoom);
 
       let cumWidth = 0;
-      let startIdx = 0;
+      let startIdx = -1;
       let endIdx = clips.length;
 
       for (let i = 0; i < clips.length; i++) {
         const dur = clips[i].sourceEnd - clips[i].sourceStart;
         const width = Math.max(MIN_CLIP_WIDTH, dur * effectivePxPerSec);
 
-        if (cumWidth + width > scrollLeft - 200 && startIdx === 0) {
+        if (startIdx === -1 && cumWidth + width > scrollLeft - 200) {
           startIdx = Math.max(0, i - 2);
         }
 
@@ -105,7 +187,12 @@ const ClipTrack = forwardRef(function ClipTrack(
         cumWidth += width;
       }
 
-      setVisibleRange({ start: startIdx, end: endIdx });
+      if (startIdx === -1) startIdx = 0;
+      setVisibleRange((prev) =>
+        prev.start === startIdx && prev.end === endIdx
+          ? prev
+          : { start: startIdx, end: endIdx }
+      );
     };
 
     updateVisibleRange();
@@ -148,14 +235,18 @@ const ClipTrack = forwardRef(function ClipTrack(
 
   return (
     <div>
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragMove={handleDragMove}
+        onDragEnd={handleDragEnd}
+        onDragCancel={stopDragAutoScroll}
+      >
         <SortableContext items={clips.map((c) => c.id)} strategy={horizontalListSortingStrategy}>
           <div
             ref={containerRef}
-            onWheel={handleWheel}
-            className="flex items-center overflow-x-auto pb-2 pt-2 px-1 scrollbar-thin"
+            className="flex items-center overflow-x-auto pb-2 pt-2 px-1 scrollbar-thin timeline-scroll"
             style={{
-              minWidth: trackWidth ? Math.max(0, trackWidth) : undefined,
               backgroundImage: 'linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px)',
               backgroundSize: '24px 24px',
             }}

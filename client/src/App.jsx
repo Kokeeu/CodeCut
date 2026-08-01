@@ -861,6 +861,8 @@ export default function App() {
                   timelineZoom={timelineZoom}
                   trackWidth={trackWidth}
                   onTimelineZoomChange={handleTimelineZoomChange}
+                  currentGlobalTime={currentGlobalTime}
+                  isPlaying={isPlaying}
                 />
               </div>
             </div>
