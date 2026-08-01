@@ -24,6 +24,7 @@ import BottomSheet from './components/BottomSheet.jsx';
 import useUndoableState from './hooks/useUndoableState.js';
 import useEditor from './hooks/useEditor.js';
 import useProjectAutosave from './hooks/useProjectAutosave.js';
+import useExitConfirmation from './hooks/useExitConfirmation.js';
 
 const idCounter = { value: 0 };
 function nextId(prefix) {
@@ -673,6 +674,8 @@ export default function App() {
 
   const hasFiles = files.length > 0;
 
+  const { showConfirm, confirmExit, cancelExit } = useExitConfirmation(hasFiles);
+
   const autosaveState = useProjectAutosave({
     files: files.map((f) => ({ id: f.id, name: f.name, duration: f.duration, waveform: f.waveform, filmstripBase64: f.filmstripBase64 })),
     clips,
@@ -932,6 +935,16 @@ export default function App() {
         message={confirmAction?.message}
         onConfirm={confirmAction?.onConfirm}
         onCancel={() => setConfirmAction(null)}
+      />
+      <ConfirmDialog
+        open={showConfirm}
+        title="Leave editor?"
+        message="You have unsaved work in the editor. If you leave, your changes will be lost."
+        confirmLabel="Leave"
+        cancelLabel="Stay"
+        onConfirm={confirmExit}
+        onCancel={cancelExit}
+        variant="danger"
       />
       <ShortcutOverlay isOpen={showShortcuts} onClose={() => setShowShortcuts(false)} />
       <ToastContainer />

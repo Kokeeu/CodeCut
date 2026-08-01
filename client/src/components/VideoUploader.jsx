@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { extractWaveform } from '../lib/waveform.js';
+import FullscreenLoader from './FullscreenLoader.jsx';
 
 const MAX_SIZE_MB = 500;
 const MAX_FILES = 10;
@@ -169,6 +170,7 @@ export default function VideoUploader({ onFilesAdded, compact }) {
         {error && (
           <p className="mt-1.5 text-[11px] text-red-400 px-1 leading-snug">{error}</p>
         )}
+        {busy && <FullscreenLoader message="Processing videos…" />}
       </div>
     );
   }
@@ -214,6 +216,7 @@ export default function VideoUploader({ onFilesAdded, compact }) {
         <input ref={inputRef} type="file" accept="video/*" multiple onChange={onChange} className="hidden" />
       </div>
       {error && <p className="mt-3 text-sm text-red-400 text-center">{error}</p>}
+      {busy && <FullscreenLoader message="Processing videos…" />}
     </div>
   );
 }
