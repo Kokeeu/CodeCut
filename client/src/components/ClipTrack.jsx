@@ -63,10 +63,17 @@ const ClipTrack = forwardRef(function ClipTrack(
   };
 
   const handleWheel = (e) => {
-    if (!e.ctrlKey || !onTimelineZoomChange) return;
+    const container = containerRef.current;
+    if (!container) return;
     e.preventDefault();
-    const delta = e.deltaY > 0 ? -WHEEL_ZOOM_STEP : WHEEL_ZOOM_STEP;
-    onTimelineZoomChange(timelineZoom + delta);
+
+    if (e.ctrlKey && onTimelineZoomChange) {
+      const delta = e.deltaY > 0 ? -WHEEL_ZOOM_STEP : WHEEL_ZOOM_STEP;
+      onTimelineZoomChange(timelineZoom + delta);
+      return;
+    }
+
+    container.scrollLeft += e.deltaY;
   };
 
   useEffect(() => {
