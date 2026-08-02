@@ -54,6 +54,7 @@ export default function ClipTrim({ clip, file, currentOffset, onChange, onSeek }
   const fileDuration = file?.duration || 0;
   const waveform = file?.waveform;
   const safeDuration = Math.max(0.01, fileDuration || 0.01);
+  const maxSourceEnd = fileDuration > 0 ? fileDuration - 0.01 : 1e9;
   
   const startPct = (clip.sourceStart / safeDuration) * 100;
   const endPct = (clip.sourceEnd / safeDuration) * 100;
@@ -88,7 +89,7 @@ export default function ClipTrim({ clip, file, currentOffset, onChange, onSeek }
     if (dragging === 'start') {
       onChange({ sourceStart: clamp(t, 0, clip.sourceEnd - MIN_GAP), sourceEnd: clip.sourceEnd });
     } else if (dragging === 'end') {
-      onChange({ sourceStart: clip.sourceStart, sourceEnd: clamp(t, clip.sourceStart + MIN_GAP, safeDuration) });
+      onChange({ sourceStart: clip.sourceStart, sourceEnd: clamp(t, clip.sourceStart + MIN_GAP, maxSourceEnd) });
     } else if (dragging === 'seek') {
       const clamped = clamp(t, clip.sourceStart, clip.sourceEnd);
       onSeek?.(clamped - clip.sourceStart);
@@ -123,7 +124,7 @@ export default function ClipTrim({ clip, file, currentOffset, onChange, onSeek }
     if (handle === 'start') {
       onChange({ sourceStart: clamp(t, 0, clip.sourceEnd - MIN_GAP), sourceEnd: clip.sourceEnd });
     } else {
-      onChange({ sourceStart: clip.sourceStart, sourceEnd: clamp(t, clip.sourceStart + MIN_GAP, safeDuration) });
+      onChange({ sourceStart: clip.sourceStart, sourceEnd: clamp(t, clip.sourceStart + MIN_GAP, maxSourceEnd) });
     }
   };
 
@@ -133,7 +134,7 @@ export default function ClipTrim({ clip, file, currentOffset, onChange, onSeek }
       const newStart = clamp(clip.sourceStart + delta, 0, clip.sourceEnd - MIN_GAP);
       onChange({ sourceStart: newStart, sourceEnd: clip.sourceEnd });
     } else {
-      const newEnd = clamp(clip.sourceEnd + delta, clip.sourceStart + MIN_GAP, safeDuration);
+      const newEnd = clamp(clip.sourceEnd + delta, clip.sourceStart + MIN_GAP, maxSourceEnd);
       onChange({ sourceStart: clip.sourceStart, sourceEnd: newEnd });
     }
   };
@@ -145,7 +146,7 @@ export default function ClipTrim({ clip, file, currentOffset, onChange, onSeek }
 
   const setOutPoint = () => {
     const newEnd = clip.sourceStart + currentOffset;
-    onChange({ sourceStart: clip.sourceStart, sourceEnd: clamp(newEnd, clip.sourceStart + MIN_GAP, safeDuration) });
+    onChange({ sourceStart: clip.sourceStart, sourceEnd: clamp(newEnd, clip.sourceStart + MIN_GAP, maxSourceEnd) });
   };
 
   const trackWidth = trimZoom * 100;

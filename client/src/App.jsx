@@ -230,7 +230,7 @@ export default function App() {
       id: nextId('clip'),
       fileId,
       sourceStart: 0,
-      sourceEnd: f.duration,
+      sourceEnd: f.duration - 0.01,
       speed: 1,
       transform: { ...DEFAULT_TRANSFORM },
       audio: { ...DEFAULT_AUDIO },
@@ -304,9 +304,16 @@ export default function App() {
 
   const handleTrimChange = useCallback(({ sourceStart, sourceEnd }) => {
     setClips((prev) =>
-      prev.map((c) => (c.id === activeClipId ? { ...c, sourceStart, sourceEnd } : c))
+      prev.map((c) => {
+        if (c.id !== activeClipId) return c;
+        const f = fileById[c.fileId];
+        const maxDur = f?.duration ? f.duration - 0.01 : sourceEnd;
+        const safeStart = Math.max(0, Math.min(sourceStart, maxDur - 0.1));
+        const safeEnd = Math.max(safeStart + 0.05, Math.min(sourceEnd, maxDur));
+        return { ...c, sourceStart: safeStart, sourceEnd: safeEnd };
+      })
     , 'trim');
-  }, [activeClipId]);
+  }, [activeClipId, fileById]);
 
   const handleTransformChange = useCallback((transform) => {
     setClips((prev) =>
@@ -379,7 +386,7 @@ export default function App() {
     if (!activeClip) return;
     const clipDur = activeClip.sourceEnd - activeClip.sourceStart;
     if (currentOffset <= 0.05 || currentOffset >= clipDur - 0.05) return;
-    const cut = activeClip.sourceStart + currentOffset;
+    const cut = activeClip.sourceStart + Math.min(currentOffset, clipDur - 0.1);
     const idx = clips.findIndex((c) => c.id === activeClip.id);
     if (idx < 0) return;
     const clipA = { ...activeClip, sourceEnd: cut, texts: [...(activeClip.texts || [])] };
