@@ -35,6 +35,7 @@ const VideoPreview = forwardRef(function VideoPreview(
   const dragRef = useRef(null);
   const textRefs = useRef({});
   const endedRef = useRef(false);
+  const isEndingRef = useRef(false);
   const isPlayingRef = useRef(isPlaying);
   const rewindRef = useRef(null);
   const seekTargetRef = useRef(null);
@@ -121,6 +122,7 @@ const VideoPreview = forwardRef(function VideoPreview(
 
   useEffect(() => {
     endedRef.current = false;
+    isEndingRef.current = false;
     seekTargetRef.current = null;
     const v = videoRef.current;
     const bg = bgVideoRef.current;
@@ -195,6 +197,7 @@ const VideoPreview = forwardRef(function VideoPreview(
       if (offset >= 0) throttledTimeUpdate(offset);
       if (!endedRef.current && v.currentTime >= clip.sourceEnd - 0.03) {
         endedRef.current = true;
+        isEndingRef.current = true;
         onClipEnded?.();
       }
     };
@@ -389,7 +392,13 @@ const VideoPreview = forwardRef(function VideoPreview(
             playsInline
             autoPlay={isPlaying}
             onPlay={() => onPlayStateChange?.(true)}
-            onPause={() => onPlayStateChange?.(false)}
+            onPause={() => {
+              if (isEndingRef.current) {
+                isEndingRef.current = false;
+                return;
+              }
+              onPlayStateChange?.(false);
+            }}
             className="pointer-events-none"
             style={{
               position: 'absolute',
