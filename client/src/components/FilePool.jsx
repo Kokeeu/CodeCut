@@ -51,14 +51,15 @@ export default function FilePool({ files, onAddClip, onFilesAdded, vertical }) {
                   {f.name}
                 </p>
                 <p className="text-[10px] text-neutral-500 font-mono tracking-tight">
-                  {formatTime(f.duration)}
+                  {f._pending ? 'Needs re-upload' : formatTime(f.duration)}
                 </p>
                 <button
                   onClick={() => onAddClip(f.id)}
-                  className="inline-flex items-center justify-center gap-1 w-full px-2 py-1 rounded-md bg-accent/15 border border-accent/20 text-accent text-[10px] font-semibold hover:bg-accent/25 hover:border-accent/40 transition-all duration-150"
+                  disabled={!!f._pending || !f.duration}
+                  className="inline-flex items-center justify-center gap-1 w-full px-2 py-1 rounded-md bg-accent/15 border border-accent/20 text-accent text-[10px] font-semibold hover:bg-accent/25 hover:border-accent/40 transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <PlusIcon />
-                  Timeline
+                  {f._pending ? 'Re-upload' : 'Timeline'}
                 </button>
               </div>
             </div>
@@ -95,13 +96,14 @@ export default function FilePool({ files, onAddClip, onFilesAdded, vertical }) {
           )}
           <div className="p-2">
             <p className="text-[11px] text-neutral-200 truncate" title={f.name}>{f.name}</p>
-            <p className="text-[10px] text-neutral-500 font-mono">{formatTime(f.duration)}</p>
+            <p className="text-[10px] text-neutral-500 font-mono">{f._pending ? 'Needs re-upload' : formatTime(f.duration)}</p>
             <button
               onClick={() => onAddClip(f.id)}
-              className="mt-1.5 inline-flex items-center justify-center gap-1 w-full px-2 py-1 rounded-md bg-accent/15 border border-accent/20 text-accent text-[11px] font-semibold hover:bg-accent/25 hover:border-accent/40 transition-all duration-150"
+              disabled={!!f._pending || !f.duration}
+              className="mt-1.5 inline-flex items-center justify-center gap-1 w-full px-2 py-1 rounded-md bg-accent/15 border border-accent/20 text-accent text-[11px] font-semibold hover:bg-accent/25 hover:border-accent/40 transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <PlusIcon />
-              Add to timeline
+              {f._pending ? 'Re-upload' : 'Add to timeline'}
             </button>
           </div>
         </div>

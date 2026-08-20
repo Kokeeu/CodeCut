@@ -1,7 +1,9 @@
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, useMemo } from 'react';
 import { FONT_CSS } from './CardMetadata.jsx';
-import { getPreviewAnimationStyle, getAnimation } from '../lib/textAnimations.js';
+import { getAnimation, getKaraokeHighlight } from '../lib/textAnimations.js';
 import useThrottledCallback from '../hooks/useThrottledCallback.js';
+import { getPipRect, getTextAlignTransform } from '../lib/pipLayout.js';
+import { BG_BRIGHTNESS, BG_SATURATION } from '../lib/projectDefaults.js';
 
 function formatTime(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
@@ -39,6 +41,7 @@ const VideoPreview = forwardRef(function VideoPreview(
   const isPlayingRef = useRef(isPlaying);
   const rewindRef = useRef(null);
   const seekTargetRef = useRef(null);
+  const pipVideoRef = useRef(null);
   isPlayingRef.current = isPlaying;
 
   const [handles, setHandles] = useState(null);
@@ -75,6 +78,7 @@ const VideoPreview = forwardRef(function VideoPreview(
       seekTargetRef.current = tt;
       if (v) v.currentTime = tt;
       if (bg) bg.currentTime = tt;
+      if (pipVideoRef.current) pipVideoRef.current.currentTime = Math.max(0, offsetWithinClip);
     },
     stepFrame: (direction) => {
       const v = videoRef.current;
@@ -85,6 +89,7 @@ const VideoPreview = forwardRef(function VideoPreview(
       seekTargetRef.current = newTime;
       v.currentTime = newTime;
       if (bg) bg.currentTime = newTime;
+      if (pipVideoRef.current) pipVideoRef.current.currentTime = Math.max(0, newTime - clip.sourceStart);
     },
     startRewind: (speedMultiplier = 1) => {
       if (rewindRef.current) clearInterval(rewindRef.current);
@@ -212,9 +217,11 @@ const VideoPreview = forwardRef(function VideoPreview(
     if (isPlaying && v.paused) {
       v.play().catch(() => {});
       if (bg) bg.play().catch(() => {});
+      pipVideoRef.current?.play?.().catch(() => {});
     } else if (!isPlaying && !v.paused) {
       v.pause();
       if (bg) bg.pause();
+      pipVideoRef.current?.pause?.();
     }
   }, [isPlaying, clip?.id]);
 
@@ -352,6 +359,8 @@ const VideoPreview = forwardRef(function VideoPreview(
   };
 
   const blurPx = (Number(meta?.blur) || 0) * DISPLAY_SCALE;
+  const previewBrightness = 1 + BG_BRIGHTNESS;
+  const previewSaturate = BG_SATURATION;
 
   return (
     <div ref={containerRef} className="flex items-center justify-center w-full h-full p-4">
@@ -378,7 +387,7 @@ const VideoPreview = forwardRef(function VideoPreview(
             autoPlay={isPlaying}
             playsInline
             className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-            style={{ filter: `blur(${blurPx}px) brightness(0.6) saturate(0.7)` }}
+            style={{ filter: `blur(${blurPx}px) brightness(${previewBrightness}) saturate(${previewSaturate})` }}
           />
         )}
         {meta?.blurEnabled === false && (
@@ -418,46 +427,25 @@ const VideoPreview = forwardRef(function VideoPreview(
         {clip?.pip?.enabled && clip.pip.fileId && (() => {
           const pipFile = files?.find((f) => f.id === clip.pip.fileId);
           if (!pipFile?.url) return null;
-          
-          const sizePercent = clip.pip.size || 30;
-          const pipWidth = EXPORT_W * (sizePercent / 100) * DISPLAY_SCALE;
-          const pipHeight = pipWidth * 9 / 16;
-          
-          let x = 20 * DISPLAY_SCALE;
-          let y = 20 * DISPLAY_SCALE;
-          
-          switch (clip.pip.position) {
-            case 'top-right':
-              x = (EXPORT_W - pipWidth / DISPLAY_SCALE - 20) * DISPLAY_SCALE;
-              y = 20 * DISPLAY_SCALE;
-              break;
-            case 'bottom-left':
-              x = 20 * DISPLAY_SCALE;
-              y = (EXPORT_H - pipHeight / DISPLAY_SCALE - 20) * DISPLAY_SCALE;
-              break;
-            case 'bottom-right':
-              x = (EXPORT_W - pipWidth / DISPLAY_SCALE - 20) * DISPLAY_SCALE;
-              y = (EXPORT_H - pipHeight / DISPLAY_SCALE - 20) * DISPLAY_SCALE;
-              break;
-          }
-          
+          const rect = getPipRect(clip.pip, EXPORT_W, EXPORT_H);
           return (
             <video
+              ref={pipVideoRef}
               src={pipFile.url}
               playsInline
-              autoPlay={isPlaying}
               muted
               className="pointer-events-none"
               style={{
                 position: 'absolute',
-                width: `${pipWidth}px`,
-                height: `${pipHeight}px`,
-                left: `${x}px`,
-                top: `${y}px`,
+                width: `${rect.width * DISPLAY_SCALE}px`,
+                height: `${rect.height * DISPLAY_SCALE}px`,
+                left: `${rect.x * DISPLAY_SCALE}px`,
+                top: `${rect.y * DISPLAY_SCALE}px`,
                 opacity: Math.max(0, Math.min(1, clip.pip.opacity ?? 1)),
                 border: clip.pip.border ? `${(clip.pip.borderWidth || 4) * DISPLAY_SCALE}px solid white` : 'none',
                 borderRadius: `${(clip.pip.borderRadius || 8) * DISPLAY_SCALE}px`,
                 objectFit: 'cover',
+                boxSizing: 'content-box',
               }}
             />
           );
@@ -471,10 +459,11 @@ const VideoPreview = forwardRef(function VideoPreview(
 
           let animStyle = {};
           let displayText = tx.text;
+          let karaokeHighlight = '';
 
           if (tx.animation?.type && isVisible) {
             const animDef = getAnimation(tx.animation.type);
-            const elapsed = currentOffset - tx.startOffset;
+            const elapsed = currentOffset - (tx.startOffset || 0);
             const animDur = Math.max(0.1, tx.animation.duration || 0.5);
             const progress = Math.min(1, elapsed / animDur);
 
@@ -483,19 +472,27 @@ const VideoPreview = forwardRef(function VideoPreview(
               const visibleChars = Math.floor(progress * len);
               displayText = (tx.text || '').slice(0, visibleChars);
             } else if (animDef.isKaraoke) {
-              animStyle = { opacity: 1 };
+              karaokeHighlight = getKaraokeHighlight(tx.text || '', progress);
             } else if (animDef.getPreviewStyle) {
               animStyle = animDef.getPreviewStyle(progress, tx.x, tx.y, tx.text) || {};
             }
           }
 
           const hexToRgba = (hex, alpha) => {
-            const r = parseInt(hex.slice(1, 3), 16);
-            const g = parseInt(hex.slice(3, 5), 16);
-            const b = parseInt(hex.slice(5, 7), 16);
+            const r = parseInt((hex || '#000000').slice(1, 3), 16);
+            const g = parseInt((hex || '#000000').slice(3, 5), 16);
+            const b = parseInt((hex || '#000000').slice(5, 7), 16);
             return `rgba(${r},${g},${b},${alpha})`;
           };
 
+          const alignTx = getTextAlignTransform(tx.align || 'left');
+          const transforms = [
+            alignTx !== 'none' ? alignTx : null,
+            animStyle.transform || null,
+            tx.rotation ? `rotate(${tx.rotation}deg)` : null,
+          ].filter(Boolean);
+
+          const { transform: _animTransform, _karaokeHighlight, _visibleText, ...restAnim } = animStyle;
           const textStyle = {
             position: 'absolute',
             left: `${(tx.x || 0) * DISPLAY_SCALE}px`,
@@ -512,7 +509,9 @@ const VideoPreview = forwardRef(function VideoPreview(
             outlineOffset: '4px',
             zIndex: selected ? 30 : 20,
             opacity: !isVisible && selected ? 0.3 : 1,
-            ...animStyle,
+            transformOrigin: tx.align === 'center' ? 'center top' : (tx.align === 'right' ? 'right top' : 'left top'),
+            transform: transforms.length ? transforms.join(' ') : undefined,
+            ...restAnim,
           };
 
           if (tx.strokeEnabled && tx.strokeWidth > 0) {
@@ -527,10 +526,6 @@ const VideoPreview = forwardRef(function VideoPreview(
             textStyle.borderRadius = `${(tx.bgRadius || 8) * DISPLAY_SCALE}px`;
           }
 
-          if (tx.rotation) {
-            textStyle.transform = `rotate(${tx.rotation}deg)`;
-          }
-
           return (
             <div
               key={tx.id}
@@ -540,7 +535,14 @@ const VideoPreview = forwardRef(function VideoPreview(
               onClick={(e) => { e.stopPropagation(); onSelectText?.(tx.id); }}
               style={textStyle}
             >
-              {displayText}
+              {karaokeHighlight ? (
+                <span style={{ position: 'relative', display: 'inline-block' }}>
+                  <span style={{ opacity: 0.35 }}>{displayText}</span>
+                  <span style={{ position: 'absolute', left: 0, top: 0, color: tx.color || '#ffffff' }}>
+                    {karaokeHighlight}
+                  </span>
+                </span>
+              ) : displayText}
             </div>
           );
         })}

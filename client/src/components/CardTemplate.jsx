@@ -30,6 +30,8 @@ export default function CardTemplate({
   const t = transform || { x: 0, y: 0, scale: 1 };
   const fontFamily = FONT_CSS[font] || FONT_CSS.inter;
   const blurPx = (Number(blur) || 0) * ds;
+  const previewBrightness = 1 - 0.05;
+  const previewSaturate = 0.5;
 
   useEffect(() => {
     const v = videoRef.current;
@@ -66,7 +68,7 @@ export default function CardTemplate({
           playsInline
           preload={isActive ? 'auto' : 'none'}
           className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-          style={{ filter: `blur(${blurPx}px) brightness(0.6) saturate(0.7)` }}
+          style={{ filter: `blur(${blurPx}px) brightness(${previewBrightness}) saturate(${previewSaturate})` }}
         />
       )}
       {(!videoUrl || blurEnabled === false) && (
@@ -116,12 +118,11 @@ export default function CardTemplate({
 
       {texts && texts.length > 0 && texts.map((tx) => {
         const align = tx.align || 'left';
-        const isCenter = align === 'center';
         const style = {
           position: 'absolute',
-          left: isCenter ? '50%' : `${(tx.x || 0) * ds}px`,
+          left: `${(tx.x || 0) * ds}px`,
           top: `${(tx.y || 0) * ds}px`,
-          transform: isCenter ? 'translateX(-50%)' : 'none',
+          transform: align === 'center' ? 'translateX(-50%)' : align === 'right' ? 'translateX(-100%)' : 'none',
           color: tx.color || '#ffffff',
           fontFamily: FONT_CSS[tx.font] || FONT_CSS.inter,
           fontSize: `${(tx.size || 60) * ds}px`,
@@ -131,10 +132,6 @@ export default function CardTemplate({
           whiteSpace: 'pre',
           textAlign: align,
         };
-        if (align === 'right') {
-          style.right = `${(1080 - (tx.x || 0)) * ds}px`;
-          style.left = 'auto';
-        }
         return (
           <div key={tx.id} className="pointer-events-none" style={style}>
             {tx.text}

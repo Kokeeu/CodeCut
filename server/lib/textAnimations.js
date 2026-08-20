@@ -32,31 +32,53 @@ const ANIMATIONS = {
   },
 };
 
-function getAnimation(type) {
-  return ANIMATIONS[type] || ANIMATIONS['fade-in'];
+function getKaraokeTokens(text) {
+  const parts = String(text || '').match(/\S+|\s+/g) || [];
+  const wordIndexes = [];
+  parts.forEach((part, i) => {
+    if (/\S/.test(part)) wordIndexes.push(i);
+  });
+  return { parts, wordIndexes };
+}
+
+function getKaraokeSegments(text, startTime, animDuration, totalDuration) {
+  const { parts, wordIndexes } = getKaraokeTokens(text);
+  if (wordIndexes.length === 0) return [];
+  const n = wordIndexes.length;
+  const wordDur = Math.max(0.01, Number(animDuration) || 0.5) / n;
+  const endTime = startTime + Math.max(Number(totalDuration) || 0, Number(animDuration) || 0);
+  return wordIndexes.map((partIndex, k) => ({
+    text: parts.slice(0, partIndex + 1).join(''),
+    startTime: startTime + k * wordDur,
+    endTime,
+  }));
 }
 
 function getTypewriterSegments(text, startTime, animDuration, totalDuration) {
   if (!text || text.length === 0) return [];
-  
+
   const chars = text.split('');
   const numChars = chars.length;
   const segmentDuration = animDuration / numChars;
   const segments = [];
-  
+
   for (let i = 0; i < numChars; i++) {
     const segmentStart = startTime + (i * segmentDuration);
     const segmentEnd = i === numChars - 1 ? startTime + totalDuration : startTime + animDuration;
     const segmentText = chars.slice(0, i + 1).join('');
-    
+
     segments.push({
       text: segmentText,
       startTime: segmentStart,
       endTime: segmentEnd,
     });
   }
-  
+
   return segments;
 }
 
-module.exports = { getAnimation, getTypewriterSegments };
+function getAnimation(type) {
+  return ANIMATIONS[type] || ANIMATIONS['fade-in'];
+}
+
+module.exports = { getAnimation, getTypewriterSegments, getKaraokeSegments };

@@ -26,7 +26,7 @@ export default function RestoreBanner({ onRestore, onDismiss, hasData }) {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-[12px] text-neutral-100 font-medium">Saved project found</p>
-          <p className="text-[10px] text-neutral-400 leading-tight">Restore your previous work or start fresh</p>
+          <p className="text-[10px] text-neutral-400 leading-tight">Restore clips, texts and cached media, or start fresh</p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <button

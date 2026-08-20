@@ -1,9 +1,10 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
-const http = require('http');
+const ffmpegStatic = require('ffmpeg-static');
+const { exportProject } = require('./lib/exportClient');
 
-const FFMPEG = path.join(__dirname, '..', 'node_modules', 'ffmpeg-static', 'ffmpeg.exe');
+const FFMPEG = ffmpegStatic;
 const TEMP_DIR = path.join(__dirname, '..', 'temp');
 const OUT = path.join(TEMP_DIR, 'test');
 
@@ -13,83 +14,126 @@ function runFfmpeg(args) {
     let stderr = '';
     p.stderr.on('data', (d) => { stderr += d.toString(); });
     p.on('error', reject);
-    p.on('exit', (code) => code === 0 ? resolve() : reject(new Error(`ffmpeg exit ${code}\n${stderr}`)));
+    p.on('exit', (code) => code === 0 ? resolve(stderr) : reject(new Error(`ffmpeg exit ${code}\n${stderr}`)));
   });
 }
 
-function postMultipart({ files, fields }) {
-  return new Promise((resolve, reject) => {
-    const boundary = '----opencode' + Date.now();
-    const parts = [];
-    for (const [name, value] of Object.entries(fields || {})) {
-      parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`));
-    }
-    for (const f of files) {
-      parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="videos"; filename="${path.basename(f.path)}"\r\nContent-Type: video/mp4\r\n\r\n`));
-      parts.push(fs.readFileSync(f.path));
-      parts.push(Buffer.from('\r\n'));
-    }
-    parts.push(Buffer.from(`--${boundary}--\r\n`));
-    const body = Buffer.concat(parts);
-    const req = http.request({ host: 'localhost', port: 4000, path: '/api/trim', method: 'POST',
-      headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}`, 'Content-Length': body.length } },
-      (res) => { const c = []; res.on('data', (d) => c.push(d)); res.on('end', () => resolve({ status: res.statusCode, body: Buffer.concat(c) })); });
-    req.on('error', reject);
-    req.write(body);
-    req.end();
-  });
-}
-
-async function testCase(label, clips, transitions) {
+async function ensureFixtures() {
+  if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
+  if (!fs.existsSync(OUT)) fs.mkdirSync(OUT, { recursive: true });
   const v1 = path.join(OUT, 'a.mp4');
   const v2 = path.join(OUT, 'b.mp4');
-  const res = await postMultipart({
-    files: [{ path: v1 }, { path: v2 }],
-    fields: { clips: JSON.stringify(clips), transitions: JSON.stringify(transitions) },
-  });
-  const ok = res.status === 200 && res.body.length > 1000;
-  console.log(`[${ok ? 'OK' : 'FAIL'}] ${label} -> status=${res.status} bytes=${res.body.length}`);
-  if (ok) {
-    const out = path.join(OUT, `out-${label.replace(/\W+/g, '_')}.mp4`);
-    fs.writeFileSync(out, res.body);
-    await runFfmpeg(['-i', out, '-f', 'null', '-']);
-  } else {
-    console.log('  body:', res.body.toString('utf8'));
+  if (!fs.existsSync(v1)) {
+    await runFfmpeg([
+      '-y', '-f', 'lavfi', '-i', 'color=c=blue:s=1280x720:d=3:r=30',
+      '-f', 'lavfi', '-i', 'sine=frequency=440:duration=3',
+      '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac', '-shortest', v1,
+    ]);
   }
-  return ok;
+  if (!fs.existsSync(v2)) {
+    await runFfmpeg([
+      '-y', '-f', 'lavfi', '-i', 'color=c=red:s=1280x720:d=3:r=30',
+      '-f', 'lavfi', '-i', 'sine=frequency=880:duration=3',
+      '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac', '-shortest', v2,
+    ]);
+  }
+  return { v1, v2 };
+}
+
+async function testCase(label, clips, transitions, extraFields = {}) {
+  const { v1, v2 } = await ensureFixtures();
+  const dest = path.join(OUT, `out-${label.replace(/\W+/g, '_')}.mp4`);
+  try {
+    await exportProject({
+      files: [{ path: v1 }, { path: v2 }],
+      fields: {
+        clips: JSON.stringify(clips),
+        transitions: JSON.stringify(transitions),
+        ...extraFields,
+      },
+      destPath: dest,
+    });
+    const stat = fs.statSync(dest);
+    if (stat.size < 1000) throw new Error(`Output too small (${stat.size} bytes)`);
+    await runFfmpeg(['-i', dest, '-f', 'null', '-']);
+    console.log(`[OK] ${label} -> ${stat.size} bytes`);
+    return true;
+  } catch (err) {
+    console.log(`[FAIL] ${label} -> ${err.message}`);
+    return false;
+  }
 }
 
 async function main() {
-  // Case 1: single clip
-  await testCase('single_clip', [
+  await ensureFixtures();
+  const results = [];
+
+  results.push(await testCase('single_clip', [
     { id: 'c1', fileIndex: 0, sourceStart: 0.5, sourceEnd: 2.5, duration: 2 },
-  ], {});
-  // Case 2: 2 clips, no transitions
-  await testCase('two_clips_none', [
+  ], {}));
+
+  results.push(await testCase('two_clips_none', [
     { id: 'c1', fileIndex: 0, sourceStart: 0, sourceEnd: 1.5, duration: 1.5 },
     { id: 'c2', fileIndex: 1, sourceStart: 0.5, sourceEnd: 2.5, duration: 2 },
-  ], {});
-  // Case 3: 2 clips, fade transition
-  await testCase('two_clips_fade', [
+  ], {}));
+
+  results.push(await testCase('two_clips_fade', [
     { id: 'c1', fileIndex: 0, sourceStart: 0, sourceEnd: 1.5, duration: 1.5 },
     { id: 'c2', fileIndex: 1, sourceStart: 0.5, sourceEnd: 2.5, duration: 2 },
-  ], { 'c1|c2': { type: 'fade', durationSec: 0.5 } });
-  // Case 4: 3 clips, mix of transitions
-  await testCase('three_clips_mix', [
+  ], { 'c1|c2': { type: 'fade', durationSec: 0.5 } }));
+
+  results.push(await testCase('three_clips_mix', [
     { id: 'c1', fileIndex: 0, sourceStart: 0, sourceEnd: 1, duration: 1 },
     { id: 'c2', fileIndex: 1, sourceStart: 1, sourceEnd: 2, duration: 1 },
     { id: 'c3', fileIndex: 0, sourceStart: 1.5, sourceEnd: 2.5, duration: 1 },
-  ], { 'c1|c2': { type: 'fade', durationSec: 0.3 }, 'c2|c3': { type: 'none', durationSec: 0 } });
-  // Case 5: transition longer than the clip (should be clamped, not crash)
-  await testCase('excessive_transition', [
+  ], { 'c1|c2': { type: 'fade', durationSec: 0.3 }, 'c2|c3': { type: 'none', durationSec: 0 } }));
+
+  results.push(await testCase('excessive_transition', [
     { id: 'c1', fileIndex: 0, sourceStart: 0, sourceEnd: 0.5, duration: 0.5 },
     { id: 'c2', fileIndex: 1, sourceStart: 1, sourceEnd: 2, duration: 1 },
-  ], { 'c1|c2': { type: 'fade', durationSec: 5 } });
-  // Case 6: no duration field sent (backend must normalize)
-  await testCase('no_duration_field', [
+  ], { 'c1|c2': { type: 'fade', durationSec: 5 } }));
+
+  results.push(await testCase('no_duration_field', [
     { id: 'c1', fileIndex: 0, sourceStart: 0, sourceEnd: 1.5 },
     { id: 'c2', fileIndex: 1, sourceStart: 0.5, sourceEnd: 2.5 },
-  ], { 'c1|c2': { type: 'wipeleft', durationSec: 0.4 } });
+  ], { 'c1|c2': { type: 'wipeleft', durationSec: 0.4 } }));
+
+  results.push(await testCase('karaoke_text', [
+    {
+      id: 'c1',
+      fileIndex: 0,
+      sourceStart: 0,
+      sourceEnd: 2,
+      texts: [{
+        text: 'Hello world',
+        x: 540,
+        y: 200,
+        size: 64,
+        font: 'inter',
+        color: '#ffffff',
+        align: 'center',
+        startOffset: 0,
+        endOffset: 2,
+        animation: { type: 'karaoke', duration: 1.2 },
+      }],
+    },
+  ], {}));
+
+  results.push(await testCase('pip_overlay', [
+    {
+      id: 'c1',
+      fileIndex: 0,
+      sourceStart: 0,
+      sourceEnd: 2,
+      pip: { enabled: true, fileIndex: 1, position: 'bottom-right', size: 30, opacity: 1, border: true, borderWidth: 4, borderRadius: 8 },
+    },
+  ], {}));
+
+  const failed = results.filter((ok) => !ok).length;
+  console.log(`\n${results.length - failed}/${results.length} passed`);
+  process.exit(failed ? 1 : 0);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

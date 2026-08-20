@@ -10,7 +10,7 @@ const ANIMATIONS = {
   },
   'slide-up': {
     label: 'Slide Up',
-    getPreviewStyle(progress, tx, ty) {
+    getPreviewStyle(progress) {
       const offset = 80 * (1 - Math.min(1, progress));
       return { transform: `translateY(${offset}px)` };
     },
@@ -20,7 +20,7 @@ const ANIMATIONS = {
   },
   'slide-left': {
     label: 'Slide Left',
-    getPreviewStyle(progress, tx, ty) {
+    getPreviewStyle(progress) {
       const offset = 120 * (1 - Math.min(1, progress));
       return { transform: `translateX(${offset}px)` };
     },
@@ -67,11 +67,42 @@ const ANIMATIONS = {
   'karaoke': {
     label: 'Karaoke',
     isKaraoke: true,
-    getPreviewStyle(progress) {
-      return { opacity: 1 };
+    getPreviewStyle(progress, tx, ty, text) {
+      return { _karaokeHighlight: getKaraokeHighlight(text || '', progress) };
     },
   },
 };
+
+export function getKaraokeTokens(text) {
+  const parts = String(text || '').match(/\S+|\s+/g) || [];
+  const wordIndexes = [];
+  parts.forEach((part, i) => {
+    if (/\S/.test(part)) wordIndexes.push(i);
+  });
+  return { parts, wordIndexes };
+}
+
+export function getKaraokeHighlight(text, progress) {
+  const { parts, wordIndexes } = getKaraokeTokens(text);
+  const n = Math.max(1, wordIndexes.length);
+  const count = Math.max(0, Math.min(n, Math.floor(Math.min(1, progress) * n + 1e-9)));
+  if (count <= 0) return '';
+  const lastPart = wordIndexes[count - 1];
+  return parts.slice(0, lastPart + 1).join('');
+}
+
+export function getKaraokeSegments(text, startTime, animDuration, totalDuration) {
+  const { parts, wordIndexes } = getKaraokeTokens(text);
+  if (wordIndexes.length === 0) return [];
+  const n = wordIndexes.length;
+  const wordDur = Math.max(0.01, Number(animDuration) || 0.5) / n;
+  const endTime = startTime + Math.max(Number(totalDuration) || 0, Number(animDuration) || 0);
+  return wordIndexes.map((partIndex, k) => ({
+    text: parts.slice(0, partIndex + 1).join(''),
+    startTime: startTime + k * wordDur,
+    endTime,
+  }));
+}
 
 export function getAnimation(type) {
   return ANIMATIONS[type] || ANIMATIONS['fade-in'];

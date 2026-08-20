@@ -1,36 +1,60 @@
 const { getVideoInfo } = require('./videoInfo');
 
-async function validateInputVideos(inputPaths, clips) {
+async function validateInputVideos(files, clips) {
   const errors = [];
+  const infoCache = new Map();
 
-  for (let i = 0; i < inputPaths.length; i++) {
-    const inputPath = inputPaths[i];
-    
+  async function infoFor(file) {
+    if (!file || !file.path) throw new Error('Missing file path');
+    if (infoCache.has(file.path)) return infoCache.get(file.path);
+    const info = await getVideoInfo(file.path);
+    infoCache.set(file.path, info);
+    return info;
+  }
+
+  for (let i = 0; i < clips.length; i++) {
+    const clip = clips[i];
+    const file = files[clip.fileIndex];
+    if (!file) {
+      errors.push(`Clip ${i + 1}: Invalid fileIndex ${clip.fileIndex}`);
+      continue;
+    }
+
     try {
-      const info = await getVideoInfo(inputPath);
-      
+      const info = await infoFor(file);
       if (info.duration <= 0) {
-        errors.push(`Video ${i + 1}: Duration is 0 or invalid`);
+        errors.push(`Video ${clip.fileIndex + 1}: Duration is 0 or invalid`);
         continue;
       }
-
       if (info.width === 0 || info.height === 0) {
-        errors.push(`Video ${i + 1}: Invalid dimensions (${info.width}x${info.height})`);
+        errors.push(`Video ${clip.fileIndex + 1}: Invalid dimensions (${info.width}x${info.height})`);
         continue;
       }
+      if (clip.sourceEnd > info.duration + 0.05) {
+        errors.push(`Clip ${i + 1}: sourceEnd (${clip.sourceEnd}s) exceeds duration (${info.duration.toFixed(2)}s)`);
+      }
+      if (clip.sourceStart >= clip.sourceEnd) {
+        errors.push(`Clip ${i + 1}: sourceStart (${clip.sourceStart}s) must be less than sourceEnd (${clip.sourceEnd}s)`);
+      }
+    } catch (err) {
+      errors.push(`Video ${clip.fileIndex + 1}: Failed to probe - ${err.message}`);
+    }
 
-      const clipsUsingThisFile = clips.filter(c => c.fileIndex === i);
-      for (const clip of clipsUsingThisFile) {
-        if (clip.sourceEnd > info.duration) {
-          errors.push(`Video ${i + 1}: sourceEnd (${clip.sourceEnd}s) exceeds duration (${info.duration}s)`);
-        }
-        if (clip.sourceStart >= clip.sourceEnd) {
-          errors.push(`Video ${i + 1}: sourceStart (${clip.sourceStart}s) must be less than sourceEnd (${clip.sourceEnd}s)`);
+    const pip = clip.pip;
+    if (pip && pip.enabled && typeof pip.fileIndex === 'number') {
+      const pipFile = files[pip.fileIndex];
+      if (!pipFile) {
+        errors.push(`Clip ${i + 1}: Invalid PIP fileIndex ${pip.fileIndex}`);
+      } else {
+        try {
+          const pipInfo = await infoFor(pipFile);
+          if (pipInfo.duration <= 0 || pipInfo.width === 0) {
+            errors.push(`Clip ${i + 1}: PIP source is not a valid video`);
+          }
+        } catch (err) {
+          errors.push(`Clip ${i + 1}: PIP probe failed - ${err.message}`);
         }
       }
-
-    } catch (err) {
-      errors.push(`Video ${i + 1}: Failed to probe - ${err.message}`);
     }
   }
 

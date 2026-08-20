@@ -2,9 +2,10 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { runPipeline, validateClips, safeUnlink, OUTPUT_W, OUTPUT_H } = require('../lib/ffmpegPipeline');
+const { runPipeline, validateClips, safeUnlink, collectPipInputs, OUTPUT_W, OUTPUT_H } = require('../lib/ffmpegPipeline');
 const { validateInputVideos } = require('../lib/validateInputs');
 const { jobQueue } = require('../lib/queue');
+const { setJob, getJob, updateJob, deleteJob, ffmpegProcesses, expireJobLater } = require('../lib/jobs');
 
 const router = express.Router();
 
@@ -25,39 +26,13 @@ const upload = multer({
 });
 
 function safeUnlinkAll(paths) {
-  paths.forEach((p) => safeUnlink(p));
+  [...new Set((paths || []).filter(Boolean))].forEach((p) => safeUnlink(p));
 }
 
 const DEFAULT_META = {
   blur: 30,
   blurEnabled: true,
 };
-
-const jobs = new Map();
-const ffmpegProcesses = new Map();
-
-function cleanupOldTempFiles() {
-  try {
-    const files = fs.readdirSync(TEMP_DIR);
-    const now = Date.now();
-    const MAX_AGE_MS = 60 * 60 * 1000;
-    for (const file of files) {
-      const filePath = path.join(TEMP_DIR, file);
-      try {
-        const stat = fs.statSync(filePath);
-        if (now - stat.mtimeMs > MAX_AGE_MS) {
-          safeUnlink(filePath);
-        }
-      } catch {
-        // ignore
-      }
-    }
-  } catch {
-    // ignore
-  }
-}
-
-cleanupOldTempFiles();
 
 router.post('/', upload.array('videos', MAX_FILES), async (req, res) => {
   const files = req.files || [];
@@ -90,6 +65,12 @@ router.post('/', upload.array('videos', MAX_FILES), async (req, res) => {
       safeUnlinkAll(files.map((f) => f.path));
       return res.status(400).json({ error: `Invalid fileIndex ${clip.fileIndex} for clip ${clip.id}.` });
     }
+    if (clip.pip && clip.pip.enabled && typeof clip.pip.fileIndex === 'number') {
+      if (clip.pip.fileIndex < 0 || clip.pip.fileIndex >= files.length) {
+        safeUnlinkAll(files.map((f) => f.path));
+        return res.status(400).json({ error: `Invalid PIP fileIndex ${clip.pip.fileIndex} for clip ${clip.id}.` });
+      }
+    }
   }
 
   const normalizedClips = clips.map((c) => ({
@@ -97,10 +78,8 @@ router.post('/', upload.array('videos', MAX_FILES), async (req, res) => {
     duration: (c.sourceEnd - c.sourceStart) / (c.speed || 1),
   }));
 
-  const inputPaths = normalizedClips.map((c) => files[c.fileIndex].path);
-
   try {
-    const validation = await validateInputVideos(inputPaths, normalizedClips);
+    const validation = await validateInputVideos(files, normalizedClips);
     if (!validation.valid) {
       safeUnlinkAll(files.map((f) => f.path));
       return res.status(400).json({ error: validation.errors.join('; ') });
@@ -110,11 +89,15 @@ router.post('/', upload.array('videos', MAX_FILES), async (req, res) => {
     return res.status(400).json({ error: `Video validation failed: ${err.message}` });
   }
 
+  const clipPaths = normalizedClips.map((c) => files[c.fileIndex].path);
+  const { extraPaths, pipInputIndexByClip } = collectPipInputs(normalizedClips, files);
+  const inputPaths = [...clipPaths, ...extraPaths];
+
   const outputName = `composed-${Date.now()}.mp4`;
   const outputPath = path.join(TEMP_DIR, outputName);
   const jobId = `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-  const job = {
+  setJob({
     id: jobId,
     status: 'queued',
     progress: 0,
@@ -122,14 +105,13 @@ router.post('/', upload.array('videos', MAX_FILES), async (req, res) => {
     outputName,
     inputPaths,
     createdAt: Date.now(),
-  };
-  jobs.set(jobId, job);
+  });
 
   res.status(202).json({ jobId, status: 'queued' });
 
   jobQueue.enqueue(jobId, async () => {
-    job.status = 'processing';
-    
+    updateJob(jobId, { status: 'processing', progress: 0 });
+
     try {
       const pipelinePromise = runPipeline({
         inputPaths,
@@ -138,39 +120,34 @@ router.post('/', upload.array('videos', MAX_FILES), async (req, res) => {
         meta,
         outputPath,
         exportConfig,
+        pipInputIndexByClip,
         onProgress: (progress) => {
-          job.progress = progress;
+          updateJob(jobId, { progress });
         },
       });
-      
-      pipelinePromise._ffmpegCommand && ffmpegProcesses.set(jobId, () => pipelinePromise._ffmpegCommand._kill());
-      
+
+      ffmpegProcesses.set(jobId, () => {
+        if (pipelinePromise._kill) pipelinePromise._kill();
+      });
+
       await pipelinePromise;
-      job.status = 'ready';
+      updateJob(jobId, { status: 'ready', progress: 1 });
     } catch (err) {
-      job.status = 'error';
-      job.error = err.message || String(err);
+      updateJob(jobId, { status: 'error', error: err.message || String(err) });
       safeUnlinkAll([...inputPaths, outputPath]);
     } finally {
       ffmpegProcesses.delete(jobId);
     }
   }).catch((err) => {
-    job.status = 'error';
-    job.error = err.message || String(err);
+    updateJob(jobId, { status: 'error', error: err.message || String(err) });
     safeUnlinkAll([...inputPaths, outputPath]);
   });
 
-  setTimeout(() => {
-    const j = jobs.get(jobId);
-    if (j && j.status === 'ready') {
-      safeUnlink(j.outputPath);
-    }
-    jobs.delete(jobId);
-  }, 5 * 60 * 1000);
+  expireJobLater(jobId);
 });
 
 router.get('/download/:jobId', (req, res) => {
-  const job = jobs.get(req.params.jobId);
+  const job = getJob(req.params.jobId);
   if (!job) {
     return res.status(404).json({ error: 'Job not found or expired.' });
   }
@@ -182,8 +159,8 @@ router.get('/download/:jobId', (req, res) => {
   }
 
   res.download(job.outputPath, job.outputName, (err) => {
-    safeUnlinkAll([...job.inputPaths, job.outputPath]);
-    jobs.delete(job.id);
+    safeUnlinkAll([...(job.inputPaths || []), job.outputPath]);
+    deleteJob(job.id);
     if (err && !res.headersSent) {
       console.error('[trim] download error:', err);
     }
@@ -191,7 +168,7 @@ router.get('/download/:jobId', (req, res) => {
 });
 
 router.get('/progress/:jobId', (req, res) => {
-  const job = jobs.get(req.params.jobId);
+  const job = getJob(req.params.jobId);
   if (!job) {
     return res.status(404).json({ error: 'Job not found.' });
   }
@@ -205,29 +182,32 @@ router.get('/progress/:jobId', (req, res) => {
   let lastSentStatus = null;
 
   const sendUpdate = () => {
-    const progressChanged = Math.abs(job.progress - lastSentProgress) >= 0.005;
-    const statusChanged = job.status !== lastSentStatus;
-    
+    const current = getJob(req.params.jobId);
+    if (!current) return false;
+    const progressChanged = Math.abs((current.progress || 0) - lastSentProgress) >= 0.005;
+    const statusChanged = current.status !== lastSentStatus;
+
     if (progressChanged || statusChanged) {
-      const data = { progress: job.progress, status: job.status };
-      if (job.error) data.error = job.error;
+      const data = { progress: current.progress, status: current.status };
+      if (current.error) data.error = current.error;
       res.write(`data: ${JSON.stringify(data)}\n\n`);
-      lastSentProgress = job.progress;
-      lastSentStatus = job.status;
+      lastSentProgress = current.progress;
+      lastSentStatus = current.status;
     }
+    return current.status === 'ready' || current.status === 'error' || current.status === 'cancelled';
   };
 
   sendUpdate();
 
   const interval = setInterval(() => {
-    const currentJob = jobs.get(req.params.jobId);
-    if (!currentJob) {
+    const current = getJob(req.params.jobId);
+    if (!current) {
       clearInterval(interval);
       res.end();
       return;
     }
-    sendUpdate();
-    if (currentJob.status === 'ready' || currentJob.status === 'error') {
+    const done = sendUpdate();
+    if (done) {
       clearInterval(interval);
       setTimeout(() => res.end(), 1000);
     }
@@ -239,23 +219,22 @@ router.get('/progress/:jobId', (req, res) => {
 });
 
 router.delete('/:jobId', (req, res) => {
-  const job = jobs.get(req.params.jobId);
+  const job = getJob(req.params.jobId);
   if (!job) {
     return res.status(404).json({ error: 'Job not found.' });
   }
-  
+
   const killFn = ffmpegProcesses.get(req.params.jobId);
   if (killFn) {
     killFn();
     ffmpegProcesses.delete(req.params.jobId);
   }
-  
-  if (job.status === 'processing') {
-    job.status = 'cancelled';
-    safeUnlinkAll([...job.inputPaths, job.outputPath]);
+
+  if (job.status === 'processing' || job.status === 'queued') {
+    safeUnlinkAll([...(job.inputPaths || []), job.outputPath]);
   }
-  
-  jobs.delete(req.params.jobId);
+
+  deleteJob(req.params.jobId);
   res.json({ status: 'cancelled' });
 });
 

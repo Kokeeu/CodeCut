@@ -1,5 +1,5 @@
 const { getAtempoChain } = require('./speed.js');
-const { getAnimation, getTypewriterSegments } = require('./textAnimations.js');
+const { getAnimation, getTypewriterSegments, getKaraokeSegments } = require('./textAnimations.js');
 
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegStatic = require('ffmpeg-static');
@@ -122,6 +122,12 @@ function resolveFont(family) {
   return FONT_FALLBACK;
 }
 
+function writeTextFile(map, runId, key, content) {
+  const p = path.join(TEMP_DIR, `text-${runId}-${key}.txt`);
+  fs.writeFileSync(p, content, 'utf8');
+  map[key] = p;
+}
+
 function writeTextFiles(clips, runId) {
   const map = {};
   clips.forEach((clip, ci) => {
@@ -129,36 +135,81 @@ function writeTextFiles(clips, runId) {
     (clip.texts || []).forEach((t, ti) => {
       const content = t && t.text != null ? String(t.text) : '';
       if (!content.trim()) return;
-      
-      if (t.animation && t.animation.type === 'typewriter') {
-        const animDur = Number(t.animation.duration) || 0.5;
-        const startOff = (Number(t.startOffset) || 0) / speed;
-        const endOff = (Number(t.endOffset) || (clip.sourceEnd - clip.sourceStart)) / speed;
-        const totalDur = endOff - startOff;
+
+      const animType = t.animation && t.animation.type;
+      const animDur = Number(t.animation && t.animation.duration) || 0.5;
+      const startOff = (Number(t.startOffset) || 0) / speed;
+      const endOff = (Number(t.endOffset) || (clip.sourceEnd - clip.sourceStart)) / speed;
+      const totalDur = endOff - startOff;
+
+      if (animType === 'typewriter') {
         const segments = getTypewriterSegments(content, startOff, animDur, totalDur);
-        
-        segments.forEach((seg, si) => {
-          const key = `c${ci}-t${ti}-s${si}`;
-          const p = path.join(TEMP_DIR, `text-${runId}-${key}.txt`);
-          fs.writeFileSync(p, seg.text, 'utf8');
-          map[key] = p;
-        });
+        segments.forEach((seg, si) => writeTextFile(map, runId, `c${ci}-t${ti}-s${si}`, seg.text));
+      } else if (animType === 'karaoke') {
+        writeTextFile(map, runId, `c${ci}-t${ti}-base`, content);
+        const segments = getKaraokeSegments(content, startOff, animDur, totalDur);
+        segments.forEach((seg, si) => writeTextFile(map, runId, `c${ci}-t${ti}-k${si}`, seg.text));
       } else {
-        const key = `c${ci}-t${ti}`;
-        const p = path.join(TEMP_DIR, `text-${runId}-${key}.txt`);
-        fs.writeFileSync(p, content, 'utf8');
-        map[key] = p;
+        writeTextFile(map, runId, `c${ci}-t${ti}`, content);
       }
     });
   });
   return map;
 }
 
+function getPipRect(pip, outputW, outputH) {
+  const sizePercent = Number(pip && pip.size) || 30;
+  const width = Math.max(2, Math.round(outputW * (sizePercent / 100)));
+  const height = Math.max(2, Math.round(width * 9 / 16));
+  const margin = Math.round(20 * (outputW / OUTPUT_W));
+  let x = margin;
+  let y = margin;
+  switch (pip && pip.position) {
+    case 'top-right':
+      x = outputW - width - margin;
+      y = margin;
+      break;
+    case 'bottom-left':
+      x = margin;
+      y = outputH - height - margin;
+      break;
+    case 'bottom-right':
+      x = outputW - width - margin;
+      y = outputH - height - margin;
+      break;
+    default:
+      x = margin;
+      y = margin;
+  }
+  return { x: Math.max(0, x), y: Math.max(0, y), width, height };
+}
+
+function collectPipInputs(clips, files) {
+  const extraPaths = [];
+  const pipInputIndexByClip = {};
+  let nextIdx = clips.length;
+  clips.forEach((c, i) => {
+    const pip = c && c.pip;
+    if (!pip || !pip.enabled) return;
+    if (typeof pip.fileIndex !== 'number' || pip.fileIndex < 0 || pip.fileIndex >= files.length) return;
+    pipInputIndexByClip[i] = nextIdx;
+    extraPaths.push(files[pip.fileIndex].path);
+    nextIdx += 1;
+  });
+  return { extraPaths, pipInputIndexByClip };
+}
+
+function getDrawtextX(align, tx) {
+  if (align === 'center') return `${tx}-text_w/2`;
+  if (align === 'right') return `${tx}-text_w`;
+  return String(tx);
+}
+
 function cleanupTextFiles(map) {
   Object.values(map).forEach((p) => { if (p) safeUnlink(p); });
 }
 
-function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig) {
+function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig, pipInputIndexByClip) {
   const filters = [];
   const outV = 'vout';
   const outA = 'aout';
@@ -231,7 +282,29 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig) {
         `color=c=black:s=${OUTPUT_W_DYN}x${OUTPUT_H_DYN}:r=${OUTPUT_FPS}:d=${clipDur.toFixed(3)}[bg${i}]`
       );
     }
-    filters.push(`[bg${i}][m${i}f]overlay=x=${xExpr}:y=${yExpr}[c${i}]`);
+    filters.push(`[bg${i}][m${i}f]overlay=x=${xExpr}:y=${yExpr}[c${i}pre]`);
+
+    const pipIdx = pipInputIndexByClip && pipInputIndexByClip[i];
+    const pip = c.pip;
+    if (pip && pip.enabled && Number.isInteger(pipIdx)) {
+      const rect = getPipRect(pip, OUTPUT_W_DYN, OUTPUT_H_DYN);
+      const opacity = Math.max(0.05, Math.min(1, Number(pip.opacity) ?? 1));
+      const bw = pip.border ? Math.max(1, Math.round((Number(pip.borderWidth) || 4) * (OUTPUT_W_DYN / OUTPUT_W))) : 0;
+      let pipChain = `[${pipIdx}:v]setpts=PTS-STARTPTS,fps=${OUTPUT_FPS},scale=${rect.width}:${rect.height}:force_original_aspect_ratio=increase:flags=lanczos,crop=${rect.width}:${rect.height},format=rgba`;
+      if (opacity < 0.999) {
+        pipChain += `,colorchannelmixer=aa=${opacity.toFixed(3)}`;
+      }
+      if (bw > 0) {
+        pipChain += `,pad=${rect.width + bw * 2}:${rect.height + bw * 2}:${bw}:${bw}:white`;
+      }
+      pipChain += `[pip${i}]`;
+      filters.push(pipChain);
+      const ox = bw > 0 ? Math.max(0, rect.x - bw) : rect.x;
+      const oy = bw > 0 ? Math.max(0, rect.y - bw) : rect.y;
+      filters.push(`[c${i}pre][pip${i}]overlay=x=${ox}:y=${oy}:format=auto:eof_action=repeat[c${i}]`);
+    } else {
+      filters.push(`[c${i}pre]null[c${i}]`);
+    }
   }
 
   const composedStart = [];
@@ -303,13 +376,14 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig) {
       const ffile = escapeFilterPathQuoted(resolveFont(t.font));
       const align = t.align || 'left';
       
-      let xExpr = align === 'center' ? '(w-text_w)/2' : String(tx);
+      let xExpr = getDrawtextX(align, tx);
       let yExpr = String(ty);
       let sizeExpr = String(size);
+      const animType = t.animation && t.animation.type;
       
-      if (t.animation && t.animation.type && t.animation.type !== 'typewriter') {
+      if (animType && animType !== 'typewriter' && animType !== 'karaoke') {
         const animDur = Number(t.animation.duration) || 0.5;
-        const animDef = getAnimation(t.animation.type);
+        const animDef = getAnimation(animType);
         const sExpr = enableStart;
 
         if (animDef.getFfmpegY) {
@@ -323,7 +397,23 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig) {
         }
       }
 
-      if (t.animation && t.animation.type === 'typewriter') {
+      const appendDrawtextStyle = (opts, { includeBox = true } = {}) => {
+        if (t.strokeEnabled && t.strokeWidth > 0) {
+          opts += `:borderw=${Math.round((Number(t.strokeWidth) || 2) * scaleFactor)}:bordercolor=${colorToHex(t.strokeColor)}`;
+        } else {
+          opts += `:shadowcolor=black@0.75:shadowx=${Math.round(3 * scaleFactor)}:shadowy=${Math.round(3 * scaleFactor)}`;
+        }
+        if (includeBox && t.bgEnabled) {
+          const bgPadding = Math.round((Number(t.bgPadding) || 12) * scaleFactor);
+          const bgOpacity = Number(t.bgOpacity ?? 0.7);
+          const bgColorHex = colorToHex(t.bgColor).replace('0x', '');
+          const bgAlpha = Math.round(bgOpacity * 255).toString(16).padStart(2, '0');
+          opts += `:box=1:boxborderw=${bgPadding}:boxcolor=0x${bgColorHex}${bgAlpha}`;
+        }
+        return opts;
+      };
+
+      if (animType === 'typewriter') {
         const animDur = Number(t.animation.duration) || 0.5;
         const totalDur = endOff - startOff;
         const segments = getTypewriterSegments(content, startOff, animDur, totalDur);
@@ -335,26 +425,36 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig) {
           
           const segStart = (clipStart + seg.startTime).toFixed(3);
           const segEnd = (clipStart + seg.endTime).toFixed(3);
-          const out = `vt${ti}_${si}`;
+          const out = `vt${ci}_${ti}_${si}`;
           const enableExpr = `between(t,${segStart},${segEnd})`;
           
           let drawtextOpts = `textfile='${escapeFilterPath(fp)}':x=${escapeDrawtextExpr(xExpr)}:y=${escapeDrawtextExpr(yExpr)}:fontsize=${escapeDrawtextExpr(sizeExpr)}:fontcolor=${fcolor}:fontfile='${ffile}':alpha='${escapeDrawtextExpr(enableExpr)}'`;
-
-          if (t.strokeEnabled && t.strokeWidth > 0) {
-            drawtextOpts += `:borderw=${Math.round((Number(t.strokeWidth) || 2) * scaleFactor)}:bordercolor=${colorToHex(t.strokeColor)}`;
-          } else {
-            drawtextOpts += `:shadowcolor=black@0.75:shadowx=${Math.round(3 * scaleFactor)}:shadowy=${Math.round(3 * scaleFactor)}`;
-          }
-
-          if (t.bgEnabled) {
-            const bgPadding = Math.round((Number(t.bgPadding) || 12) * scaleFactor);
-            const bgOpacity = Number(t.bgOpacity ?? 0.7);
-            const bgColorHex = colorToHex(t.bgColor).replace('0x', '');
-            const bgAlpha = Math.round(bgOpacity * 255).toString(16).padStart(2, '0');
-            drawtextOpts += `:box=1:boxborderw=${bgPadding}:boxcolor=0x${bgColorHex}${bgAlpha}`;
-          }
-
+          drawtextOpts = appendDrawtextStyle(drawtextOpts);
           filters.push(`[${prevLabel}]drawtext=${drawtextOpts}[${out}]`);
+          prevLabel = out;
+        });
+      } else if (animType === 'karaoke') {
+        const animDur = Number(t.animation.duration) || 0.5;
+        const totalDur = endOff - startOff;
+        const baseFp = textFiles && textFiles[`c${ci}-t${ti}-base`];
+        if (!baseFp) { ti++; return; }
+        const enableExpr = `between(t,${enableStart},${enableEnd})`;
+        const baseOut = `vt${ci}_${ti}_base`;
+        let baseOpts = `textfile='${escapeFilterPath(baseFp)}':x=${escapeDrawtextExpr(xExpr)}:y=${escapeDrawtextExpr(yExpr)}:fontsize=${escapeDrawtextExpr(sizeExpr)}:fontcolor=${fcolor}@0.35:fontfile='${ffile}':alpha='${escapeDrawtextExpr(enableExpr)}'`;
+        baseOpts = appendDrawtextStyle(baseOpts);
+        filters.push(`[${prevLabel}]drawtext=${baseOpts}[${baseOut}]`);
+        prevLabel = baseOut;
+
+        const segments = getKaraokeSegments(content, startOff, animDur, totalDur);
+        segments.forEach((seg, si) => {
+          const fp = textFiles && textFiles[`c${ci}-t${ti}-k${si}`];
+          if (!fp) return;
+          const segStart = (clipStart + seg.startTime).toFixed(3);
+          const out = `vt${ci}_${ti}_k${si}`;
+          const hlEnable = `between(t,${segStart},${enableEnd})`;
+          let hlOpts = `textfile='${escapeFilterPath(fp)}':x=${escapeDrawtextExpr(xExpr)}:y=${escapeDrawtextExpr(yExpr)}:fontsize=${escapeDrawtextExpr(sizeExpr)}:fontcolor=${fcolor}:fontfile='${ffile}':alpha='${escapeDrawtextExpr(hlEnable)}'`;
+          hlOpts = appendDrawtextStyle(hlOpts, { includeBox: false });
+          filters.push(`[${prevLabel}]drawtext=${hlOpts}[${out}]`);
           prevLabel = out;
         });
       } else {
@@ -362,12 +462,12 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig) {
         const fp = textFiles && textFiles[key];
         if (!fp) { ti++; return; }
         
-        const out = `vt${ti}`;
+        const out = `vt${ci}_${ti}`;
         let alphaExpr = '1';
         
-        if (t.animation && t.animation.type) {
+        if (animType) {
           const animDur = Number(t.animation.duration) || 0.5;
-          const animDef = getAnimation(t.animation.type);
+          const animDef = getAnimation(animType);
           const sExpr = enableStart;
           
           if (animDef.getFfmpegEnable) {
@@ -381,21 +481,7 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig) {
           : enableExpr;
 
         let drawtextOpts = `textfile='${escapeFilterPath(fp)}':x=${escapeDrawtextExpr(xExpr)}:y=${escapeDrawtextExpr(yExpr)}:fontsize=${escapeDrawtextExpr(sizeExpr)}:fontcolor=${fcolor}:fontfile='${ffile}':alpha='${escapeDrawtextExpr(fullEnable)}'`;
-
-        if (t.strokeEnabled && t.strokeWidth > 0) {
-          drawtextOpts += `:borderw=${Math.round((Number(t.strokeWidth) || 2) * scaleFactor)}:bordercolor=${colorToHex(t.strokeColor)}`;
-        } else {
-          drawtextOpts += `:shadowcolor=black@0.75:shadowx=${Math.round(3 * scaleFactor)}:shadowy=${Math.round(3 * scaleFactor)}`;
-        }
-
-        if (t.bgEnabled) {
-          const bgPadding = Math.round((Number(t.bgPadding) || 12) * scaleFactor);
-          const bgOpacity = Number(t.bgOpacity ?? 0.7);
-          const bgColorHex = colorToHex(t.bgColor).replace('0x', '');
-          const bgAlpha = Math.round(bgOpacity * 255).toString(16).padStart(2, '0');
-          drawtextOpts += `:box=1:boxborderw=${bgPadding}:boxcolor=0x${bgColorHex}${bgAlpha}`;
-        }
-
+        drawtextOpts = appendDrawtextStyle(drawtextOpts);
         filters.push(`[${prevLabel}]drawtext=${drawtextOpts}[${out}]`);
         prevLabel = out;
       }
@@ -436,10 +522,10 @@ function parseTimeToSeconds(timeStr) {
   return hours * 3600 + minutes * 60 + seconds;
 }
 
-function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog, onProgress, exportConfig }) {
+function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog, onProgress, exportConfig, pipInputIndexByClip }) {
   const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const textFiles = writeTextFiles(clips, runId);
-  const filterGraph = buildFilterGraph(clips, transitions, meta, textFiles, exportConfig);
+  const filterGraph = buildFilterGraph(clips, transitions, meta, textFiles, exportConfig, pipInputIndexByClip);
 
   const totalDuration = clips.reduce((sum, c) => {
     return sum + (Number(c.sourceEnd) - Number(c.sourceStart)) / (Number(c.speed) || 1);
@@ -455,8 +541,9 @@ function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog, 
 
   const TIMEOUT_MS = 5 * 60 * 1000;
 
-  return new Promise((resolve, reject) => {
-    const command = ffmpeg();
+  let command = null;
+  const promise = new Promise((resolve, reject) => {
+    command = ffmpeg();
     let timeoutHandle = null;
     let resolved = false;
 
@@ -532,6 +619,10 @@ function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog, 
       }
     };
   });
+  promise._kill = () => {
+    if (command && command._kill) command._kill();
+  };
+  return promise;
 }
 
 module.exports = {
@@ -539,6 +630,7 @@ module.exports = {
   validateClips,
   runPipeline,
   safeUnlink,
+  collectPipInputs,
   OUTPUT_W,
   OUTPUT_H,
   FONT_PICKER_OPTIONS,

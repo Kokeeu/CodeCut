@@ -30,12 +30,12 @@ export default function useProjectAutosave({ files, clips, transitions, meta }) 
     timerRef.current = setTimeout(() => {
       try {
         const snapshot = {
-          files: files.map((f) => ({
+          files: (files || []).map((f) => ({
             id: f.id,
             name: f.name,
             duration: f.duration,
             waveform: f.waveform,
-            filmstrip: f.filmstrip,
+            filmstripBase64: f.filmstripBase64 || null,
           })),
           clips,
           transitions,
@@ -63,8 +63,7 @@ export default function useProjectAutosave({ files, clips, transitions, meta }) 
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (!saved) return null;
-      const data = JSON.parse(saved);
-      return data;
+      return JSON.parse(saved);
     } catch {
       return null;
     }

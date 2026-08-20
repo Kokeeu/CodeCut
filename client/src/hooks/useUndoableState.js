@@ -3,61 +3,75 @@ import { useCallback, useRef, useState } from 'react';
 const BATCH_WINDOW_MS = 500;
 
 export default function useUndoableState(initialValue) {
-  const [state, setState] = useState(initialValue);
-  const pastRef = useRef([]);
-  const futureRef = useRef([]);
-  const skipRef = useRef(false);
+  const [store, setStore] = useState({
+    present: initialValue,
+    past: [],
+    future: [],
+  });
   const lastTagRef = useRef(null);
   const lastTimeRef = useRef(0);
 
   const set = useCallback((updater, tag) => {
-    if (skipRef.current) {
-      skipRef.current = false;
-      setState(updater);
-      return;
-    }
     const now = Date.now();
     const shouldBatch = tag && tag === lastTagRef.current && (now - lastTimeRef.current) < BATCH_WINDOW_MS;
     lastTagRef.current = tag || null;
     lastTimeRef.current = now;
 
-    setState((prev) => {
-      if (shouldBatch && pastRef.current.length > 0) {
-        pastRef.current[pastRef.current.length - 1] = prev;
-      } else {
-        pastRef.current = [...pastRef.current, prev];
+    setStore((s) => {
+      const next = typeof updater === 'function' ? updater(s.present) : updater;
+      if (Object.is(next, s.present)) return s;
+      if (shouldBatch) {
+        return { present: next, past: s.past, future: [] };
       }
-      futureRef.current = [];
-      return typeof updater === 'function' ? updater(prev) : updater;
+      return { present: next, past: [...s.past, s.present], future: [] };
     });
   }, []);
 
   const undo = useCallback(() => {
-    if (pastRef.current.length === 0) return;
-    setState((prev) => {
-      const next = pastRef.current[pastRef.current.length - 1];
-      pastRef.current = pastRef.current.slice(0, -1);
-      futureRef.current = [prev, ...futureRef.current];
-      skipRef.current = true;
+    setStore((s) => {
+      if (s.past.length === 0) return s;
+      const previous = s.past[s.past.length - 1];
       lastTagRef.current = null;
-      return next;
+      return {
+        present: previous,
+        past: s.past.slice(0, -1),
+        future: [s.present, ...s.future],
+      };
     });
   }, []);
 
   const redo = useCallback(() => {
-    if (futureRef.current.length === 0) return;
-    setState((prev) => {
-      const next = futureRef.current[0];
-      futureRef.current = futureRef.current.slice(1);
-      pastRef.current = [...pastRef.current, prev];
-      skipRef.current = true;
+    setStore((s) => {
+      if (s.future.length === 0) return s;
+      const next = s.future[0];
       lastTagRef.current = null;
-      return next;
+      return {
+        present: next,
+        past: [...s.past, s.present],
+        future: s.future.slice(1),
+      };
     });
   }, []);
 
-  const canUndo = pastRef.current.length > 0;
-  const canRedo = futureRef.current.length > 0;
+  const reset = useCallback((next) => {
+    lastTagRef.current = null;
+    lastTimeRef.current = 0;
+    setStore((s) => ({
+      present: typeof next === 'function' ? next(s.present) : next,
+      past: [],
+      future: [],
+    }));
+  }, []);
 
-  return [state, set, { undo, redo, canUndo, canRedo }];
+  return [
+    store.present,
+    set,
+    {
+      undo,
+      redo,
+      reset,
+      canUndo: store.past.length > 0,
+      canRedo: store.future.length > 0,
+    },
+  ];
 }

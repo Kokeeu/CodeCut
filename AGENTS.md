@@ -10,39 +10,26 @@ Codecut 9:16 is a vertical video editor (1080×1920) for creating TikTok/Reels-s
 video-editor/
 ├── client/          # React SPA (Vite)
 │   └── src/
-│       ├── App.jsx              # Main state + layout
+│       ├── App.jsx              # Layout + playback chrome
 │       ├── hooks/
-│       │   └── useUndoableState.js  # Undo/redo hook
+│       │   ├── useProjectState.js   # Clips/files/texts + unified undo
+│       │   └── useUndoableState.js  # History helper
 │       ├── lib/
+│       │   ├── projectDefaults.js   # Constants, templates, nextId
+│       │   ├── mediaStore.js        # IndexedDB video cache
 │       │   ├── speed.js             # Speed constants + atempo chain
 │       │   ├── textAnimations.js    # Animation definitions (preview)
 │       │   └── waveform.js          # Waveform extraction
-│       └── components/
-│           ├── VideoPreview.jsx      # Editor preview (drag/resize texts)
-│           ├── CardTemplate.jsx      # Pure card renderer (4 layers)
-│           ├── TemplatesPanel.jsx    # Template gallery + apply
-│           ├── ClipTrack.jsx         # Timeline with dnd-kit
-│           ├── ClipBlock.jsx         # Individual clip in timeline
-│           ├── ClipTrim.jsx          # Trim handles for active clip
-│           ├── TransitionPicker.jsx  # Between-clip transitions
-│           ├── VideoUploader.jsx     # Multi-file upload
-│           ├── FilePool.jsx          # Media pool cards
-│           ├── CardMetadata.jsx      # Per-clip text editor
-│           ├── ExportButton.jsx      # Sends to /api/trim
-│           ├── ProjectSummary.jsx    # Stats display
-│           ├── SpeedPicker.jsx       # Speed selector (0.25x-3x)
-│           ├── AudioPanel.jsx        # Volume + fade controls
-│           ├── TimelineScrubber.jsx  # Global timeline scrubber
-│           ├── ProjectIO.jsx         # Save/Load project JSON
-│           └── PipPicker.jsx         # Picture-in-Picture config
+│       └── components/              # Editor UI
 ├── server/
 │   ├── index.js                  # Express entry
-│   ├── routes/trim.js            # POST /api/trim endpoint
+│   ├── routes/trim.js            # POST /api/trim (async jobs)
 │   ├── lib/
 │   │   ├── ffmpegPipeline.js     # FFmpeg filter graph builder
+│   │   ├── jobs.js               # In-memory + disk job store
 │   │   ├── speed.js              # Speed constants + atempo chain
 │   │   └── textAnimations.js     # Animation definitions (export)
-│   └── assets/fonts/             # Inter, Montserrat, Bebas Neue
+│   └── assets/fonts/             # Inter, Montserrat, Bebas Neue, ...
 └── README.md
 ```
 
@@ -58,8 +45,10 @@ Every output is a 1080×1920 card with 4 layers:
 
 ### State Model
 
+Document state (`clips`, `transitions`, `meta`) lives in `useProjectState` with a single undo stack. `App.jsx` keeps playback/layout UI state.
+
 ```js
-// App.jsx
+// useProjectState.js
 {
   files: [{ id, file, url, name, duration, thumbnail, waveform }],
   clips: [{
@@ -78,7 +67,7 @@ Every output is a 1080×1920 card with 4 layers:
 
 ### Templates
 
-4 hardcoded templates in `App.jsx`:
+4 hardcoded templates in `client/src/lib/projectDefaults.js`:
 - **Opening Anime** - Inter, white, header + 4 lines
 - **Neon Style** - Bebas Neue, yellow, minimal
 - **Dark Mode** - Montserrat, blur heavy, texts top
@@ -168,7 +157,7 @@ Run: `node server/scripts/smoke_all.js` (requires server running on :4000)
 
 ### Add a new template
 
-In `App.jsx`, add to `TEMPLATES` array:
+In `client/src/lib/projectDefaults.js`, add to `TEMPLATES` array:
 ```js
 {
   id: 'tpl-new',
@@ -245,10 +234,10 @@ cd server && node scripts/smoke_all.js
 
 ## Known Issues
 
-- Preview blur intensity differs slightly from export (CSS `blur()` vs FFmpeg `gblur`)
-- Text `align: 'center'` uses `(w-text_w)/2` in export, CSS `translateX(-50%)` in preview
-- Typewriter and karaoke text animations are preview-only (not yet in FFmpeg export)
-- Corner PIP is preview-only (not yet in FFmpeg export)
+- Preview blur still differs slightly from export (CSS `blur()` vs FFmpeg `gblur`), though brightness/saturation now use the same coefficients
+- PIP export uses square corners (preview can show `borderRadius`)
+- Project `.json` files do not embed video binaries; restore uses IndexedDB when the same files were cached (max 200 MB each)
+- Karaoke highlight is word-based (no per-syllable timings)
 
 ## Version History
 
@@ -262,3 +251,5 @@ cd server && node scripts/smoke_all.js
 - v0.8: Precision editing (frame-by-frame, timeline zoom, waveform, corner PIP)
 - v0.9: Export progress bar (SSE real-time progress from FFmpeg)
 - v0.10: Precision trim (frame-by-frame, numeric input, waveform, zoom, Set In/Out, thin handles)
+- v0.11: Editor chrome (sidebars, transport, autosave, shuttle, export presets)
+- v0.12: Unified undo, PIP + karaoke in FFmpeg export, persisted jobs, media restore, SSE smoke tests

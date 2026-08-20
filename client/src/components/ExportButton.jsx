@@ -188,7 +188,18 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
         duration: (c.sourceEnd - c.sourceStart) / (c.speed || 1),
         transform: c.transform || { x: 0, y: 0, scale: 1 },
         audio: c.audio || { volume: 1, mute: false, fadeIn: 0, fadeOut: 0 },
-        pip: c.pip || null,
+        pip: c.pip?.enabled && Number.isInteger(fileIndexById[c.pip.fileId])
+          ? {
+              enabled: true,
+              fileIndex: fileIndexById[c.pip.fileId],
+              position: c.pip.position || 'bottom-right',
+              size: c.pip.size || 30,
+              opacity: c.pip.opacity ?? 1,
+              border: c.pip.border ?? true,
+              borderWidth: c.pip.borderWidth || 4,
+              borderRadius: c.pip.borderRadius || 8,
+            }
+          : null,
         texts: (c.texts || []).map((t) => ({
           ...t,
           animation: t.animation || null,
