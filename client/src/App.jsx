@@ -20,6 +20,7 @@ import useExitConfirmation from './hooks/useExitConfirmation.js';
 import useProjectState from './hooks/useProjectState.js';
 import { getTrackWidth, clampZoom } from './lib/timelineScale.js';
 import { TEMPLATES } from './lib/projectDefaults.js';
+import { resolvePlayback, transitionDuration } from './lib/transitions.js';
 
 export default function App() {
   const project = useProjectState();
@@ -51,13 +52,30 @@ export default function App() {
   const { totalDuration, snapPoints, currentGlobalTime: getGlobalTime } = useEditor(clips, transitions);
 
   const trackWidth = useMemo(
-    () => getTrackWidth(clips, timelineZoom),
-    [clips, timelineZoom]
+    () => getTrackWidth(clips, transitions, timelineZoom),
+    [clips, transitions, timelineZoom]
   );
 
   const currentGlobalTime = useMemo(() => {
-    return getGlobalTime(activeClipId) + currentOffset;
+    return getGlobalTime(activeClipId, currentOffset);
   }, [getGlobalTime, activeClipId, currentOffset]);
+
+  const playback = useMemo(
+    () => resolvePlayback(clips, transitions, currentGlobalTime),
+    [clips, transitions, currentGlobalTime]
+  );
+
+  const previewClip = playback.index >= 0 ? clips[playback.index] : activeClip;
+  const previewFile = previewClip ? fileById[previewClip.fileId] : activeFile;
+  const incoming = playback.incoming && clips[playback.incoming.index]
+    ? {
+        clip: clips[playback.incoming.index],
+        fileUrl: fileById[clips[playback.incoming.index].fileId]?.url || null,
+        progress: playback.incoming.progress,
+        type: playback.incoming.type,
+        sourceOffset: playback.incoming.sourceOffset,
+      }
+    : null;
 
   const handleTimelineZoomChange = useCallback((zoom) => {
     setTimelineZoom(clampZoom(zoom));
@@ -69,39 +87,56 @@ export default function App() {
   }, [setCurrentOffset]);
 
   const handleGlobalSeek = useCallback((globalTime) => {
-    let cum = 0;
-    for (let i = 0; i < clips.length; i++) {
-      const clip = clips[i];
-      const clipDur = (clip.sourceEnd - clip.sourceStart) / (clip.speed || 1);
-      if (globalTime <= cum + clipDur || i === clips.length - 1) {
-        const offsetInClip = Math.max(0, Math.min(clipDur, globalTime - cum));
-        handleSelectClip(clip.id);
-        setCurrentOffset(offsetInClip);
-        previewRef.current?.seekTo(offsetInClip);
-        return;
-      }
-      cum += clipDur;
-      if (i < clips.length - 1) {
-        const t = transitions[i];
-        if (t && t.type && t.type !== 'none') {
-          cum -= Number(t.durationSec) || 0;
-        }
-      }
+    const hit = resolvePlayback(clips, transitions, globalTime);
+    if (hit.index < 0) return;
+    const clip = clips[hit.index];
+    if (clip.id !== activeClipId) {
+      handleSelectClip(clip.id, hit.sourceOffset);
+    } else {
+      setCurrentOffset(hit.sourceOffset);
+      previewRef.current?.seekTo(hit.sourceOffset);
     }
-  }, [clips, transitions, handleSelectClip, setCurrentOffset]);
+  }, [clips, transitions, activeClipId, handleSelectClip, setCurrentOffset]);
 
   const handleClipEnded = useCallback(() => {
     const idx = clips.findIndex((c) => c.id === activeClipId);
     if (idx >= 0 && idx < clips.length - 1) {
-      handleSelectClip(clips[idx + 1].id);
+      const next = clips[idx + 1];
+      const overlap = transitionDuration(transitions[idx], clips[idx], next);
+      handleSelectClip(next.id, overlap * (next.speed || 1));
     } else {
       setIsPlaying(false);
       if (clips.length > 0) {
-        handleSelectClip(clips[0].id);
-        previewRef.current?.seekTo(0);
+        const first = clips[0];
+        if (first.id === activeClipId) {
+          setCurrentOffset(0);
+          previewRef.current?.seekTo(0);
+        } else {
+          handleSelectClip(first.id, 0);
+        }
       }
     }
-  }, [clips, activeClipId, handleSelectClip]);
+  }, [clips, transitions, activeClipId, handleSelectClip]);
+
+  const handleTimelineSelect = useCallback((clipId) => {
+    if (!clips.some((c) => c.id === clipId)) return;
+    setSelectedTextId(null);
+    if (clipId === activeClipId) {
+      setCurrentOffset(0);
+      previewRef.current?.seekTo(0);
+      return;
+    }
+    handleSelectClip(clipId, 0);
+  }, [clips, activeClipId, handleSelectClip, setSelectedTextId, setCurrentOffset]);
+
+  const handlePreviewTime = useCallback((sourceOffset) => {
+    const playClip = playback.index >= 0 ? clips[playback.index] : null;
+    if (playClip && playClip.id !== activeClipId) {
+      handleSelectClip(playClip.id, sourceOffset);
+      return;
+    }
+    setCurrentOffset(sourceOffset);
+  }, [playback.index, clips, activeClipId, handleSelectClip, setCurrentOffset]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -262,10 +297,10 @@ export default function App() {
               <div className="absolute inset-0 bg-gradient-radial from-accent/[0.04] via-transparent to-transparent pointer-events-none" />
               <VideoPreview
                 ref={previewRef}
-                clip={activeClip}
-                fileUrl={activeFile ? activeFile.url : null}
+                clip={previewClip}
+                fileUrl={previewFile ? previewFile.url : null}
                 isPlaying={isPlaying}
-                onTimeUpdate={setCurrentOffset}
+                onTimeUpdate={handlePreviewTime}
                 onClipEnded={handleClipEnded}
                 onPlayStateChange={setIsPlaying}
                 meta={meta}
@@ -273,9 +308,10 @@ export default function App() {
                 selectedTextId={selectedTextId}
                 onSelectText={setSelectedTextId}
                 onUpdateText={handleUpdateText}
-                currentOffset={currentOffset}
+                currentOffset={playback.index >= 0 ? playback.sourceOffset : currentOffset}
                 files={files}
                 showGuides={showGuides}
+                incoming={incoming}
               />
             </div>
 
@@ -330,9 +366,10 @@ export default function App() {
                   ref={setTimelineContainer}
                   clips={clips}
                   activeClipId={activeClipId}
+                  incomingClipId={incoming?.clip?.id}
                   transitions={transitions}
                   fileById={fileById}
-                  onSelect={handleSelectClip}
+                  onSelect={handleTimelineSelect}
                   onDelete={handleDeleteClip}
                   onDuplicate={handleDuplicateClip}
                   onReorder={handleReorder}

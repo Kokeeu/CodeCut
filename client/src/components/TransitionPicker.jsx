@@ -196,15 +196,15 @@ const TransitionPicker = memo(function TransitionPicker({ value, maxDuration, on
   const currentType = isNone ? 'none' : value.type;
 
   const setType = (type) => {
-    if (type === 'none') {
+    if (type === 'none' || maxDuration < 0.05) {
       onChange({ type: 'none', durationSec: 0 });
     } else {
-      onChange({ type, durationSec: dur > 0 ? dur : Math.min(0.5, maxDuration) });
+      onChange({ type, durationSec: dur > 0 ? Math.min(dur, maxDuration) : Math.min(0.5, maxDuration) });
     }
   };
 
   const setDuration = (d) => {
-    const safeDuration = Math.max(0.1, Math.min(maxDuration, d));
+    const safeDuration = Math.max(0.05, Math.min(maxDuration, d));
     onChange({ type: value.type, durationSec: safeDuration });
   };
 
@@ -264,15 +264,15 @@ const TransitionPicker = memo(function TransitionPicker({ value, maxDuration, on
           </div>
           <input
             type="range"
-            min="0.1"
-            max={Math.max(0.1, maxDuration).toFixed(1)}
-            step="0.1"
-            value={dur || 0.1}
+            min="0.05"
+            max={Math.max(0.05, maxDuration).toFixed(2)}
+            step="0.05"
+            value={dur || 0.05}
             onChange={(e) => setDuration(Number(e.target.value))}
             className="w-full"
           />
           <div className="flex justify-between text-[9px] font-mono text-neutral-500">
-            <span>0.1s</span>
+            <span>0.05s</span>
             <span>max {maxDuration.toFixed(1)}s</span>
           </div>
           <button

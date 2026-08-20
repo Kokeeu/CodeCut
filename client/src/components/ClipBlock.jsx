@@ -26,7 +26,7 @@ function DuplicateIcon() {
   );
 }
 
-const ClipBlock = memo(function ClipBlock({ clip, index, width, file, isActive, canDelete, onSelect, onDelete, onDuplicate }) {
+const ClipBlock = memo(function ClipBlock({ clip, index, width, file, isActive, canDelete, onSelect, onDelete, onDuplicate, overlapLeft = 0, overlapRight = 0 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: clip.id });
 
   const style = {
@@ -73,6 +73,18 @@ const ClipBlock = memo(function ClipBlock({ clip, index, width, file, isActive, 
       ].join(' ')}
       title={file ? file.name : ''}
     >
+      {overlapLeft > 2 && (
+        <div
+          className="absolute top-0 bottom-0 left-0 pointer-events-none z-[5]"
+          style={{ width: overlapLeft, background: 'linear-gradient(90deg, rgba(168,85,247,0.4), transparent)' }}
+        />
+      )}
+      {overlapRight > 2 && (
+        <div
+          className="absolute top-0 bottom-0 right-0 pointer-events-none z-[5]"
+          style={{ width: overlapRight, background: 'linear-gradient(90deg, transparent, rgba(168,85,247,0.4))' }}
+        />
+      )}
       {filmstripStyle ? (
         <div style={filmstripStyle} className="absolute inset-0 opacity-70 pointer-events-none" />
       ) : file && file.thumbnail ? (

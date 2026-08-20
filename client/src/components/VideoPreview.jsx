@@ -4,6 +4,7 @@ import { getAnimation, getKaraokeHighlight } from '../lib/textAnimations.js';
 import useThrottledCallback from '../hooks/useThrottledCallback.js';
 import { getPipRect, getTextAlignTransform } from '../lib/pipLayout.js';
 import { BG_BRIGHTNESS, BG_SATURATION } from '../lib/projectDefaults.js';
+import { getPreviewTransitionStyles } from '../lib/transitions.js';
 
 function formatTime(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
@@ -22,11 +23,178 @@ const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 const CORNERS = ['nw', 'ne', 'sw', 'se'];
 const CORNER_CURSOR = { nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize' };
 
+function hexToRgba(hex, alpha) {
+  const h = hex || '#000000';
+  const r = parseInt(h.slice(1, 3), 16);
+  const g = parseInt(h.slice(3, 5), 16);
+  const b = parseInt(h.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function ClipMedia({
+  clip, fileUrl, videoRef, bgRef, pipRef, meta, displayScale, files,
+  currentOffset, interactive, selectedTextId, onSelectText, startTextDrag, textRefs,
+  onPlay, onPause,
+}) {
+  if (!clip) return null;
+  const t = clip.transform || { x: 0, y: 0, scale: 1 };
+  const texts = clip.texts || [];
+  const blurPx = (Number(meta?.blur) || 0) * displayScale;
+  const previewBrightness = 1 + BG_BRIGHTNESS;
+  const previewSaturate = BG_SATURATION;
+
+  return (
+    <>
+      {fileUrl && meta?.blurEnabled !== false && (
+        <video
+          ref={bgRef}
+          src={fileUrl}
+          muted
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+          style={{ filter: `blur(${blurPx}px) brightness(${previewBrightness}) saturate(${previewSaturate})` }}
+        />
+      )}
+      {meta?.blurEnabled === false && (
+        <div className="absolute inset-0 bg-black pointer-events-none" />
+      )}
+      {fileUrl ? (
+        <video
+          ref={videoRef}
+          src={fileUrl}
+          playsInline
+          onPlay={onPlay}
+          onPause={onPause}
+          className="pointer-events-none"
+          style={{
+            position: 'absolute',
+            width: `${EXPORT_W * Math.max(0.1, Math.min(10, t.scale || 1)) * displayScale}px`,
+            maxWidth: 'none',
+            left: '50%',
+            top: `${MAIN_Y * displayScale}px`,
+            transform: `translateX(-50%) translate(${t.x * displayScale}px, ${t.y * displayScale}px)`,
+          }}
+        />
+      ) : null}
+      {clip.pip?.enabled && clip.pip.fileId && (() => {
+        const pipFile = files?.find((f) => f.id === clip.pip.fileId);
+        if (!pipFile?.url) return null;
+        const rect = getPipRect(clip.pip, EXPORT_W, EXPORT_H);
+        return (
+          <video
+            ref={pipRef}
+            src={pipFile.url}
+            playsInline
+            muted
+            className="pointer-events-none"
+            style={{
+              position: 'absolute',
+              width: `${rect.width * displayScale}px`,
+              height: `${rect.height * displayScale}px`,
+              left: `${rect.x * displayScale}px`,
+              top: `${rect.y * displayScale}px`,
+              opacity: Math.max(0, Math.min(1, clip.pip.opacity ?? 1)),
+              border: clip.pip.border ? `${(clip.pip.borderWidth || 4) * displayScale}px solid white` : 'none',
+              borderRadius: `${(clip.pip.borderRadius || 8) * displayScale}px`,
+              objectFit: 'cover',
+              boxSizing: 'content-box',
+            }}
+          />
+        );
+      })()}
+      {texts.map((tx) => {
+        const isVisible = tx.startOffset == null || tx.endOffset == null
+          || (currentOffset >= tx.startOffset && currentOffset <= tx.endOffset);
+        const selected = interactive && tx.id === selectedTextId;
+        if (!isVisible && !selected) return null;
+
+        let animStyle = {};
+        let displayText = tx.text;
+        let karaokeHighlight = '';
+
+        if (tx.animation?.type && isVisible) {
+          const animDef = getAnimation(tx.animation.type);
+          const elapsed = currentOffset - (tx.startOffset || 0);
+          const animDur = Math.max(0.1, tx.animation.duration || 0.5);
+          const progress = Math.min(1, elapsed / animDur);
+
+          if (animDef.isTypewriter) {
+            const len = (tx.text || '').length;
+            displayText = (tx.text || '').slice(0, Math.floor(progress * len));
+          } else if (animDef.isKaraoke) {
+            karaokeHighlight = getKaraokeHighlight(tx.text || '', progress);
+          } else if (animDef.getPreviewStyle) {
+            animStyle = animDef.getPreviewStyle(progress, tx.x, tx.y, tx.text) || {};
+          }
+        }
+
+        const alignTx = getTextAlignTransform(tx.align || 'left');
+        const transforms = [
+          alignTx !== 'none' ? alignTx : null,
+          animStyle.transform || null,
+          tx.rotation ? `rotate(${tx.rotation}deg)` : null,
+        ].filter(Boolean);
+        const { transform: _animTransform, _karaokeHighlight, _visibleText, ...restAnim } = animStyle;
+        const textStyle = {
+          position: 'absolute',
+          left: `${(tx.x || 0) * displayScale}px`,
+          top: `${(tx.y || 0) * displayScale}px`,
+          color: tx.color || '#ffffff',
+          fontFamily: FONT_CSS[tx.font] || FONT_CSS.inter,
+          fontSize: `${Math.max(12, Math.min(400, tx.size || 60)) * displayScale}px`,
+          fontWeight: 700,
+          lineHeight: 1.2,
+          cursor: interactive ? 'move' : 'default',
+          userSelect: 'none',
+          whiteSpace: 'pre',
+          outline: selected ? '1.5px dashed #a855f7' : 'none',
+          outlineOffset: '4px',
+          zIndex: selected ? 30 : 20,
+          opacity: !isVisible && selected ? 0.3 : 1,
+          transformOrigin: tx.align === 'center' ? 'center top' : (tx.align === 'right' ? 'right top' : 'left top'),
+          transform: transforms.length ? transforms.join(' ') : undefined,
+          pointerEvents: interactive ? 'auto' : 'none',
+          ...restAnim,
+        };
+        if (tx.strokeEnabled && tx.strokeWidth > 0) {
+          textStyle.WebkitTextStroke = `${(tx.strokeWidth || 2) * displayScale}px ${tx.strokeColor || '#000000'}`;
+        } else {
+          textStyle.textShadow = '0 2px 8px rgba(0,0,0,0.7)';
+        }
+        if (tx.bgEnabled) {
+          textStyle.backgroundColor = hexToRgba(tx.bgColor || '#000000', tx.bgOpacity ?? 0.7);
+          textStyle.padding = `${(tx.bgPadding || 12) * displayScale}px`;
+          textStyle.borderRadius = `${(tx.bgRadius || 8) * displayScale}px`;
+        }
+        return (
+          <div
+            key={tx.id}
+            data-text-item={interactive ? true : undefined}
+            ref={interactive ? (el) => { if (el) textRefs.current[tx.id] = el; else delete textRefs.current[tx.id]; } : undefined}
+            onPointerDown={interactive ? (e) => startTextDrag(e, tx.id) : undefined}
+            onClick={interactive ? (e) => { e.stopPropagation(); onSelectText?.(tx.id); } : undefined}
+            style={textStyle}
+          >
+            {karaokeHighlight ? (
+              <span style={{ position: 'relative', display: 'inline-block' }}>
+                <span style={{ opacity: 0.35 }}>{displayText}</span>
+                <span style={{ position: 'absolute', left: 0, top: 0, color: tx.color || '#ffffff' }}>
+                  {karaokeHighlight}
+                </span>
+              </span>
+            ) : displayText}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 const VideoPreview = forwardRef(function VideoPreview(
   {
     clip, fileUrl, isPlaying, onTimeUpdate, onClipEnded, onPlayStateChange,
     meta, onTransformChange, selectedTextId, onSelectText, onUpdateText,
-    currentOffset, files, showGuides,
+    currentOffset, files, showGuides, incoming,
   },
   ref
 ) {
@@ -42,6 +210,11 @@ const VideoPreview = forwardRef(function VideoPreview(
   const rewindRef = useRef(null);
   const seekTargetRef = useRef(null);
   const pipVideoRef = useRef(null);
+  const inVideoRef = useRef(null);
+  const inBgRef = useRef(null);
+  const inPipRef = useRef(null);
+  const offsetRef = useRef(currentOffset);
+  offsetRef.current = currentOffset;
   isPlayingRef.current = isPlaying;
 
   const [handles, setHandles] = useState(null);
@@ -137,8 +310,10 @@ const VideoPreview = forwardRef(function VideoPreview(
       rewindRef.current = null;
     }
     const applySeek = () => {
-      v.currentTime = clip.sourceStart;
-      if (bg) bg.currentTime = clip.sourceStart;
+      const tt = clip.sourceStart + Math.max(0, offsetRef.current || 0);
+      v.currentTime = tt;
+      if (bg) bg.currentTime = tt;
+      if (pipVideoRef.current) pipVideoRef.current.currentTime = Math.max(0, offsetRef.current || 0);
       if (isPlayingRef.current) {
         v.play().catch(() => {});
         if (bg) bg.play().catch(() => {});
@@ -162,14 +337,19 @@ const VideoPreview = forwardRef(function VideoPreview(
     }
   }, [clip?.speed]);
 
+  const transStyles = incoming
+    ? getPreviewTransitionStyles(incoming.type, incoming.progress)
+    : null;
+
   useEffect(() => {
     const v = videoRef.current;
     if (!v || !clip) return;
     const audio = clip.audio || { volume: 1, mute: false };
+    const gain = transStyles ? transStyles.audioOut : 1;
     v.muted = audio.mute || false;
-    const volume = Math.max(0, Math.min(1, audio.volume || 1));
+    const volume = Math.max(0, Math.min(1, (audio.volume || 1) * gain));
     v.volume = audio.mute ? 0 : volume;
-  }, [clip?.audio?.volume, clip?.audio?.mute]);
+  }, [clip?.audio?.volume, clip?.audio?.mute, transStyles, clip]);
 
   useEffect(() => {
     if (!clip || !files || files.length === 0) return;
@@ -223,7 +403,40 @@ const VideoPreview = forwardRef(function VideoPreview(
       if (bg) bg.pause();
       pipVideoRef.current?.pause?.();
     }
-  }, [isPlaying, clip?.id]);
+    const iv = inVideoRef.current;
+    const ib = inBgRef.current;
+    if (incoming && iv) {
+      if (isPlaying) {
+        iv.play().catch(() => {});
+        ib?.play?.().catch(() => {});
+        inPipRef.current?.play?.().catch(() => {});
+      } else {
+        iv.pause();
+        ib?.pause?.();
+        inPipRef.current?.pause?.();
+      }
+    }
+  }, [isPlaying, clip?.id, incoming?.clip?.id]);
+
+  useEffect(() => {
+    const iv = inVideoRef.current;
+    const ib = inBgRef.current;
+    if (!incoming?.clip || !iv) return;
+    const inClip = incoming.clip;
+    const tt = inClip.sourceStart + Math.max(0, incoming.sourceOffset || 0);
+    if (Math.abs(iv.currentTime - tt) > 0.12) {
+      iv.currentTime = tt;
+      if (ib) ib.currentTime = tt;
+      if (inPipRef.current) inPipRef.current.currentTime = Math.max(0, incoming.sourceOffset || 0);
+    }
+    const rate = Math.max(0.0625, Math.min(16, inClip.speed || 1));
+    iv.playbackRate = rate;
+    const audio = inClip.audio || { volume: 1, mute: false };
+    const gain = transStyles ? transStyles.audioIn : 1;
+    iv.muted = audio.mute || false;
+    iv.volume = audio.mute ? 0 : Math.max(0, Math.min(1, (audio.volume || 1) * gain));
+    if (isPlayingRef.current && iv.paused) iv.play().catch(() => {});
+  }, [incoming, transStyles]);
 
   useEffect(() => {
     const card = cardRef.current;
@@ -358,10 +571,6 @@ const VideoPreview = forwardRef(function VideoPreview(
     onTransformChange({ x: 0, y: 0, scale: 1 });
   };
 
-  const blurPx = (Number(meta?.blur) || 0) * DISPLAY_SCALE;
-  const previewBrightness = 1 + BG_BRIGHTNESS;
-  const previewSaturate = BG_SATURATION;
-
   return (
     <div ref={containerRef} className="flex items-center justify-center w-full h-full p-4">
       <div
@@ -379,173 +588,75 @@ const VideoPreview = forwardRef(function VideoPreview(
           boxShadow: '0 32px 80px -16px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.04), 0 0 60px -20px rgba(168, 85, 247, 0.15)',
         }}
       >
-        {fileUrl && meta?.blurEnabled !== false && (
-          <video
-            ref={bgVideoRef}
-            src={fileUrl}
-            muted
-            autoPlay={isPlaying}
-            playsInline
-            className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-            style={{ filter: `blur(${blurPx}px) brightness(${previewBrightness}) saturate(${previewSaturate})` }}
-          />
-        )}
-        {meta?.blurEnabled === false && (
-          <div className="absolute inset-0 bg-black pointer-events-none" />
-        )}
-
         {clip && fileUrl ? (
-          <video
-            ref={videoRef}
-            src={fileUrl}
-            playsInline
-            autoPlay={isPlaying}
-            onPlay={() => onPlayStateChange?.(true)}
-            onPause={() => {
-              if (isEndingRef.current) {
-                isEndingRef.current = false;
-                return;
-              }
-              onPlayStateChange?.(false);
-            }}
-            className="pointer-events-none"
-            style={{
-              position: 'absolute',
-              width: `${EXPORT_W * Math.max(0.1, Math.min(10, t.scale || 1)) * DISPLAY_SCALE}px`,
-              maxWidth: 'none',
-              left: '50%',
-              top: `${MAIN_Y * DISPLAY_SCALE}px`,
-              transform: `translateX(-50%) translate(${t.x * DISPLAY_SCALE}px, ${t.y * DISPLAY_SCALE}px)`,
-            }}
-          />
+          (() => {
+            const outgoingLayer = (
+              <div
+                className="absolute inset-0 overflow-hidden"
+                style={{ zIndex: transStyles && !transStyles.incomingOnTop ? 3 : 1, ...((transStyles && transStyles.outgoing) || {}) }}
+              >
+                <ClipMedia
+                  clip={clip}
+                  fileUrl={fileUrl}
+                  videoRef={videoRef}
+                  bgRef={bgVideoRef}
+                  pipRef={pipVideoRef}
+                  meta={meta}
+                  displayScale={DISPLAY_SCALE}
+                  files={files}
+                  currentOffset={currentOffset}
+                  interactive
+                  selectedTextId={selectedTextId}
+                  onSelectText={onSelectText}
+                  startTextDrag={startTextDrag}
+                  textRefs={textRefs}
+                  onPlay={() => onPlayStateChange?.(true)}
+                  onPause={() => {
+                    if (isEndingRef.current) {
+                      isEndingRef.current = false;
+                      return;
+                    }
+                    onPlayStateChange?.(false);
+                  }}
+                />
+              </div>
+            );
+            const incomingLayer = incoming?.clip && incoming.fileUrl ? (
+              <div
+                className="absolute inset-0 overflow-hidden pointer-events-none"
+                style={{ zIndex: transStyles && transStyles.incomingOnTop ? 3 : 1, ...((transStyles && transStyles.incoming) || {}) }}
+              >
+                <ClipMedia
+                  clip={incoming.clip}
+                  fileUrl={incoming.fileUrl}
+                  videoRef={inVideoRef}
+                  bgRef={inBgRef}
+                  pipRef={inPipRef}
+                  meta={meta}
+                  displayScale={DISPLAY_SCALE}
+                  files={files}
+                  currentOffset={incoming.sourceOffset}
+                  interactive={false}
+                />
+              </div>
+            ) : null;
+            const first = transStyles && !transStyles.incomingOnTop ? incomingLayer : outgoingLayer;
+            const second = transStyles && !transStyles.incomingOnTop ? outgoingLayer : incomingLayer;
+            return (
+              <>
+                {first}
+                {second}
+                {transStyles?.veil && (
+                  <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 4, ...transStyles.veil }} />
+                )}
+              </>
+            );
+          })()
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-slate-600 text-sm pointer-events-none">
             No clip selected
           </div>
         )}
-
-        {clip?.pip?.enabled && clip.pip.fileId && (() => {
-          const pipFile = files?.find((f) => f.id === clip.pip.fileId);
-          if (!pipFile?.url) return null;
-          const rect = getPipRect(clip.pip, EXPORT_W, EXPORT_H);
-          return (
-            <video
-              ref={pipVideoRef}
-              src={pipFile.url}
-              playsInline
-              muted
-              className="pointer-events-none"
-              style={{
-                position: 'absolute',
-                width: `${rect.width * DISPLAY_SCALE}px`,
-                height: `${rect.height * DISPLAY_SCALE}px`,
-                left: `${rect.x * DISPLAY_SCALE}px`,
-                top: `${rect.y * DISPLAY_SCALE}px`,
-                opacity: Math.max(0, Math.min(1, clip.pip.opacity ?? 1)),
-                border: clip.pip.border ? `${(clip.pip.borderWidth || 4) * DISPLAY_SCALE}px solid white` : 'none',
-                borderRadius: `${(clip.pip.borderRadius || 8) * DISPLAY_SCALE}px`,
-                objectFit: 'cover',
-                boxSizing: 'content-box',
-              }}
-            />
-          );
-        })()}
-
-        {texts.map((tx) => {
-          const isVisible = tx.startOffset == null || tx.endOffset == null
-            || (currentOffset >= tx.startOffset && currentOffset <= tx.endOffset);
-          const selected = tx.id === selectedTextId;
-          if (!isVisible && !selected) return null;
-
-          let animStyle = {};
-          let displayText = tx.text;
-          let karaokeHighlight = '';
-
-          if (tx.animation?.type && isVisible) {
-            const animDef = getAnimation(tx.animation.type);
-            const elapsed = currentOffset - (tx.startOffset || 0);
-            const animDur = Math.max(0.1, tx.animation.duration || 0.5);
-            const progress = Math.min(1, elapsed / animDur);
-
-            if (animDef.isTypewriter) {
-              const len = (tx.text || '').length;
-              const visibleChars = Math.floor(progress * len);
-              displayText = (tx.text || '').slice(0, visibleChars);
-            } else if (animDef.isKaraoke) {
-              karaokeHighlight = getKaraokeHighlight(tx.text || '', progress);
-            } else if (animDef.getPreviewStyle) {
-              animStyle = animDef.getPreviewStyle(progress, tx.x, tx.y, tx.text) || {};
-            }
-          }
-
-          const hexToRgba = (hex, alpha) => {
-            const r = parseInt((hex || '#000000').slice(1, 3), 16);
-            const g = parseInt((hex || '#000000').slice(3, 5), 16);
-            const b = parseInt((hex || '#000000').slice(5, 7), 16);
-            return `rgba(${r},${g},${b},${alpha})`;
-          };
-
-          const alignTx = getTextAlignTransform(tx.align || 'left');
-          const transforms = [
-            alignTx !== 'none' ? alignTx : null,
-            animStyle.transform || null,
-            tx.rotation ? `rotate(${tx.rotation}deg)` : null,
-          ].filter(Boolean);
-
-          const { transform: _animTransform, _karaokeHighlight, _visibleText, ...restAnim } = animStyle;
-          const textStyle = {
-            position: 'absolute',
-            left: `${(tx.x || 0) * DISPLAY_SCALE}px`,
-            top: `${(tx.y || 0) * DISPLAY_SCALE}px`,
-            color: tx.color || '#ffffff',
-            fontFamily: FONT_CSS[tx.font] || FONT_CSS.inter,
-            fontSize: `${Math.max(12, Math.min(400, tx.size || 60)) * DISPLAY_SCALE}px`,
-            fontWeight: 700,
-            lineHeight: 1.2,
-            cursor: 'move',
-            userSelect: 'none',
-            whiteSpace: 'pre',
-            outline: selected ? '1.5px dashed #a855f7' : 'none',
-            outlineOffset: '4px',
-            zIndex: selected ? 30 : 20,
-            opacity: !isVisible && selected ? 0.3 : 1,
-            transformOrigin: tx.align === 'center' ? 'center top' : (tx.align === 'right' ? 'right top' : 'left top'),
-            transform: transforms.length ? transforms.join(' ') : undefined,
-            ...restAnim,
-          };
-
-          if (tx.strokeEnabled && tx.strokeWidth > 0) {
-            textStyle.WebkitTextStroke = `${(tx.strokeWidth || 2) * DISPLAY_SCALE}px ${tx.strokeColor || '#000000'}`;
-          } else {
-            textStyle.textShadow = '0 2px 8px rgba(0,0,0,0.7)';
-          }
-
-          if (tx.bgEnabled) {
-            textStyle.backgroundColor = hexToRgba(tx.bgColor || '#000000', tx.bgOpacity ?? 0.7);
-            textStyle.padding = `${(tx.bgPadding || 12) * DISPLAY_SCALE}px`;
-            textStyle.borderRadius = `${(tx.bgRadius || 8) * DISPLAY_SCALE}px`;
-          }
-
-          return (
-            <div
-              key={tx.id}
-              data-text-item
-              ref={(el) => { if (el) textRefs.current[tx.id] = el; else delete textRefs.current[tx.id]; }}
-              onPointerDown={(e) => startTextDrag(e, tx.id)}
-              onClick={(e) => { e.stopPropagation(); onSelectText?.(tx.id); }}
-              style={textStyle}
-            >
-              {karaokeHighlight ? (
-                <span style={{ position: 'relative', display: 'inline-block' }}>
-                  <span style={{ opacity: 0.35 }}>{displayText}</span>
-                  <span style={{ position: 'absolute', left: 0, top: 0, color: tx.color || '#ffffff' }}>
-                    {karaokeHighlight}
-                  </span>
-                </span>
-              ) : displayText}
-            </div>
-          );
-        })}
 
         {handles && CORNERS.map((corner) => (
           <div

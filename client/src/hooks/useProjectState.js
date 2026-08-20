@@ -364,9 +364,9 @@ export default function useProjectState() {
     }, 'transition');
   }, [setTransitions]);
 
-  const handleSelectClip = useCallback((clipId) => {
+  const handleSelectClip = useCallback((clipId, sourceOffset = 0) => {
     setActiveClipId(clipId);
-    setCurrentOffset(0);
+    setCurrentOffset(typeof sourceOffset === 'number' ? Math.max(0, sourceOffset) : 0);
     setSelectedTextId(null);
   }, []);
 

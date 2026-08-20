@@ -12,6 +12,7 @@ import {
   ZOOM_STEP,
   WHEEL_ZOOM_STEP,
 } from '../lib/timelineScale.js';
+import { clipOutputDuration, transitionDuration } from '../lib/transitions.js';
 
 function ZoomInIcon() {
   return (
@@ -35,6 +36,7 @@ const ClipTrack = forwardRef(function ClipTrack(
   {
     clips,
     activeClipId,
+    incomingClipId,
     transitions,
     fileById,
     onSelect,
@@ -172,8 +174,12 @@ const ClipTrack = forwardRef(function ClipTrack(
       let endIdx = clips.length;
 
       for (let i = 0; i < clips.length; i++) {
-        const dur = clips[i].sourceEnd - clips[i].sourceStart;
+        const dur = clipOutputDuration(clips[i]);
         const width = Math.max(MIN_CLIP_WIDTH, dur * effectivePxPerSec);
+        const overlap = i > 0
+          ? transitionDuration(transitions?.[i - 1], clips[i - 1], clips[i]) * effectivePxPerSec
+          : 0;
+        if (overlap > 0) cumWidth -= overlap;
 
         if (startIdx === -1 && cumWidth + width > scrollLeft - 200) {
           startIdx = Math.max(0, i - 2);
@@ -199,7 +205,7 @@ const ClipTrack = forwardRef(function ClipTrack(
     container.addEventListener('scroll', updateVisibleRange);
 
     return () => container.removeEventListener('scroll', updateVisibleRange);
-  }, [clips, timelineZoom]);
+  }, [clips, transitions, timelineZoom]);
 
   useEffect(() => {
     const node = containerRef.current;
@@ -253,31 +259,56 @@ const ClipTrack = forwardRef(function ClipTrack(
           >
             {visibleClips.map((clip, idx) => {
               const i = visibleRange.start + idx;
-              const dur = clip.sourceEnd - clip.sourceStart;
-              const width = Math.max(MIN_CLIP_WIDTH, dur * effectivePxPerSec);
+              const outDur = clipOutputDuration(clip);
+              const width = Math.max(MIN_CLIP_WIDTH, outDur * effectivePxPerSec);
               const nextClip = clips[i + 1];
+              const prevClip = clips[i - 1];
+              const overlapIn = prevClip
+                ? transitionDuration(transitions[i - 1], prevClip, clip)
+                : 0;
+              const overlapOut = nextClip
+                ? transitionDuration(transitions[i], clip, nextClip)
+                : 0;
+              const overlapInPx = overlapIn * effectivePxPerSec;
+              const overlapOutPx = overlapOut * effectivePxPerSec;
               const seamMaxDur = nextClip
-                ? Math.max(0, Math.min(dur, nextClip.sourceEnd - nextClip.sourceStart) - 0.1)
+                ? Math.max(0, Math.min(outDur, clipOutputDuration(nextClip)) - 0.02)
                 : 0;
               return (
-                <div key={clip.id} className="flex items-center shrink-0">
+                <div
+                  key={clip.id}
+                  className="flex items-center shrink-0"
+                  style={{ marginLeft: overlapInPx > 0 ? -overlapInPx : 0 }}
+                >
                   <ClipBlock
                     clip={clip}
                     index={i}
                     width={width}
                     file={fileById[clip.fileId]}
-                    isActive={clip.id === activeClipId}
+                    isActive={clip.id === activeClipId || clip.id === incomingClipId}
                     canDelete={clips.length > 1}
                     onSelect={() => onSelect(clip.id)}
                     onDelete={() => onDelete(clip.id)}
                     onDuplicate={() => onDuplicate?.(clip.id)}
+                    overlapLeft={overlapInPx}
+                    overlapRight={overlapOutPx}
                   />
                   {nextClip && (
-                    <TransitionPicker
-                      value={transitions[i] || { type: 'none', durationSec: 0 }}
-                      maxDuration={seamMaxDur}
-                      onChange={(v) => onTransitionChange(i, v)}
-                    />
+                    <div
+                      className="relative shrink-0 z-20"
+                      style={{ width: 0 }}
+                    >
+                      <div
+                        className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2"
+                        style={{ left: overlapOutPx > 0 ? -overlapOutPx / 2 : 0 }}
+                      >
+                        <TransitionPicker
+                          value={transitions[i] || { type: 'none', durationSec: 0 }}
+                          maxDuration={seamMaxDur}
+                          onChange={(v) => onTransitionChange(i, v)}
+                        />
+                      </div>
+                    </div>
                   )}
                 </div>
               );
