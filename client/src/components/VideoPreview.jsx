@@ -214,8 +214,10 @@ const VideoPreview = forwardRef(function VideoPreview(
   const inBgRef = useRef(null);
   const inPipRef = useRef(null);
   const offsetRef = useRef(currentOffset);
+  const clipIdRef = useRef(clip?.id);
   offsetRef.current = currentOffset;
   isPlayingRef.current = isPlaying;
+  clipIdRef.current = clip?.id;
 
   const [handles, setHandles] = useState(null);
   const [cardH, setCardH] = useState(480);
@@ -239,9 +241,14 @@ const VideoPreview = forwardRef(function VideoPreview(
   const t = clip?.transform || { x: 0, y: 0, scale: 1 };
   const texts = clip?.texts || [];
 
-  const throttledTimeUpdate = useThrottledCallback((offset) => {
+  const throttledTimeUpdate = useThrottledCallback((offset, clipId) => {
+    if (clipId !== clipIdRef.current) return;
     onTimeUpdate?.(offset);
   }, 33);
+
+  useEffect(() => {
+    throttledTimeUpdate.cancel?.();
+  }, [clip?.id, throttledTimeUpdate]);
 
   useImperativeHandle(ref, () => ({
     seekTo: (offsetWithinClip) => {
@@ -301,7 +308,6 @@ const VideoPreview = forwardRef(function VideoPreview(
   useEffect(() => {
     endedRef.current = false;
     isEndingRef.current = false;
-    seekTargetRef.current = null;
     const v = videoRef.current;
     const bg = bgVideoRef.current;
     if (!v || !clip) return;
@@ -309,15 +315,21 @@ const VideoPreview = forwardRef(function VideoPreview(
       clearInterval(rewindRef.current);
       rewindRef.current = null;
     }
+    const playIfNeeded = () => {
+      if (!isPlayingRef.current) return;
+      v.play().catch(() => {
+        if (isPlayingRef.current) v.play().catch(() => {});
+      });
+      if (bg) bg.play().catch(() => {});
+      pipVideoRef.current?.play?.().catch(() => {});
+    };
     const applySeek = () => {
       const tt = clip.sourceStart + Math.max(0, offsetRef.current || 0);
+      seekTargetRef.current = tt;
       v.currentTime = tt;
       if (bg) bg.currentTime = tt;
       if (pipVideoRef.current) pipVideoRef.current.currentTime = Math.max(0, offsetRef.current || 0);
-      if (isPlayingRef.current) {
-        v.play().catch(() => {});
-        if (bg) bg.play().catch(() => {});
-      }
+      playIfNeeded();
     };
     if (v.readyState >= 1) {
       applySeek();
@@ -372,6 +384,14 @@ const VideoPreview = forwardRef(function VideoPreview(
   useEffect(() => {
     const v = videoRef.current;
     if (!v || !clip) return undefined;
+    const finishClip = () => {
+      if (endedRef.current) return;
+      endedRef.current = true;
+      isEndingRef.current = true;
+      throttledTimeUpdate.cancel?.();
+      try { v.pause(); } catch (_) { /* ignore */ }
+      onClipEnded?.();
+    };
     const onTime = () => {
       if (seekTargetRef.current !== null) {
         const diff = Math.abs(v.currentTime - seekTargetRef.current);
@@ -379,15 +399,15 @@ const VideoPreview = forwardRef(function VideoPreview(
         seekTargetRef.current = null;
       }
       const offset = v.currentTime - clip.sourceStart;
-      if (offset >= 0) throttledTimeUpdate(offset);
-      if (!endedRef.current && v.currentTime >= clip.sourceEnd - 0.03) {
-        endedRef.current = true;
-        isEndingRef.current = true;
-        onClipEnded?.();
-      }
+      if (offset >= 0) throttledTimeUpdate(offset, clip.id);
+      if (v.currentTime >= clip.sourceEnd - (1 / OUTPUT_FPS)) finishClip();
     };
     v.addEventListener('timeupdate', onTime);
-    return () => v.removeEventListener('timeupdate', onTime);
+    v.addEventListener('ended', finishClip);
+    return () => {
+      v.removeEventListener('timeupdate', onTime);
+      v.removeEventListener('ended', finishClip);
+    };
   }, [clip, throttledTimeUpdate, onClipEnded]);
 
   useEffect(() => {
@@ -395,9 +415,23 @@ const VideoPreview = forwardRef(function VideoPreview(
     const bg = bgVideoRef.current;
     if (!v || !clip) return;
     if (isPlaying && v.paused) {
-      v.play().catch(() => {});
-      if (bg) bg.play().catch(() => {});
-      pipVideoRef.current?.play?.().catch(() => {});
+      const seeking = seekTargetRef.current !== null
+        && Math.abs(v.currentTime - seekTargetRef.current) > 0.05;
+      if (seeking) {
+        v.play().catch(() => {});
+        if (bg) bg.play().catch(() => {});
+        pipVideoRef.current?.play?.().catch(() => {});
+      } else if (v.currentTime >= clip.sourceEnd - (1 / OUTPUT_FPS)) {
+        if (!endedRef.current) {
+          endedRef.current = true;
+          isEndingRef.current = true;
+          onClipEnded?.();
+        }
+      } else {
+        v.play().catch(() => {});
+        if (bg) bg.play().catch(() => {});
+        pipVideoRef.current?.play?.().catch(() => {});
+      }
     } else if (!isPlaying && !v.paused) {
       v.pause();
       if (bg) bg.pause();
@@ -416,7 +450,7 @@ const VideoPreview = forwardRef(function VideoPreview(
         inPipRef.current?.pause?.();
       }
     }
-  }, [isPlaying, clip?.id, incoming?.clip?.id]);
+  }, [isPlaying, clip?.id, incoming?.clip?.id, clip?.sourceEnd, onClipEnded]);
 
   useEffect(() => {
     const iv = inVideoRef.current;
@@ -431,6 +465,8 @@ const VideoPreview = forwardRef(function VideoPreview(
     }
     const rate = Math.max(0.0625, Math.min(16, inClip.speed || 1));
     iv.playbackRate = rate;
+    if (ib) ib.playbackRate = rate;
+    if (inPipRef.current) inPipRef.current.playbackRate = rate;
     const audio = inClip.audio || { volume: 1, mute: false };
     const gain = transStyles ? transStyles.audioIn : 1;
     iv.muted = audio.mute || false;
@@ -612,8 +648,7 @@ const VideoPreview = forwardRef(function VideoPreview(
                   textRefs={textRefs}
                   onPlay={() => onPlayStateChange?.(true)}
                   onPause={() => {
-                    if (isEndingRef.current) {
-                      isEndingRef.current = false;
+                    if (isEndingRef.current || isPlayingRef.current || seekTargetRef.current !== null) {
                       return;
                     }
                     onPlayStateChange?.(false);

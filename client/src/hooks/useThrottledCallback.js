@@ -9,6 +9,13 @@ export default function useThrottledCallback(callback, delay) {
     callbackRef.current = callback;
   }, [callback]);
 
+  const cancel = useCallback(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  }, []);
+
   const throttledCallback = useCallback((...args) => {
     const now = Date.now();
     const timeSinceLastCall = now - lastCallRef.current;
@@ -17,23 +24,18 @@ export default function useThrottledCallback(callback, delay) {
       lastCallRef.current = now;
       callbackRef.current(...args);
     } else {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
+      cancel();
       timeoutRef.current = setTimeout(() => {
+        timeoutRef.current = null;
         lastCallRef.current = Date.now();
         callbackRef.current(...args);
       }, delay - timeSinceLastCall);
     }
-  }, [delay]);
+  }, [delay, cancel]);
 
-  useEffect(() => {
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  }, []);
+  throttledCallback.cancel = cancel;
+
+  useEffect(() => cancel, [cancel]);
 
   return throttledCallback;
 }

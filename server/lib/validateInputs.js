@@ -3,6 +3,7 @@ const { getVideoInfo } = require('./videoInfo');
 async function validateInputVideos(files, clips) {
   const errors = [];
   const infoCache = new Map();
+  const infoByFileIndex = [];
 
   async function infoFor(file) {
     if (!file || !file.path) throw new Error('Missing file path');
@@ -22,6 +23,7 @@ async function validateInputVideos(files, clips) {
 
     try {
       const info = await infoFor(file);
+      infoByFileIndex[clip.fileIndex] = info;
       if (info.duration <= 0) {
         errors.push(`Video ${clip.fileIndex + 1}: Duration is 0 or invalid`);
         continue;
@@ -48,6 +50,7 @@ async function validateInputVideos(files, clips) {
       } else {
         try {
           const pipInfo = await infoFor(pipFile);
+          infoByFileIndex[pip.fileIndex] = pipInfo;
           if (pipInfo.duration <= 0 || pipInfo.width === 0) {
             errors.push(`Clip ${i + 1}: PIP source is not a valid video`);
           }
@@ -59,10 +62,10 @@ async function validateInputVideos(files, clips) {
   }
 
   if (errors.length > 0) {
-    return { valid: false, errors };
+    return { valid: false, errors, infoByFileIndex };
   }
 
-  return { valid: true, errors: [] };
+  return { valid: true, errors: [], infoByFileIndex };
 }
 
 module.exports = { validateInputVideos };

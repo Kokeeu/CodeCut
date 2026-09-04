@@ -1,14 +1,59 @@
+export const XFADE_TYPES = [
+  'fade',
+  'fadeblack',
+  'fadewhite',
+  'wipeleft',
+  'wiperight',
+  'slideleft',
+  'slideright',
+  'circleopen',
+  'circleclose',
+];
+
+const XFADE_TYPE_SET = new Set(XFADE_TYPES);
+
+export function isXfadeType(type) {
+  return XFADE_TYPE_SET.has(type);
+}
+
+export function sanitizeTransition(transition) {
+  if (!transition || !transition.type || transition.type === 'none') {
+    return { type: 'none', durationSec: 0 };
+  }
+  const type = isXfadeType(transition.type) ? transition.type : 'fade';
+  const durationSec = Math.max(0, Number(transition.durationSec) || 0);
+  return { type, durationSec };
+}
+
 export function clipOutputDuration(clip) {
   if (!clip) return 0;
   return Math.max(0, (Number(clip.sourceEnd) - Number(clip.sourceStart)) / (Number(clip.speed) || 1));
 }
 
 export function transitionDuration(transition, clipA, clipB) {
-  if (!transition || !transition.type || transition.type === 'none') return 0;
-  const requested = Number(transition.durationSec) || 0;
-  if (requested <= 0) return 0;
+  const t = sanitizeTransition(transition);
+  if (t.type === 'none') return 0;
+  if (t.durationSec <= 0) return 0;
   const maxDur = Math.max(0, Math.min(clipOutputDuration(clipA), clipOutputDuration(clipB)) - 0.02);
-  return Math.min(requested, maxDur);
+  return Math.min(t.durationSec, maxDur);
+}
+
+export function clipSelectSourceOffset(clips, transitions, clipIndex) {
+  if (!clips || clipIndex <= 0 || clipIndex >= clips.length) return 0;
+  const overlap = transitionDuration(transitions?.[clipIndex - 1], clips[clipIndex - 1], clips[clipIndex]);
+  return overlap * (Number(clips[clipIndex].speed) || 1);
+}
+
+const SEAM_EPS = 1e-3;
+const FRAME_SEC = 1 / 30;
+
+export function clipAdvanceSourceOffset(clips, transitions, clipIndex) {
+  const base = clipSelectSourceOffset(clips, transitions, clipIndex);
+  if (!clips || clipIndex < 0 || clipIndex >= clips.length) return base;
+  const speed = Number(clips[clipIndex].speed) || 1;
+  const sourceDur = Math.max(0, Number(clips[clipIndex].sourceEnd) - Number(clips[clipIndex].sourceStart));
+  const extra = FRAME_SEC * speed;
+  return Math.min(base + extra, Math.max(0, sourceDur - extra));
 }
 
 export function getClipStarts(clips, transitions = []) {
@@ -72,7 +117,9 @@ export function resolvePlayback(clips, transitions, globalTime) {
       return { index: i, sourceOffset: 0, outputOffset: 0, incoming: null };
     }
 
-    if (transDur > 0 && i < clips.length - 1 && g >= overlapStart && g < end) {
+    const primaryEnd = i === clips.length - 1 ? end : end - SEAM_EPS;
+
+    if (transDur > 0 && i < clips.length - 1 && g >= overlapStart && g < primaryEnd) {
       const next = clips[i + 1];
       const nextSpeed = Number(next.speed) || 1;
       return {
@@ -84,13 +131,13 @@ export function resolvePlayback(clips, transitions, globalTime) {
           sourceOffset: (g - starts[i + 1]) * nextSpeed,
           outputOffset: g - starts[i + 1],
           progress: (g - overlapStart) / transDur,
-          type: transitions[i].type,
+          type: sanitizeTransition(transitions[i]).type,
           duration: transDur,
         },
       };
     }
 
-    if (g < overlapStart || (transDur <= 0 && g < end) || i === clips.length - 1) {
+    if (g < overlapStart || (transDur <= 0 && g < primaryEnd) || i === clips.length - 1) {
       return {
         index: i,
         sourceOffset: Math.max(0, g - start) * speed,

@@ -49,7 +49,11 @@ function getVideoInfo(filePath) {
         height: videoStream?.height || 0,
         fps: videoStream?.r_frame_rate ? eval(videoStream.r_frame_rate) : 0,
         codec: videoStream?.codec_name || 'unknown',
+        hasAudio: Boolean(audioStream),
         audioCodec: audioStream?.codec_name || 'unknown',
+        audioSampleRate: Number(audioStream?.sample_rate) || 0,
+        audioChannels: Number(audioStream?.channels) || 0,
+        audioChannelLayout: audioStream?.channel_layout || 'unknown',
         bitrate: metadata.format.bit_rate || 0,
       };
 

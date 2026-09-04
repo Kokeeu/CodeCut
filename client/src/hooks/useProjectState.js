@@ -11,6 +11,7 @@ import {
   makeClip,
   nextId,
 } from '../lib/projectDefaults.js';
+import { sanitizeTransition } from '../lib/transitions.js';
 import {
   blobToFile,
   clearMediaStore,
@@ -18,6 +19,17 @@ import {
   getMediaFileByName,
   putMediaFile,
 } from '../lib/mediaStore.js';
+
+function normalizeTransitions(raw, clipCount) {
+  const next = (raw || []).map((t) => sanitizeTransition(t));
+  if (clipCount > 0) {
+    while (next.length < clipCount - 1) next.push({ ...DEFAULT_TRANSITION });
+    next.length = Math.max(0, clipCount - 1);
+  } else {
+    next.length = 0;
+  }
+  return next;
+}
 
 function base64ToBlobUrl(base64) {
   if (!base64) return null;
@@ -179,7 +191,7 @@ export default function useProjectState() {
     setDoc((prev) => ({
       ...prev,
       clips: [...prev.clips, clip],
-      transitions: prev.clips.length === 0 ? prev.transitions : [...prev.transitions, { ...DEFAULT_TRANSITION }],
+      transitions: prev.clips.length === 0 ? [] : [...prev.transitions, { ...DEFAULT_TRANSITION }],
     }), 'add-clip');
     setActiveClipId(clip.id);
     setCurrentOffset(0);
@@ -359,7 +371,7 @@ export default function useProjectState() {
   const handleTransitionChange = useCallback((index, value) => {
     setTransitions((prev) => {
       const t = [...prev];
-      t[index] = value;
+      t[index] = sanitizeTransition(value);
       return t;
     }, 'transition');
   }, [setTransitions]);
@@ -494,10 +506,7 @@ export default function useProjectState() {
         })),
       };
     });
-    const newTransitions = (data.transitions || []).map((t) => ({
-      type: t.type || 'none',
-      durationSec: t.durationSec || 0,
-    }));
+    const newTransitions = normalizeTransitions(data.transitions, newClips.length);
     undo.reset({
       clips: newClips,
       transitions: newTransitions,
@@ -585,9 +594,11 @@ export default function useProjectState() {
     }
 
     setFiles(newFiles);
+    const restoredClips = data.clips || [];
+    const restoredTransitions = normalizeTransitions(data.transitions, restoredClips.length);
     undo.reset({
-      clips: data.clips || [],
-      transitions: data.transitions || [],
+      clips: restoredClips,
+      transitions: restoredTransitions,
       meta: data.meta || { ...DEFAULT_META },
     });
     if ((data.clips || []).length > 0) setActiveClipId(data.clips[0].id);

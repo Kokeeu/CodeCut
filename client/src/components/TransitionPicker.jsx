@@ -145,18 +145,30 @@ const TransitionPicker = memo(function TransitionPicker({ value, maxDuration, on
       Math.min(window.innerWidth - POPOVER_WIDTH - VIEWPORT_PADDING, desiredLeft)
     );
 
-    const spaceAbove = rect.top;
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const placement =
-      spaceAbove >= POPOVER_MAX_HEIGHT || spaceAbove > spaceBelow ? 'top' : 'bottom';
+    const spaceAbove = rect.top - VIEWPORT_PADDING;
+    const spaceBelow = window.innerHeight - rect.bottom - VIEWPORT_PADDING;
+    const placement = spaceBelow >= Math.min(POPOVER_MAX_HEIGHT, spaceAbove) && spaceBelow > spaceAbove
+      ? 'bottom'
+      : 'top';
     setPopoverPlacement(placement);
 
-    const top =
-      placement === 'top'
-        ? Math.max(VIEWPORT_PADDING, rect.top - 8)
-        : Math.min(window.innerHeight - VIEWPORT_PADDING, rect.bottom + 8);
-
-    setPopoverRect({ left, top });
+    const gap = 8;
+    const arrowLeft = rect.left + rect.width / 2 - left;
+    if (placement === 'top') {
+      setPopoverRect({
+        left,
+        bottom: window.innerHeight - rect.top + gap,
+        maxHeight: Math.max(160, Math.min(POPOVER_MAX_HEIGHT, spaceAbove - gap)),
+        arrowLeft,
+      });
+    } else {
+      setPopoverRect({
+        left,
+        top: rect.bottom + gap,
+        maxHeight: Math.max(160, Math.min(POPOVER_MAX_HEIGHT, spaceBelow - gap)),
+        arrowLeft,
+      });
+    }
   }, []);
 
   useLayoutEffect(() => {
@@ -211,14 +223,26 @@ const TransitionPicker = memo(function TransitionPicker({ value, maxDuration, on
   const popover = open && popoverRect ? (
     <div
       ref={popoverRef}
-      className="fixed z-[60] w-72 p-3 glass-floating rounded-2xl animate-slide-up shadow-panel-lg"
-      style={{ left: popoverRect.left, top: popoverRect.top, maxHeight: 'calc(100vh - 16px)', overflowY: 'auto' }}
+      className={[
+        'fixed z-[60] w-72 p-3 glass-floating rounded-2xl shadow-panel-lg',
+        popoverPlacement === 'top' ? 'animate-slide-up' : 'animate-slide-down',
+      ].join(' ')}
+      style={{
+        left: popoverRect.left,
+        maxHeight: popoverRect.maxHeight,
+        overflowY: 'auto',
+        ...(popoverPlacement === 'top'
+          ? { bottom: popoverRect.bottom }
+          : { top: popoverRect.top }),
+      }}
       onWheel={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
     >
       <div
-        className="absolute left-1/2 -translate-x-1/2 w-2.5 h-2.5 rotate-45 bg-glass-strong border-glass-border"
+        className="absolute w-2.5 h-2.5 rotate-45 bg-glass-strong border-glass-border"
         style={{
+          left: popoverRect.arrowLeft,
+          marginLeft: -5,
           ...(popoverPlacement === 'top'
             ? { bottom: '-5px', borderRight: '1px solid', borderBottom: '1px solid' }
             : { top: '-5px', borderLeft: '1px solid', borderTop: '1px solid' }),

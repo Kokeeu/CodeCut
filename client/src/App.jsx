@@ -20,7 +20,7 @@ import useExitConfirmation from './hooks/useExitConfirmation.js';
 import useProjectState from './hooks/useProjectState.js';
 import { getTrackWidth, clampZoom } from './lib/timelineScale.js';
 import { TEMPLATES } from './lib/projectDefaults.js';
-import { resolvePlayback, transitionDuration } from './lib/transitions.js';
+import { resolvePlayback, clipSelectSourceOffset, clipAdvanceSourceOffset } from './lib/transitions.js';
 
 export default function App() {
   const project = useProjectState();
@@ -48,6 +48,7 @@ export default function App() {
   const [timelineContainer, setTimelineContainer] = useState(null);
   const previewRef = useRef(null);
   const shuttleRef = useRef({ direction: 0, level: 0 });
+  const advancingRef = useRef(false);
 
   const { totalDuration, snapPoints, currentGlobalTime: getGlobalTime } = useEditor(clips, transitions);
 
@@ -99,44 +100,55 @@ export default function App() {
   }, [clips, transitions, activeClipId, handleSelectClip, setCurrentOffset]);
 
   const handleClipEnded = useCallback(() => {
-    const idx = clips.findIndex((c) => c.id === activeClipId);
+    const idx = playback.index >= 0
+      ? playback.index
+      : clips.findIndex((c) => c.id === activeClipId);
     if (idx >= 0 && idx < clips.length - 1) {
-      const next = clips[idx + 1];
-      const overlap = transitionDuration(transitions[idx], clips[idx], next);
-      handleSelectClip(next.id, overlap * (next.speed || 1));
-    } else {
-      setIsPlaying(false);
-      if (clips.length > 0) {
-        const first = clips[0];
-        if (first.id === activeClipId) {
-          setCurrentOffset(0);
-          previewRef.current?.seekTo(0);
-        } else {
-          handleSelectClip(first.id, 0);
-        }
-      }
-    }
-  }, [clips, transitions, activeClipId, handleSelectClip]);
-
-  const handleTimelineSelect = useCallback((clipId) => {
-    if (!clips.some((c) => c.id === clipId)) return;
-    setSelectedTextId(null);
-    if (clipId === activeClipId) {
-      setCurrentOffset(0);
-      previewRef.current?.seekTo(0);
+      advancingRef.current = true;
+      handleSelectClip(clips[idx + 1].id, clipAdvanceSourceOffset(clips, transitions, idx + 1));
       return;
     }
-    handleSelectClip(clipId, 0);
-  }, [clips, activeClipId, handleSelectClip, setSelectedTextId, setCurrentOffset]);
+    setIsPlaying(false);
+    if (clips.length > 0) {
+      const first = clips[0];
+      if (first.id === activeClipId) {
+        setCurrentOffset(0);
+        previewRef.current?.seekTo(0);
+      } else {
+        handleSelectClip(first.id, 0);
+      }
+    }
+  }, [clips, transitions, activeClipId, playback.index, handleSelectClip, setCurrentOffset]);
+
+  const handleTimelineSelect = useCallback((clipId) => {
+    const idx = clips.findIndex((c) => c.id === clipId);
+    if (idx < 0) return;
+    setSelectedTextId(null);
+    const sourceOffset = clipSelectSourceOffset(clips, transitions, idx);
+    if (clipId === activeClipId) {
+      setCurrentOffset(sourceOffset);
+      previewRef.current?.seekTo(sourceOffset);
+      return;
+    }
+    handleSelectClip(clipId, sourceOffset);
+  }, [clips, transitions, activeClipId, handleSelectClip, setSelectedTextId, setCurrentOffset]);
 
   const handlePreviewTime = useCallback((sourceOffset) => {
+    if (advancingRef.current) return;
     const playClip = playback.index >= 0 ? clips[playback.index] : null;
-    if (playClip && playClip.id !== activeClipId) {
+    if (!playClip) return;
+    if (playClip.id !== activeClipId) {
+      const activeIdx = clips.findIndex((c) => c.id === activeClipId);
+      if (isPlaying && playback.index < activeIdx) return;
       handleSelectClip(playClip.id, sourceOffset);
       return;
     }
     setCurrentOffset(sourceOffset);
-  }, [playback.index, clips, activeClipId, handleSelectClip, setCurrentOffset]);
+  }, [playback.index, clips, activeClipId, isPlaying, handleSelectClip, setCurrentOffset]);
+
+  useEffect(() => {
+    advancingRef.current = false;
+  }, [activeClipId]);
 
   useEffect(() => {
     const onKey = (e) => {

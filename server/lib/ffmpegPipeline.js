@@ -20,6 +20,29 @@ const BG_SATURATION = 0.5;
 
 const MAIN_Y = 360;
 
+const XFADE_TYPES = new Set([
+  'fade',
+  'fadeblack',
+  'fadewhite',
+  'wipeleft',
+  'wiperight',
+  'slideleft',
+  'slideright',
+  'circleopen',
+  'circleclose',
+]);
+
+function resolveXfade(t, durA, durB) {
+  const maxDur = Math.max(0, Math.min(durA, durB) - 0.02);
+  const rawType = t && t.type && t.type !== 'none' ? String(t.type) : null;
+  if (!rawType) return { type: null, duration: 0 };
+  const type = XFADE_TYPES.has(rawType) ? rawType : 'fade';
+  const reqDur = Number(t.durationSec) || 0;
+  const duration = Math.min(Math.max(0, reqDur), maxDur);
+  if (duration <= 0) return { type: null, duration: 0 };
+  return { type, duration };
+}
+
 const TEMP_DIR = path.join(__dirname, '..', 'temp');
 if (!fs.existsSync(TEMP_DIR)) {
   fs.mkdirSync(TEMP_DIR, { recursive: true });
@@ -232,17 +255,22 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig, pip
     if (speed !== 1) {
       videoFilter += `,setpts=PTS/${speed}`;
     }
-    videoFilter += `,fps=${OUTPUT_FPS},format=yuv420p[s${i}raw]`;
+    videoFilter += `,fps=${OUTPUT_FPS},format=yuv420p,setsar=1[s${i}raw]`;
     filters.push(videoFilter);
 
     const audio = c.audio || { volume: 1, mute: false, fadeIn: 0, fadeOut: 0 };
     const clipDur = (Number(c.sourceEnd) - Number(c.sourceStart)) / speed;
-    
-    let audioFilter = `[${i}:a]atrim=start=${s}:end=${e},asetpts=PTS-STARTPTS,aresample=${AUDIO_RATE}`;
-    if (speed !== 1) {
-      const atempoChain = getAtempoChain(speed);
-      if (atempoChain.length > 0) {
-        audioFilter += `,${atempoChain.join(',')}`;
+
+    let audioFilter;
+    if (c.hasAudio === false) {
+      audioFilter = `anullsrc=channel_layout=stereo:sample_rate=${AUDIO_RATE},atrim=duration=${clipDur.toFixed(3)},asetpts=PTS-STARTPTS`;
+    } else {
+      audioFilter = `[${i}:a]atrim=start=${s}:end=${e},asetpts=PTS-STARTPTS,aresample=${AUDIO_RATE}`;
+      if (speed !== 1) {
+        const atempoChain = getAtempoChain(speed);
+        if (atempoChain.length > 0) {
+          audioFilter += `,${atempoChain.join(',')}`;
+        }
       }
     }
     if (audio.mute) {
@@ -262,7 +290,7 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig, pip
         audioFilter += `,afade=t=out:st=${fadeStart.toFixed(3)}:d=${safeFadeOut.toFixed(3)}`;
       }
     }
-    audioFilter += `[a${i}]`;
+    audioFilter += `,aformat=sample_fmts=fltp:sample_rates=${AUDIO_RATE}:channel_layouts=stereo[a${i}]`;
     filters.push(audioFilter);
 
     const tr = normalizeTransform(c.transform);
@@ -282,7 +310,7 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig, pip
         `color=c=black:s=${OUTPUT_W_DYN}x${OUTPUT_H_DYN}:r=${OUTPUT_FPS}:d=${clipDur.toFixed(3)}[bg${i}]`
       );
     }
-    filters.push(`[bg${i}][m${i}f]overlay=x=${xExpr}:y=${yExpr}[c${i}pre]`);
+    filters.push(`[bg${i}][m${i}f]overlay=x=${xExpr}:y=${yExpr},setsar=1[c${i}pre]`);
 
     const pipIdx = pipInputIndexByClip && pipInputIndexByClip[i];
     const pip = c.pip;
@@ -301,7 +329,7 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig, pip
       filters.push(pipChain);
       const ox = bw > 0 ? Math.max(0, rect.x - bw) : rect.x;
       const oy = bw > 0 ? Math.max(0, rect.y - bw) : rect.y;
-      filters.push(`[c${i}pre][pip${i}]overlay=x=${ox}:y=${oy}:format=auto:eof_action=repeat[c${i}]`);
+      filters.push(`[c${i}pre][pip${i}]overlay=x=${ox}:y=${oy}:format=auto:eof_action=repeat,setsar=1[c${i}]`);
     } else {
       filters.push(`[c${i}pre]null[c${i}]`);
     }
@@ -323,22 +351,23 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig, pip
     for (let i = 0; i < clips.length - 1; i++) {
       const nextV = `c${i + 1}`;
       const nextA = `a${i + 1}`;
-      const t = transitions[`${clips[i].id}|${clips[i + 1].id}`];
+      const t = resolveXfade(
+        transitions[`${clips[i].id}|${clips[i + 1].id}`],
+        clipDurations[i],
+        clipDurations[i + 1]
+      );
       const isLast = i === clips.length - 2;
       const vLabel = isLast ? 'vc' : `vc${i}`;
       const aLabel = isLast ? 'ac' : `ac${i}`;
-      const maxDur = Math.max(0, Math.min(clipDurations[i], clipDurations[i + 1]) - 0.02);
-      const reqDur = t && t.type && t.type !== 'none' ? Number(t.durationSec) || 0 : 0;
-      const effDur = Math.min(reqDur, maxDur);
-      const hasTransition = t && t.type && t.type !== 'none' && effDur > 0;
+      const hasTransition = Boolean(t.type);
 
       if (!hasTransition) {
         filters.push(
           `[${curV}][${curA}][${nextV}][${nextA}]concat=n=2:v=1:a=1[${vLabel}][${aLabel}]`
         );
       } else {
-        const dur = effDur.toFixed(3);
-        const offset = Math.max(0, cumDuration + clipDurations[i] - effDur).toFixed(3);
+        const dur = t.duration.toFixed(3);
+        const offset = Math.max(0, cumDuration + clipDurations[i] - t.duration).toFixed(3);
         filters.push(
           `[${curV}][${nextV}]xfade=transition=${t.type}:duration=${dur}:offset=${offset}[${vLabel}]`
         );
@@ -350,7 +379,7 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig, pip
       curV = vLabel;
       curA = aLabel;
       cumDuration += clipDurations[i];
-      if (hasTransition) cumDuration -= effDur;
+      if (hasTransition) cumDuration -= t.duration;
       composedStart.push(cumDuration);
     }
   }

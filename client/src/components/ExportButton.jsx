@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { sanitizeTransition } from '../lib/transitions.js';
 
 const PLATFORM_PRESETS = {
   tiktok: { label: 'TikTok', resolution: '1080', fps: 30, icon: '📱' },
@@ -209,10 +210,10 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
       const transitionsMap = {};
       clips.forEach((c, i) => {
         if (i < clips.length - 1) {
-          const t = transitions[i] || { type: 'none', durationSec: 0 };
+          const t = sanitizeTransition(transitions[i]);
           transitionsMap[`${c.id}|${clips[i + 1].id}`] = {
             type: t.type,
-            durationSec: Number(t.durationSec) || 0,
+            durationSec: t.durationSec,
           };
         }
       });

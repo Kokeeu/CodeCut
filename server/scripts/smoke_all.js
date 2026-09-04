@@ -23,6 +23,8 @@ async function ensureFixtures() {
   if (!fs.existsSync(OUT)) fs.mkdirSync(OUT, { recursive: true });
   const v1 = path.join(OUT, 'a.mp4');
   const v2 = path.join(OUT, 'b.mp4');
+  const noAudio = path.join(OUT, 'no-audio.mp4');
+  const portraitStereo = path.join(OUT, 'portrait-stereo-48k.mp4');
   if (!fs.existsSync(v1)) {
     await runFfmpeg([
       '-y', '-f', 'lavfi', '-i', 'color=c=blue:s=1280x720:d=3:r=30',
@@ -39,15 +41,29 @@ async function ensureFixtures() {
       '-c:a', 'aac', '-shortest', v2,
     ]);
   }
-  return { v1, v2 };
+  if (!fs.existsSync(noAudio)) {
+    await runFfmpeg([
+      '-y', '-f', 'lavfi', '-i', 'color=c=green:s=854x480:d=3:r=30',
+      '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', noAudio,
+    ]);
+  }
+  if (!fs.existsSync(portraitStereo)) {
+    await runFfmpeg([
+      '-y', '-f', 'lavfi', '-i', 'color=c=purple:s=720x1280:d=3:r=30',
+      '-f', 'lavfi', '-i', 'sine=frequency=660:sample_rate=48000:duration=3',
+      '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac', '-ac', '2', '-shortest', portraitStereo,
+    ]);
+  }
+  return { v1, v2, noAudio, portraitStereo };
 }
 
-async function testCase(label, clips, transitions, extraFields = {}) {
+async function testCase(label, clips, transitions, extraFields = {}, inputFiles = null) {
   const { v1, v2 } = await ensureFixtures();
   const dest = path.join(OUT, `out-${label.replace(/\W+/g, '_')}.mp4`);
   try {
     await exportProject({
-      files: [{ path: v1 }, { path: v2 }],
+      files: inputFiles || [{ path: v1 }, { path: v2 }],
       fields: {
         clips: JSON.stringify(clips),
         transitions: JSON.stringify(transitions),
@@ -67,7 +83,7 @@ async function testCase(label, clips, transitions, extraFields = {}) {
 }
 
 async function main() {
-  await ensureFixtures();
+  const fixtures = await ensureFixtures();
   const results = [];
 
   results.push(await testCase('single_clip', [
@@ -130,6 +146,16 @@ async function main() {
       pip: { enabled: true, fileIndex: 1, position: 'bottom-right', size: 30, opacity: 1, border: true, borderWidth: 4, borderRadius: 8 },
     },
   ], {}));
+
+  results.push(await testCase('mixed_media_audio_normalization', [
+    { id: 'c1', fileIndex: 0, sourceStart: 0, sourceEnd: 1 },
+    { id: 'c2', fileIndex: 1, sourceStart: 0.5, sourceEnd: 1.5 },
+    { id: 'c3', fileIndex: 2, sourceStart: 1, sourceEnd: 2 },
+  ], {}, {}, [
+    { path: fixtures.v1 },
+    { path: fixtures.noAudio },
+    { path: fixtures.portraitStereo },
+  ]));
 
   const failed = results.filter((ok) => !ok).length;
   console.log(`\n${results.length - failed}/${results.length} passed`);

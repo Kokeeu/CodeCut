@@ -78,19 +78,25 @@ router.post('/', upload.array('videos', MAX_FILES), async (req, res) => {
     duration: (c.sourceEnd - c.sourceStart) / (c.speed || 1),
   }));
 
+  let infoByFileIndex = [];
   try {
     const validation = await validateInputVideos(files, normalizedClips);
     if (!validation.valid) {
       safeUnlinkAll(files.map((f) => f.path));
       return res.status(400).json({ error: validation.errors.join('; ') });
     }
+    infoByFileIndex = validation.infoByFileIndex || [];
   } catch (err) {
     safeUnlinkAll(files.map((f) => f.path));
     return res.status(400).json({ error: `Video validation failed: ${err.message}` });
   }
 
-  const clipPaths = normalizedClips.map((c) => files[c.fileIndex].path);
-  const { extraPaths, pipInputIndexByClip } = collectPipInputs(normalizedClips, files);
+  const pipelineClips = normalizedClips.map((c) => ({
+    ...c,
+    hasAudio: infoByFileIndex[c.fileIndex]?.hasAudio !== false,
+  }));
+  const clipPaths = pipelineClips.map((c) => files[c.fileIndex].path);
+  const { extraPaths, pipInputIndexByClip } = collectPipInputs(pipelineClips, files);
   const inputPaths = [...clipPaths, ...extraPaths];
 
   const outputName = `composed-${Date.now()}.mp4`;
@@ -115,7 +121,7 @@ router.post('/', upload.array('videos', MAX_FILES), async (req, res) => {
     try {
       const pipelinePromise = runPipeline({
         inputPaths,
-        clips: normalizedClips,
+        clips: pipelineClips,
         transitions,
         meta,
         outputPath,
