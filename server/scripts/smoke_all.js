@@ -123,7 +123,7 @@ async function main() {
       sourceStart: 0,
       sourceEnd: 2,
       texts: [{
-        text: 'Hello world',
+        text: 'Hello world\nSecond line',
         x: 540,
         y: 200,
         size: 64,
@@ -133,6 +133,47 @@ async function main() {
         startOffset: 0,
         endOffset: 2,
         animation: { type: 'karaoke', duration: 1.2 },
+      }],
+    },
+  ], {}));
+
+  results.push(await testCase('multiline_text', [
+    {
+      id: 'c1',
+      fileIndex: 0,
+      sourceStart: 0,
+      sourceEnd: 2,
+      texts: [{
+        text: 'Primera línea\nSegunda línea',
+        x: 540,
+        y: 200,
+        size: 64,
+        font: 'inter',
+        color: '#ffffff',
+        align: 'center',
+        startOffset: 0,
+        endOffset: 2,
+      }],
+    },
+  ], {}));
+
+  results.push(await testCase('typewriter_multiline_text', [
+    {
+      id: 'c1',
+      fileIndex: 0,
+      sourceStart: 0,
+      sourceEnd: 2,
+      texts: [{
+        text: 'First line\nSecond line',
+        x: 540,
+        y: 200,
+        size: 64,
+        font: 'inter',
+        color: '#ffffff',
+        align: 'center',
+        startOffset: 0,
+        endOffset: 2,
+        animation: { type: 'typewriter', duration: 1.2 },
       }],
     },
   ], {}));

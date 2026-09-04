@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import useDebouncedCallback from '../hooks/useDebouncedCallback.js';
 
-export default function TextContentInput({ value, onChange, ...props }) {
+export default function TextContentInput({ value, onChange, className = '', rows = 2, ...props }) {
   const [localValue, setLocalValue] = useState(value);
 
   useEffect(() => {
@@ -19,9 +19,11 @@ export default function TextContentInput({ value, onChange, ...props }) {
   };
 
   return (
-    <input
+    <textarea
+      rows={rows}
       value={localValue}
       onChange={handleChange}
+      className={`resize-none overflow-y-auto ${className}`}
       {...props}
     />
   );

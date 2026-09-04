@@ -1,6 +1,7 @@
 import SpeedPicker from './SpeedPicker.jsx';
 import AudioPanel from './AudioPanel.jsx';
 import PipPicker from './PipPicker.jsx';
+import TextContentInput from './TextContentInput.jsx';
 import { getAnimationTypes } from '../lib/textAnimations.js';
 
 export const FONT_OPTIONS = [
@@ -204,9 +205,9 @@ export default function CardMetadata({
                       ×
                     </button>
                   </div>
-                  <input
+                  <TextContentInput
                     value={t.text}
-                    onChange={(e) => onUpdateText(t.id, { text: e.target.value })}
+                    onChange={(newValue) => onUpdateText(t.id, { text: newValue })}
                     onClick={(e) => e.stopPropagation()}
                     placeholder="Text content"
                     maxLength={100}
