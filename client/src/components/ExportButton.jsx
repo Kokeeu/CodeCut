@@ -73,10 +73,10 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
     }
   };
 
-  const resetExport = () => {
+  const resetExport = ({ clearError = true } = {}) => {
     setStatus('idle');
     setProgress(0);
-    setError(null);
+    if (clearError) setError(null);
   };
 
   const cancelExport = () => {
@@ -111,7 +111,7 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
       .catch((err) => {
         console.error('Download error:', err);
         setError(err.message || 'Download failed');
-        resetExport();
+        resetExport({ clearError: false });
       });
   };
 
@@ -140,7 +140,7 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
           eventSourceRef.current = null;
           jobIdRef.current = null;
           setError(data.error || 'Processing failed');
-          resetExport();
+          resetExport({ clearError: false });
         }
       } catch (err) {
         console.error('Error parsing progress data:', err);
@@ -155,7 +155,7 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
       eventSourceRef.current = null;
       jobIdRef.current = null;
       setError('Connection lost');
-      resetExport();
+      resetExport({ clearError: false });
     };
   };
 
@@ -268,7 +268,7 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
     } catch (e) {
       console.error(e);
       setError(e.message || 'Export failed');
-      resetExport();
+      resetExport({ clearError: false });
     }
   };
 
@@ -410,6 +410,12 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
               <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
               Cancel Export
             </button>
+          </div>
+        )}
+
+        {error && status === 'idle' && !showSettings && (
+          <div className="absolute right-0 top-full mt-2 w-72 p-2.5 rounded-lg bg-red-950/95 border border-red-800 text-[11px] leading-relaxed text-red-200 shadow-2xl z-50">
+            {error}
           </div>
         )}
       </div>

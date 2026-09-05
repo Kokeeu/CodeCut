@@ -156,18 +156,19 @@ router.post('/', upload.fields([
 
       await pipelinePromise;
       updateJob(jobId, { status: 'ready', progress: 1 });
+      expireJobLater(jobId);
     } catch (err) {
       updateJob(jobId, { status: 'error', error: err.message || String(err) });
       safeUnlinkAll([...inputPaths, outputPath]);
+      expireJobLater(jobId);
     } finally {
       ffmpegProcesses.delete(jobId);
     }
   }).catch((err) => {
     updateJob(jobId, { status: 'error', error: err.message || String(err) });
     safeUnlinkAll([...inputPaths, outputPath]);
+    expireJobLater(jobId);
   });
-
-  expireJobLater(jobId);
 });
 
 router.get('/download/:jobId', (req, res) => {

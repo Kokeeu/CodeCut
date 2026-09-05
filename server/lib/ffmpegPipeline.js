@@ -596,17 +596,43 @@ function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog, 
 
   const preset = totalDuration < 30 ? 'medium' : 'veryfast';
 
-  const TIMEOUT_MS = 5 * 60 * 1000;
+  const STALL_TIMEOUT_MS = 5 * 60 * 1000;
 
   let command = null;
   const promise = new Promise((resolve, reject) => {
     command = ffmpeg();
     let timeoutHandle = null;
-    let resolved = false;
+    let settled = false;
+    let cleanedUp = false;
 
     const cleanup = () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
       if (timeoutHandle) clearTimeout(timeoutHandle);
       cleanupTextFiles(textFiles);
+    };
+
+    const fail = (err, kill = false) => {
+      if (settled) return;
+      settled = true;
+      if (kill) {
+        try {
+          command.kill('SIGKILL');
+        } catch (killErr) {
+          console.warn('[pipeline] ffmpeg kill failed:', killErr.message);
+        }
+      }
+      cleanup();
+      reject(err);
+    };
+
+    const resetStallTimeout = () => {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+      timeoutHandle = setTimeout(() => {
+        const err = new Error('FFmpeg stopped responding for 5 minutes');
+        console.error('[pipeline] ffmpeg stalled:', err.message);
+        fail(err, true);
+      }, STALL_TIMEOUT_MS);
     };
 
     inputPaths.forEach((p) => command.input(p));
@@ -627,21 +653,15 @@ function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog, 
       .on('start', (cmd) => {
         if (onLog) onLog('start', cmd);
         console.log('[pipeline] ffmpeg start:', cmd);
-        timeoutHandle = setTimeout(() => {
-          if (!resolved) {
-            resolved = true;
-            command.kill('SIGKILL');
-            cleanup();
-            reject(new Error('FFmpeg timeout: processing exceeded 5 minutes'));
-          }
-        }, TIMEOUT_MS);
+        resetStallTimeout();
       })
       .on('stderr', (line) => {
         if (onLog) onLog('stderr', line);
-        
-        if (onProgress && totalDuration > 0) {
-          const timeMatch = line.match(/time=(\d+:\d+:\d+\.\d+)/);
-          if (timeMatch) {
+
+        const timeMatch = line.match(/time=(\d+:\d+:\d+\.\d+)/);
+        if (timeMatch) {
+          resetStallTimeout();
+          if (onProgress && totalDuration > 0) {
             const currentTime = parseTimeToSeconds(timeMatch[1]);
             const progress = Math.min(1, currentTime / totalDuration);
             onProgress(progress);
@@ -649,8 +669,8 @@ function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog, 
         }
       })
       .on('error', (err) => {
-        if (resolved) return;
-        resolved = true;
+        if (settled) return;
+        settled = true;
         if (onLog) onLog('error', err.message);
         console.error('[pipeline] ffmpeg error:', err.message);
         console.error('[pipeline] filter graph:', filterGraph);
@@ -658,8 +678,8 @@ function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog, 
         reject(err);
       })
       .on('end', () => {
-        if (resolved) return;
-        resolved = true;
+        if (settled) return;
+        settled = true;
         if (onLog) onLog('end', null);
         if (onProgress) onProgress(1);
         console.log('[pipeline] done ->', outputPath);
@@ -669,11 +689,7 @@ function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog, 
       .save(outputPath);
 
     command._kill = () => {
-      if (!resolved) {
-        resolved = true;
-        command.kill('SIGKILL');
-        cleanup();
-      }
+      fail(new Error('Export cancelled'), true);
     };
   });
   promise._kill = () => {
