@@ -1,5 +1,6 @@
 import { useRef, useEffect } from 'react';
 import { FONT_CSS } from './CardMetadata.jsx';
+import CollaborativeRatingOverlay from './CollaborativeRatingOverlay.jsx';
 
 const EXPORT_H = 1920;
 const EXPORT_W = 1080;
@@ -23,6 +24,8 @@ export default function CardTemplate({
   onClick,
   showPlaceholder = true,
   videoPlaceholder,
+  participants,
+  collaborativeRating,
 }) {
   const videoRef = useRef(null);
   const bgRef = useRef(null);
@@ -148,6 +151,14 @@ export default function CardTemplate({
           </div>
         );
       })}
+
+      {collaborativeRating?.enabled && (
+        <CollaborativeRatingOverlay
+          participants={participants || []}
+          rating={collaborativeRating}
+          scale={ds}
+        />
+      )}
 
       {!texts && hasBottomText && (
         <div

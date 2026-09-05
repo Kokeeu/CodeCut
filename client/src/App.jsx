@@ -30,6 +30,7 @@ export default function App() {
     fileById, activeClip, activeFile, activeClipDuration, pendingFiles, undo,
     handleFilesAdded, handleAddClip, handleDeleteClip, handleDuplicateClip, handleReorder,
     handleTrimChange, handleTransformChange, handleSpeedChange, handleAudioChange, handlePipChange,
+    handleCollaborativeRatingChange,
     handleAddText, handleUpdateText, handleDeleteText, handleSplit, handleTransitionChange,
     handleSelectClip, handleApplyTemplate, handleReset, handleSaveProject, handleLoadProject,
     handleRestore,
@@ -410,6 +411,7 @@ export default function App() {
               onSpeedChange={handleSpeedChange}
               onAudioChange={handleAudioChange}
               onPipChange={handlePipChange}
+              onCollaborativeRatingChange={handleCollaborativeRatingChange}
               onTrimChange={handleTrimChange}
               onTransformChange={handleTransformChange}
               onSeek={handleSeek}
@@ -461,6 +463,7 @@ export default function App() {
               onSpeedChange={handleSpeedChange}
               onAudioChange={handleAudioChange}
               onPipChange={handlePipChange}
+              onCollaborativeRatingChange={handleCollaborativeRatingChange}
               onTrimChange={handleTrimChange}
               onTransformChange={handleTransformChange}
               onSeek={handleSeek}

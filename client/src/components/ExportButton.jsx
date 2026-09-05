@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { sanitizeTransition } from '../lib/transitions.js';
+import { renderCollaborativeOverlay } from '../lib/collaborativeRanking.js';
 
 const PLATFORM_PRESETS = {
   tiktok: { label: 'TikTok', resolution: '1080', fps: 30, icon: '📱' },
@@ -180,7 +181,12 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
         form.append('videos', f.file, f.name);
       });
 
-      const clipsPayload = clips.map((c) => ({
+      const ratingOverlayBlobs = await Promise.all(
+        clips.map((clip) => renderCollaborativeOverlay(meta, clip))
+      );
+      let ratingOverlayFileIndex = 0;
+
+      const clipsPayload = clips.map((c, clipIndex) => ({
         id: c.id,
         fileIndex: fileIndexById[c.fileId],
         sourceStart: c.sourceStart,
@@ -203,11 +209,19 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
               borderRadius: c.pip.borderRadius || 8,
             }
           : null,
+        collaborativeRating: c.collaborativeRating || null,
+        ratingOverlayFileIndex: ratingOverlayBlobs[clipIndex]
+          ? ratingOverlayFileIndex++
+          : null,
         texts: (c.texts || []).map((t) => ({
           ...t,
           animation: t.animation || null,
         })),
       }));
+
+      ratingOverlayBlobs.forEach((blob, index) => {
+        if (blob) form.append('ratingOverlays', blob, `rating-overlay-${index}.png`);
+      });
 
       const transitionsMap = {};
       clips.forEach((c, i) => {
@@ -222,7 +236,16 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
 
       form.append('clips', JSON.stringify(clipsPayload));
       form.append('transitions', JSON.stringify(transitionsMap));
-      form.append('meta', JSON.stringify(meta || {}));
+      const collaborativeRanking = meta?.collaborativeRanking
+        ? {
+            ...meta.collaborativeRanking,
+            participants: (meta.collaborativeRanking.participants || []).map(({ image: _image, ...participant }) => participant),
+          }
+        : undefined;
+      form.append('meta', JSON.stringify({
+        ...(meta || {}),
+        ...(collaborativeRanking ? { collaborativeRanking } : {}),
+      }));
       form.append('exportConfig', JSON.stringify(config));
 
       const res = await fetch('/api/trim', { method: 'POST', body: form });

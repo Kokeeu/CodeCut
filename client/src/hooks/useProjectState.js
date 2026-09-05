@@ -8,6 +8,7 @@ import {
   DEFAULT_TRANSFORM,
   DEFAULT_TRANSITION,
   PROJECT_VERSION,
+  makeDefaultParticipants,
   makeClip,
   nextId,
 } from '../lib/projectDefaults.js';
@@ -224,6 +225,9 @@ export default function useProjectState() {
         transform: { ...(source.transform || DEFAULT_TRANSFORM) },
         audio: { ...(source.audio || DEFAULT_AUDIO) },
         pip: { ...(source.pip || DEFAULT_PIP) },
+        collaborativeRating: source.collaborativeRating
+          ? { ...source.collaborativeRating, scores: { ...(source.collaborativeRating.scores || {}) } }
+          : null,
       };
       const nextClips = [...prev.clips];
       nextClips.splice(idx + 1, 0, dup);
@@ -292,6 +296,23 @@ export default function useProjectState() {
     , 'pip');
   }, [activeClipId, setClips]);
 
+  const handleCollaborativeRatingChange = useCallback((partial) => {
+    setClips((prev) => prev.map((clip) => (
+      clip.id === activeClipId
+        ? {
+            ...clip,
+            collaborativeRating: {
+              enabled: true,
+              average: '0.0',
+              scores: {},
+              ...(clip.collaborativeRating || {}),
+              ...partial,
+            },
+          }
+        : clip
+    )), 'collaborative-rating');
+  }, [activeClipId, setClips]);
+
   const handleAddText = useCallback(() => {
     if (!activeClipId) return;
     const id = nextId('text');
@@ -356,6 +377,9 @@ export default function useProjectState() {
         transform: { ...(source.transform || DEFAULT_TRANSFORM) },
         audio: { ...(source.audio || DEFAULT_AUDIO) },
         pip: { ...(source.pip || DEFAULT_PIP) },
+        collaborativeRating: source.collaborativeRating
+          ? { ...source.collaborativeRating, scores: { ...(source.collaborativeRating.scores || {}) } }
+          : null,
         texts: sliceClipTexts(source.texts, splitOffset, source.sourceEnd - source.sourceStart),
       };
       const nextClips = [...prev.clips];
@@ -386,10 +410,24 @@ export default function useProjectState() {
     if (!template) return;
     setDoc((prev) => {
       if (prev.clips.length === 0) return prev;
+      const currentParticipants = prev.meta?.collaborativeRanking?.participants || [];
+      const participants = template.collaborativeRanking
+        ? (currentParticipants.length >= 2 ? currentParticipants : makeDefaultParticipants())
+        : currentParticipants;
+      const collaborativeRanking = template.collaborativeRanking
+        ? { enabled: true, participants }
+        : prev.meta?.collaborativeRanking
+          ? { ...prev.meta.collaborativeRanking, enabled: false }
+          : undefined;
       return {
         ...prev,
-        clips: prev.clips.map((c, index) => applyClipTemplate(c, template, index)),
-        meta: { ...prev.meta, blur: template.blur, blurEnabled: template.blurEnabled },
+        clips: prev.clips.map((c, index) => applyClipTemplate(c, template, index, participants)),
+        meta: {
+          ...prev.meta,
+          blur: template.blur,
+          blurEnabled: template.blurEnabled,
+          ...(collaborativeRanking ? { collaborativeRanking } : {}),
+        },
       };
     }, 'apply-template');
     setSelectedTextId(null);
@@ -421,6 +459,9 @@ export default function useProjectState() {
         transform: c.transform || { ...DEFAULT_TRANSFORM },
         audio: c.audio || { ...DEFAULT_AUDIO },
         pip: c.pip ? { ...c.pip, fileName: fileNames[c.pip.fileId] || '' } : { ...DEFAULT_PIP },
+        collaborativeRating: c.collaborativeRating
+          ? { ...c.collaborativeRating, scores: { ...(c.collaborativeRating.scores || {}) } }
+          : null,
         texts: (c.texts || []).map((t) => ({
           text: t.text,
           x: t.x,
@@ -467,6 +508,9 @@ export default function useProjectState() {
           ...(c.pip || DEFAULT_PIP),
           fileId: pipFileId || null,
         },
+        collaborativeRating: c.collaborativeRating
+          ? { ...c.collaborativeRating, scores: { ...(c.collaborativeRating.scores || {}) } }
+          : null,
         texts: (c.texts || []).map((t) => ({
           id: nextId('text'),
           text: t.text,
@@ -620,6 +664,7 @@ export default function useProjectState() {
     handleSpeedChange,
     handleAudioChange,
     handlePipChange,
+    handleCollaborativeRatingChange,
     handleAddText,
     handleUpdateText,
     handleDeleteText,

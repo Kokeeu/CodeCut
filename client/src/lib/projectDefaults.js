@@ -23,7 +23,16 @@ export const DEFAULT_TEXT_STYLE = {
   strokeWidth: 2,
   rotation: 0,
 };
-export const PROJECT_VERSION = '0.12';
+export const PROJECT_VERSION = '0.13';
+
+export const PARTICIPANT_ACCENTS = [
+  '#fb7185',
+  '#22d3ee',
+  '#a78bfa',
+  '#fbbf24',
+  '#34d399',
+  '#f472b6',
+];
 
 export const BG_BRIGHTNESS = -0.05;
 export const BG_SATURATION = 0.5;
@@ -35,6 +44,13 @@ export function nextId(prefix) {
     ? crypto.randomUUID().slice(0, 8)
     : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   return `${prefix}-${uniq}-${idCounter.value.toString(36)}`;
+}
+
+export function makeDefaultParticipants() {
+  return [
+    { id: nextId('participant'), name: 'Participante 1', image: null, accent: PARTICIPANT_ACCENTS[0] },
+    { id: nextId('participant'), name: 'Participante 2', image: null, accent: PARTICIPANT_ACCENTS[1] },
+  ];
 }
 
 export function makeClip(fileId, duration, extras = {}) {
@@ -81,6 +97,22 @@ export const TEMPLATES = [
       { id: 'tpl-2-text-3', text: 'TÍTULO DE LA\nCANCIÓN', x: 70, y: 1190, size: 68, align: 'left' },
       { id: 'tpl-2-text-4', text: 'ARTISTA', x: 70, y: 1380, size: 52, align: 'left' },
       { id: 'tpl-2-text-5', text: 'TOP 10 • SEMANA 01', x: 70, y: 1490, size: 36, align: 'left' },
+    ],
+  },
+  {
+    id: 'tpl-top-musical-colaborativo',
+    name: 'Top Colaborativo',
+    description: 'Fotos, nombres, notas manuales y promedio por canción',
+    font: 'bebasneue',
+    color: '#ffffff',
+    blur: 30,
+    blurEnabled: true,
+    collaborativeRanking: true,
+    texts: [
+      { id: 'tpl-collab-text-1', text: 'TOP DE CANCIONES', x: 540, y: 105, size: 78, align: 'center' },
+      { id: 'tpl-collab-text-2', text: '#01', x: 540, y: 205, size: 118, align: 'center', color: '#c084fc' },
+      { id: 'tpl-collab-text-3', text: 'TÍTULO DE LA CANCIÓN', x: 540, y: 1010, size: 62, align: 'center' },
+      { id: 'tpl-collab-text-4', text: 'ARTISTA', x: 540, y: 1100, size: 44, align: 'center', color: '#c4b5fd' },
     ],
   },
   {

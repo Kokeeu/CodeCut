@@ -21,7 +21,7 @@ const upload = multer({
   dest: TEMP_DIR,
   limits: {
     fileSize: MAX_SIZE_MB * 1024 * 1024,
-    files: MAX_FILES,
+    files: MAX_FILES * 2,
   },
 });
 
@@ -34,9 +34,15 @@ const DEFAULT_META = {
   blurEnabled: true,
 };
 
-router.post('/', upload.array('videos', MAX_FILES), async (req, res) => {
-  const files = req.files || [];
+router.post('/', upload.fields([
+  { name: 'videos', maxCount: MAX_FILES },
+  { name: 'ratingOverlays', maxCount: MAX_FILES },
+]), async (req, res) => {
+  const files = req.files?.videos || [];
+  const ratingOverlayFiles = req.files?.ratingOverlays || [];
+  const uploadedFiles = [...files, ...ratingOverlayFiles];
   if (files.length === 0) {
+    safeUnlinkAll(uploadedFiles.map((f) => f.path));
     return res.status(400).json({ error: 'No video files uploaded under field "videos".' });
   }
 
@@ -50,24 +56,24 @@ router.post('/', upload.array('videos', MAX_FILES), async (req, res) => {
     if (req.body.meta) meta = { ...meta, ...JSON.parse(req.body.meta) };
     if (req.body.exportConfig) exportConfig = JSON.parse(req.body.exportConfig);
   } catch (e) {
-    safeUnlinkAll(files.map((f) => f.path));
+    safeUnlinkAll(uploadedFiles.map((f) => f.path));
     return res.status(400).json({ error: 'Invalid JSON in clips, transitions, meta or exportConfig.' });
   }
 
   const validationError = validateClips(clips);
   if (validationError) {
-    safeUnlinkAll(files.map((f) => f.path));
+    safeUnlinkAll(uploadedFiles.map((f) => f.path));
     return res.status(400).json({ error: validationError });
   }
 
   for (const clip of clips) {
     if (typeof clip.fileIndex !== 'number' || clip.fileIndex < 0 || clip.fileIndex >= files.length) {
-      safeUnlinkAll(files.map((f) => f.path));
+      safeUnlinkAll(uploadedFiles.map((f) => f.path));
       return res.status(400).json({ error: `Invalid fileIndex ${clip.fileIndex} for clip ${clip.id}.` });
     }
     if (clip.pip && clip.pip.enabled && typeof clip.pip.fileIndex === 'number') {
       if (clip.pip.fileIndex < 0 || clip.pip.fileIndex >= files.length) {
-        safeUnlinkAll(files.map((f) => f.path));
+        safeUnlinkAll(uploadedFiles.map((f) => f.path));
         return res.status(400).json({ error: `Invalid PIP fileIndex ${clip.pip.fileIndex} for clip ${clip.id}.` });
       }
     }
@@ -82,12 +88,12 @@ router.post('/', upload.array('videos', MAX_FILES), async (req, res) => {
   try {
     const validation = await validateInputVideos(files, normalizedClips);
     if (!validation.valid) {
-      safeUnlinkAll(files.map((f) => f.path));
+      safeUnlinkAll(uploadedFiles.map((f) => f.path));
       return res.status(400).json({ error: validation.errors.join('; ') });
     }
     infoByFileIndex = validation.infoByFileIndex || [];
   } catch (err) {
-    safeUnlinkAll(files.map((f) => f.path));
+    safeUnlinkAll(uploadedFiles.map((f) => f.path));
     return res.status(400).json({ error: `Video validation failed: ${err.message}` });
   }
 
@@ -97,7 +103,18 @@ router.post('/', upload.array('videos', MAX_FILES), async (req, res) => {
   }));
   const clipPaths = pipelineClips.map((c) => files[c.fileIndex].path);
   const { extraPaths, pipInputIndexByClip } = collectPipInputs(pipelineClips, files);
-  const inputPaths = [...clipPaths, ...extraPaths];
+  const ratingOverlayInputIndexByClip = {};
+  const ratingOverlayPaths = [];
+  let nextRatingInputIndex = clipPaths.length + extraPaths.length;
+  pipelineClips.forEach((clip, index) => {
+    if (!Number.isInteger(clip.ratingOverlayFileIndex)) return;
+    const overlayFile = ratingOverlayFiles[clip.ratingOverlayFileIndex];
+    if (!overlayFile) return;
+    ratingOverlayInputIndexByClip[index] = nextRatingInputIndex;
+    ratingOverlayPaths.push(overlayFile.path);
+    nextRatingInputIndex += 1;
+  });
+  const inputPaths = [...clipPaths, ...extraPaths, ...ratingOverlayPaths];
 
   const outputName = `composed-${Date.now()}.mp4`;
   const outputPath = path.join(TEMP_DIR, outputName);
@@ -127,6 +144,7 @@ router.post('/', upload.array('videos', MAX_FILES), async (req, res) => {
         outputPath,
         exportConfig,
         pipInputIndexByClip,
+        ratingOverlayInputIndexByClip,
         onProgress: (progress) => {
           updateJob(jobId, { progress });
         },

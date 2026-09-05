@@ -43,7 +43,8 @@ Vite hace proxy de `/api/*` a `http://localhost:4000`.
 2. Desde el media pool, añade más clips con **Timeline**.
 3. Edita en el timeline: click para activar, arrastra para reordenar, `S` para split, transiciones en las costuras.
 4. Ajusta trim, textos (arrastrar/redimensionar), velocidad, audio, PIP y plantillas.
-5. **Export** envía la composición a FFmpeg y descarga el MP4 cuando termina.
+5. En **Top Colaborativo**, abre **Ranking** para cargar fotos circulares, editar nombres y registrar notas de 0 a 10 y el promedio de cada clip.
+6. **Export** envía la composición a FFmpeg y descarga el MP4 cuando termina.
 
 El proyecto se auto-guarda en el navegador (JSON + videos en IndexedDB cuando caben). Restore rehidrata clips y media. Un `.json` de proyecto no incluye los videos: si no están en caché, hay que re-subir archivos con el mismo nombre.
 
@@ -60,7 +61,7 @@ El proyecto se auto-guarda en el navegador (JSON + videos en IndexedDB cuando ca
 
 Flujo asíncrono con progreso SSE:
 
-1. `POST /api/trim` — multipart (`videos`, `clips`, `transitions`, `meta`, `exportConfig`) → `{ jobId }` (HTTP 202)
+1. `POST /api/trim` — multipart (`videos`, `ratingOverlays`, `clips`, `transitions`, `meta`, `exportConfig`) → `{ jobId }` (HTTP 202)
 2. `GET /api/trim/progress/:jobId` — SSE `{ progress, status }`
 3. `GET /api/trim/download/:jobId` — MP4 cuando `status` es `ready`
 4. `DELETE /api/trim/:jobId` — cancela el job
@@ -77,8 +78,8 @@ npm start          # en otra terminal
 node scripts/smoke_all.js
 ```
 
-`smoke_all.js` cubre clip único, multi-clip, transiciones, karaoke y PIP, usando el flujo 202 → SSE → download.
+`smoke_all.js` cubre clip único, multi-clip, transiciones, karaoke, PIP y el overlay de calificaciones colaborativas, usando el flujo 202 → SSE → download.
 
 ## Versión
 
-v0.12 — undo unificado, PIP y karaoke en export, jobs en disco, restore de media, tests SSE.
+v0.13 — plantilla Top Colaborativo con participantes configurables, fotos circulares, notas manuales y promedio en preview y export.

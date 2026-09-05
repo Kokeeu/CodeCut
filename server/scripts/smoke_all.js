@@ -25,6 +25,7 @@ async function ensureFixtures() {
   const v2 = path.join(OUT, 'b.mp4');
   const noAudio = path.join(OUT, 'no-audio.mp4');
   const portraitStereo = path.join(OUT, 'portrait-stereo-48k.mp4');
+  const ratingOverlay = path.join(OUT, 'rating-overlay.png');
   if (!fs.existsSync(v1)) {
     await runFfmpeg([
       '-y', '-f', 'lavfi', '-i', 'color=c=blue:s=1280x720:d=3:r=30',
@@ -55,7 +56,13 @@ async function ensureFixtures() {
       '-c:a', 'aac', '-ac', '2', '-shortest', portraitStereo,
     ]);
   }
-  return { v1, v2, noAudio, portraitStereo };
+  if (!fs.existsSync(ratingOverlay)) {
+    await runFfmpeg([
+      '-y', '-f', 'lavfi', '-i', 'color=c=black@0.0:s=1080x1920,format=rgba,drawbox=x=60:y=1270:w=460:h=340:color=0xFB7185@0.9:t=fill:replace=1,drawbox=x=560:y=1270:w=460:h=340:color=0x22D3EE@0.9:t=fill:replace=1,drawbox=x=270:y=1680:w=540:h=104:color=0xA855F7@0.95:t=fill:replace=1',
+      '-frames:v', '1', ratingOverlay,
+    ]);
+  }
+  return { v1, v2, noAudio, portraitStereo, ratingOverlay };
 }
 
 async function testCase(label, clips, transitions, extraFields = {}, inputFiles = null) {
@@ -102,6 +109,13 @@ async function main() {
   results.push(await testCase('single_clip', [
     { id: 'c1', fileIndex: 0, sourceStart: 0.5, sourceEnd: 2.5, duration: 2 },
   ], {}));
+
+  results.push(await testCase('collaborative_rating_overlay', [
+    { id: 'c1', fileIndex: 0, sourceStart: 0, sourceEnd: 2, ratingOverlayFileIndex: 0 },
+  ], {}, {}, [
+    { path: fixtures.v1 },
+    { path: fixtures.ratingOverlay, fieldName: 'ratingOverlays', contentType: 'image/png' },
+  ]));
 
   results.push(await testCase('two_clips_none', [
     { id: 'c1', fileIndex: 0, sourceStart: 0, sourceEnd: 1.5, duration: 1.5 },

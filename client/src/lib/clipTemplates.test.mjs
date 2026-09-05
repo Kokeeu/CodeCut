@@ -4,6 +4,7 @@ import { applyClipTemplate, sliceClipTexts } from './clipTemplates.js';
 import { TEMPLATES, makeClip } from './projectDefaults.js';
 
 const discovery = TEMPLATES.find((template) => template.id === 'tpl-music-discovery');
+const collaborative = TEMPLATES.find((template) => template.id === 'tpl-top-musical-colaborativo');
 
 test('the first clip is a full-length intro and retains its source media', () => {
   const source = makeClip('file', 40, { sourceStart: 10, speed: 2 });
@@ -77,4 +78,24 @@ test('splitting retains the text of that clip without introducing another phase'
     assert.ok(firstHalf.every((text) => text.startOffset === 0 && text.endOffset === 5));
     assert.ok(secondHalf.every((text) => text.startOffset === 0 && text.endOffset === 7));
   }
+});
+
+test('the collaborative template assigns manual scores to every participant', () => {
+  const participants = [
+    { id: 'ana', name: 'Ana' },
+    { id: 'mateo', name: 'Mateo' },
+    { id: 'leo', name: 'Leo' },
+  ];
+  const clip = applyClipTemplate(makeClip('song', 12), collaborative, 0, participants);
+  assert.equal(clip.collaborativeRating.enabled, true);
+  assert.equal(clip.collaborativeRating.average, '8.8');
+  assert.deepEqual(clip.collaborativeRating.scores, { ana: '8.5', mateo: '9.0', leo: '0.0' });
+  assert.equal(clip.texts.length, 4);
+});
+
+test('switching away from the collaborative template removes its rating panel', () => {
+  const participant = { id: 'ana', name: 'Ana' };
+  const collaborativeClip = applyClipTemplate(makeClip('song', 12), collaborative, 0, [participant]);
+  const regularClip = applyClipTemplate(collaborativeClip, TEMPLATES[0]);
+  assert.equal(regularClip.collaborativeRating, null);
 });

@@ -232,7 +232,7 @@ function cleanupTextFiles(map) {
   Object.values(map).forEach((p) => { if (p) safeUnlink(p); });
 }
 
-function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig, pipInputIndexByClip) {
+function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig, pipInputIndexByClip, ratingOverlayInputIndexByClip) {
   const filters = [];
   const outV = 'vout';
   const outA = 'aout';
@@ -326,6 +326,7 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig, pip
 
     const pipIdx = pipInputIndexByClip && pipInputIndexByClip[i];
     const pip = c.pip;
+    let composedClipLabel = `c${i}pre`;
     if (pip && pip.enabled && Number.isInteger(pipIdx)) {
       const rect = getPipRect(pip, OUTPUT_W_DYN, OUTPUT_H_DYN);
       const opacity = Math.max(0.05, Math.min(1, Number(pip.opacity) ?? 1));
@@ -341,9 +342,16 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig, pip
       filters.push(pipChain);
       const ox = bw > 0 ? Math.max(0, rect.x - bw) : rect.x;
       const oy = bw > 0 ? Math.max(0, rect.y - bw) : rect.y;
-      filters.push(`[c${i}pre][pip${i}]overlay=x=${ox}:y=${oy}:format=auto:eof_action=repeat,setsar=1[c${i}]`);
+      filters.push(`[c${i}pre][pip${i}]overlay=x=${ox}:y=${oy}:format=auto:eof_action=repeat,setsar=1[c${i}pip]`);
+      composedClipLabel = `c${i}pip`;
+    }
+
+    const ratingOverlayIdx = ratingOverlayInputIndexByClip && ratingOverlayInputIndexByClip[i];
+    if (Number.isInteger(ratingOverlayIdx)) {
+      filters.push(`[${ratingOverlayIdx}:v]scale=${OUTPUT_W_DYN}:${OUTPUT_H_DYN}:flags=lanczos,format=rgba[rating${i}]`);
+      filters.push(`[${composedClipLabel}][rating${i}]overlay=x=0:y=0:format=auto:eof_action=repeat,setsar=1[c${i}]`);
     } else {
-      filters.push(`[c${i}pre]null[c${i}]`);
+      filters.push(`[${composedClipLabel}]null[c${i}]`);
     }
   }
 
@@ -563,10 +571,18 @@ function parseTimeToSeconds(timeStr) {
   return hours * 3600 + minutes * 60 + seconds;
 }
 
-function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog, onProgress, exportConfig, pipInputIndexByClip }) {
+function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog, onProgress, exportConfig, pipInputIndexByClip, ratingOverlayInputIndexByClip }) {
   const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const textFiles = writeTextFiles(clips, runId);
-  const filterGraph = buildFilterGraph(clips, transitions, meta, textFiles, exportConfig, pipInputIndexByClip);
+  const filterGraph = buildFilterGraph(
+    clips,
+    transitions,
+    meta,
+    textFiles,
+    exportConfig,
+    pipInputIndexByClip,
+    ratingOverlayInputIndexByClip
+  );
 
   const totalDuration = clips.reduce((sum, c) => {
     return sum + (Number(c.sourceEnd) - Number(c.sourceStart)) / (Number(c.speed) || 1);

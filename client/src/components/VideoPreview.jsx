@@ -5,6 +5,7 @@ import useThrottledCallback from '../hooks/useThrottledCallback.js';
 import { getPipRect, getTextAlignTransform } from '../lib/pipLayout.js';
 import { BG_BRIGHTNESS, BG_SATURATION } from '../lib/projectDefaults.js';
 import { getPreviewTransitionStyles } from '../lib/transitions.js';
+import CollaborativeRatingOverlay from './CollaborativeRatingOverlay.jsx';
 
 function formatTime(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
@@ -110,6 +111,13 @@ function ClipMedia({
           />
         );
       })()}
+      {meta?.collaborativeRanking?.enabled && (
+        <CollaborativeRatingOverlay
+          participants={meta.collaborativeRanking.participants || []}
+          rating={clip.collaborativeRating}
+          scale={displayScale}
+        />
+      )}
       {texts.map((tx) => {
         const isVisible = tx.startOffset == null || tx.endOffset == null
           || (currentOffset >= tx.startOffset && currentOffset <= tx.endOffset);

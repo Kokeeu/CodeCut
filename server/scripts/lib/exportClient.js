@@ -15,8 +15,10 @@ function postMultipart({ files, fields, host = 'localhost', port = 4000, pathNam
 
     for (const f of files) {
       const filename = path.basename(f.path);
+      const fieldName = f.fieldName || 'videos';
+      const contentType = f.contentType || 'video/mp4';
       parts.push(Buffer.from(
-        `--${boundary}\r\nContent-Disposition: form-data; name="videos"; filename="${filename}"\r\nContent-Type: video/mp4\r\n\r\n`
+        `--${boundary}\r\nContent-Disposition: form-data; name="${fieldName}"; filename="${filename}"\r\nContent-Type: ${contentType}\r\n\r\n`
       ));
       parts.push(fs.readFileSync(f.path));
       parts.push(Buffer.from('\r\n'));

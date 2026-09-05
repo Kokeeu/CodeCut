@@ -7,6 +7,7 @@ import ClipTransformControls from './ClipTransformControls.jsx';
 import TextContentInput from './TextContentInput.jsx';
 import { FONT_OPTIONS, FONT_CSS } from './CardMetadata.jsx';
 import { getAnimationTypes } from '../lib/textAnimations.js';
+import CollaborativeRankingPanel from './CollaborativeRankingPanel.jsx';
 
 function DualRangeSlider({ min, max, step, valueStart, valueEnd, onChange }) {
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -47,6 +48,7 @@ const TABS = [
   { id: 'video', label: 'Video' },
   { id: 'audio', label: 'Audio' },
   { id: 'text', label: 'Text' },
+  { id: 'ranking', label: 'Ranking' },
   { id: 'clip', label: 'Clip' },
 ];
 
@@ -84,10 +86,21 @@ function ClipTabIcon() {
   );
 }
 
+function RankingTabIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <circle cx="4.25" cy="4.5" r="2" stroke="currentColor" strokeWidth="1.2" />
+      <circle cx="9.75" cy="4.5" r="2" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M1.5 11c.2-2 1.2-3 2.75-3S6.8 9 7 11M7 11c.2-2 1.2-3 2.75-3s2.55 1 2.75 3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 const TAB_ICONS = {
   video: VideoTabIcon,
   audio: AudioTabIcon,
   text: TextTabIcon,
+  ranking: RankingTabIcon,
   clip: ClipTabIcon,
 };
 
@@ -111,7 +124,7 @@ function Section({ title, children, className = '' }) {
 export default function PropertiesPanel({
   meta, onMetaChange, activeClip, activeFile, selectedTextId, onSelectText,
   onAddText, onUpdateText, onDeleteText, onSpeedChange, onAudioChange,
-  onPipChange, onTrimChange, onTransformChange, onSeek, files, currentOffset,
+  onPipChange, onCollaborativeRatingChange, onTrimChange, onTransformChange, onSeek, files, currentOffset,
   collapsed, onToggleCollapse, embedded,
 }) {
   const [activeTab, setActiveTab] = useState('video');
@@ -487,6 +500,17 @@ export default function PropertiesPanel({
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {activeTab === 'ranking' && (
+          <div className="animate-fade-in">
+            <CollaborativeRankingPanel
+              meta={meta}
+              activeClip={activeClip}
+              onMetaChange={onMetaChange}
+              onRatingChange={onCollaborativeRatingChange}
+            />
           </div>
         )}
 

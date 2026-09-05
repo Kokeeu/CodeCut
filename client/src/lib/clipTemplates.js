@@ -1,6 +1,6 @@
 import { DEFAULT_TEXT_STYLE, nextId } from './projectDefaults.js';
 
-export function applyClipTemplate(clip, template, clipIndex = 0) {
+export function applyClipTemplate(clip, template, clipIndex = 0, participants = []) {
   const duration = clip.sourceEnd - clip.sourceStart;
   const sequence = template.clipSequence;
   const phase = sequence?.[Math.min(clipIndex, sequence.length - 1)];
@@ -9,6 +9,16 @@ export function applyClipTemplate(clip, template, clipIndex = 0) {
     ...clip,
     introEnd: undefined,
     videoLayout: phase === 'intro' ? 'cover' : undefined,
+    collaborativeRating: template.collaborativeRanking
+      ? {
+          enabled: true,
+          average: '8.8',
+          scores: Object.fromEntries(participants.map((participant, index) => [
+            participant.id,
+            index === 0 ? '8.5' : index === 1 ? '9.0' : '0.0',
+          ])),
+        }
+      : null,
     transform: template.transform ? { ...template.transform } : clip.transform,
     texts: texts.map((text) => ({
       ...DEFAULT_TEXT_STYLE,

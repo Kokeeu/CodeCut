@@ -1,5 +1,16 @@
 import CardTemplate from './CardTemplate.jsx';
 
+const SAMPLE_PARTICIPANTS = [
+  { id: 'sample-1', name: 'Ana', accent: '#fb7185' },
+  { id: 'sample-2', name: 'Mateo', accent: '#22d3ee' },
+];
+
+const SAMPLE_RATING = {
+  enabled: true,
+  average: '8.8',
+  scores: { 'sample-1': '8.5', 'sample-2': '9.0' },
+};
+
 function TemplatePreview({ template, height }) {
   const phases = template.clipSequence || [null];
   return (
@@ -14,7 +25,9 @@ function TemplatePreview({ template, height }) {
             blurEnabled={template.blurEnabled}
             height={height}
             showPlaceholder={false}
-            videoPlaceholder={phase === 'intro' ? 'cover' : phase === 'main' ? 'card' : undefined}
+            videoPlaceholder={phase === 'intro' ? 'cover' : phase === 'main' || template.collaborativeRanking ? 'card' : undefined}
+            participants={template.collaborativeRanking ? SAMPLE_PARTICIPANTS : undefined}
+            collaborativeRating={template.collaborativeRanking ? SAMPLE_RATING : undefined}
           />
           {phase && <span className="text-[9px] text-neutral-400">{phase === 'intro' ? 'Clip 1 · Intro' : 'Clip 2+ · Canción'}</span>}
         </div>
