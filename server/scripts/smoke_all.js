@@ -85,6 +85,19 @@ async function testCase(label, clips, transitions, extraFields = {}, inputFiles 
 async function main() {
   const fixtures = await ensureFixtures();
   const results = [];
+  const { TEMPLATES } = await import('../../client/src/lib/projectDefaults.js');
+  const { applyClipTemplate } = await import('../../client/src/lib/clipTemplates.js');
+  const discovery = TEMPLATES.find((template) => template.id === 'tpl-music-discovery');
+  const discoveryClips = [0, 1].map((index) => applyClipTemplate({
+    id: `discovery-${index}`, fileIndex: index, sourceStart: 0, sourceEnd: 3, speed: 1,
+  }, discovery, index));
+
+  results.push(await testCase('music_discovery', discoveryClips, {}, {
+    meta: JSON.stringify({ blur: discovery.blur, blurEnabled: discovery.blurEnabled }),
+  }));
+  results.push(await testCase('music_discovery_720_fast', discoveryClips.map((clip) => ({ ...clip, speed: 2 })), {}, {
+    exportConfig: JSON.stringify({ resolution: '720' }),
+  }));
 
   results.push(await testCase('single_clip', [
     { id: 'c1', fileIndex: 0, sourceStart: 0.5, sourceEnd: 2.5, duration: 2 },

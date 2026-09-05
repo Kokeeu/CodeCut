@@ -22,6 +22,7 @@ export default function CardTemplate({
   isActive = false,
   onClick,
   showPlaceholder = true,
+  videoPlaceholder,
 }) {
   const videoRef = useRef(null);
   const bgRef = useRef(null);
@@ -75,6 +76,15 @@ export default function CardTemplate({
         <div className="absolute inset-0 bg-black pointer-events-none" />
       )}
 
+      {!videoUrl && videoPlaceholder && (
+        <div
+          className="absolute left-0 w-full bg-gradient-to-br from-slate-600 to-slate-900 pointer-events-none"
+          style={videoPlaceholder === 'cover'
+            ? { top: 0, height: '100%' }
+            : { top: `${MAIN_Y * ds}px`, height: `${EXPORT_W * 9 / 16 * ds}px` }}
+        />
+      )}
+
       {headerText && (
         <div
           className="absolute top-[7%] left-1/2 -translate-x-1/2 text-center px-3 pointer-events-none"
@@ -123,8 +133,8 @@ export default function CardTemplate({
           left: `${(tx.x || 0) * ds}px`,
           top: `${(tx.y || 0) * ds}px`,
           transform: align === 'center' ? 'translateX(-50%)' : align === 'right' ? 'translateX(-100%)' : 'none',
-          color: tx.color || '#ffffff',
-          fontFamily: FONT_CSS[tx.font] || FONT_CSS.inter,
+          color: tx.color || color,
+          fontFamily: FONT_CSS[tx.font] || fontFamily,
           fontSize: `${(tx.size || 60) * ds}px`,
           fontWeight: 700,
           lineHeight: 1.2,

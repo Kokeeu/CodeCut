@@ -185,6 +185,8 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
         fileIndex: fileIndexById[c.fileId],
         sourceStart: c.sourceStart,
         sourceEnd: c.sourceEnd,
+        introEnd: c.introEnd,
+        videoLayout: c.videoLayout,
         speed: c.speed || 1,
         duration: (c.sourceEnd - c.sourceStart) / (c.speed || 1),
         transform: c.transform || { x: 0, y: 0, scale: 1 },

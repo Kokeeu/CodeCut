@@ -39,6 +39,8 @@ function ClipMedia({
   if (!clip) return null;
   const t = clip.transform || { x: 0, y: 0, scale: 1 };
   const texts = clip.texts || [];
+  const introActive = clip.videoLayout === 'cover'
+    || (Number.isFinite(clip.introEnd) && clip.sourceStart + currentOffset < clip.introEnd);
   const blurPx = (Number(meta?.blur) || 0) * displayScale;
   const previewBrightness = 1 + BG_BRIGHTNESS;
   const previewSaturate = BG_SATURATION;
@@ -66,7 +68,13 @@ function ClipMedia({
           onPlay={onPlay}
           onPause={onPause}
           className="pointer-events-none"
-          style={{
+          style={introActive ? {
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+          } : {
             position: 'absolute',
             width: `${EXPORT_W * Math.max(0.1, Math.min(10, t.scale || 1)) * displayScale}px`,
             maxWidth: 'none',

@@ -294,23 +294,35 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig, pip
     filters.push(audioFilter);
 
     const tr = normalizeTransform(c.transform);
+    const introDuration = c.videoLayout === 'cover' ? clipDur : Number.isFinite(c.introEnd)
+      ? Math.max(0, Math.min(clipDur, (c.introEnd - Number(c.sourceStart)) / speed))
+      : 0;
+    if (introDuration > 0) {
+      filters.push(`[s${i}raw]split=2[s${i}card][s${i}intro]`);
+      filters.push(`[s${i}intro]scale=${OUTPUT_W_DYN}:${OUTPUT_H_DYN}:force_original_aspect_ratio=increase:flags=lanczos,crop=${OUTPUT_W_DYN}:${OUTPUT_H_DYN},setsar=1[intro${i}]`);
+    }
+    const cardInput = introDuration > 0 ? `s${i}card` : `s${i}raw`;
     const mainW = Math.max(2, Math.round(MAIN_MAX_W * tr.scale));
     const xExpr = `(W-w)/2${fmtSigned(tr.x)}`;
     const yExpr = `${MAIN_Y_DYN}${fmtSigned(tr.y)}`;
     if (blurEnabled) {
-      filters.push(`[s${i}raw]split=2[m${i}][bgr${i}]`);
+      filters.push(`[${cardInput}]split=2[m${i}][bgr${i}]`);
       filters.push(`[m${i}]scale=${mainW}:-2:flags=lanczos,setsar=1[m${i}f]`);
       const bgBlur = blurSigma > 0 ? `,gblur=sigma=${blurSigma}` : '';
       filters.push(
         `[bgr${i}]scale=${OUTPUT_W_DYN}:${OUTPUT_H_DYN}:force_original_aspect_ratio=increase:flags=lanczos,crop=${OUTPUT_W_DYN}:${OUTPUT_H_DYN}${bgBlur},eq=brightness=${BG_BRIGHTNESS}:saturation=${BG_SATURATION}[bg${i}]`
       );
     } else {
-      filters.push(`[s${i}raw]scale=${mainW}:-2:flags=lanczos,setsar=1[m${i}f]`);
+      filters.push(`[${cardInput}]scale=${mainW}:-2:flags=lanczos,setsar=1[m${i}f]`);
       filters.push(
         `color=c=black:s=${OUTPUT_W_DYN}x${OUTPUT_H_DYN}:r=${OUTPUT_FPS}:d=${clipDur.toFixed(3)}[bg${i}]`
       );
     }
-    filters.push(`[bg${i}][m${i}f]overlay=x=${xExpr}:y=${yExpr},setsar=1[c${i}pre]`);
+    const cardOutput = introDuration > 0 ? `c${i}card` : `c${i}pre`;
+    filters.push(`[bg${i}][m${i}f]overlay=x=${xExpr}:y=${yExpr},setsar=1[${cardOutput}]`);
+    if (introDuration > 0) {
+      filters.push(`[c${i}card][intro${i}]overlay=x=0:y=0:enable='lt(t,${introDuration.toFixed(3)})',setsar=1[c${i}pre]`);
+    }
 
     const pipIdx = pipInputIndexByClip && pipInputIndexByClip[i];
     const pip = c.pip;

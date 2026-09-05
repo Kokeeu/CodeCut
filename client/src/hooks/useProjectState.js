@@ -12,6 +12,7 @@ import {
   nextId,
 } from '../lib/projectDefaults.js';
 import { sanitizeTransition } from '../lib/transitions.js';
+import { applyClipTemplate, sliceClipTexts } from '../lib/clipTemplates.js';
 import {
   blobToFile,
   clearMediaStore,
@@ -342,21 +343,20 @@ export default function useProjectState() {
       const idx = prev.clips.findIndex((c) => c.id === activeClip.id);
       if (idx < 0) return prev;
       const source = prev.clips[idx];
-      const clipA = { ...source, sourceEnd: cut, texts: [...(source.texts || [])] };
+      const splitOffset = cut - source.sourceStart;
+      const clipA = { ...source, sourceEnd: cut, texts: sliceClipTexts(source.texts, 0, splitOffset) };
       const clipB = {
         id: nextId('clip'),
         fileId: source.fileId,
         sourceStart: cut,
         sourceEnd: source.sourceEnd,
+        introEnd: source.introEnd,
+        videoLayout: source.videoLayout,
         speed: source.speed || 1,
         transform: { ...(source.transform || DEFAULT_TRANSFORM) },
         audio: { ...(source.audio || DEFAULT_AUDIO) },
         pip: { ...(source.pip || DEFAULT_PIP) },
-        texts: (source.texts || []).map((t) => ({
-          ...t,
-          id: nextId('text'),
-          endOffset: t.endOffset != null ? t.endOffset : (source.sourceEnd - cut),
-        })),
+        texts: sliceClipTexts(source.texts, splitOffset, source.sourceEnd - source.sourceStart),
       };
       const nextClips = [...prev.clips];
       nextClips.splice(idx, 1, clipA, clipB);
@@ -388,29 +388,11 @@ export default function useProjectState() {
       if (prev.clips.length === 0) return prev;
       return {
         ...prev,
-        clips: prev.clips.map((c) => {
-          const dur = c.sourceEnd - c.sourceStart;
-          return {
-            ...c,
-            texts: template.texts.map((t) => ({
-              id: nextId('text'),
-              text: t.text,
-              x: t.x,
-              y: t.y,
-              size: t.size,
-              font: template.font,
-              color: template.color,
-              align: t.align || 'left',
-              startOffset: 0,
-              endOffset: dur,
-              animation: null,
-              ...DEFAULT_TEXT_STYLE,
-            })),
-          };
-        }),
+        clips: prev.clips.map((c, index) => applyClipTemplate(c, template, index)),
         meta: { ...prev.meta, blur: template.blur, blurEnabled: template.blurEnabled },
       };
     }, 'apply-template');
+    setSelectedTextId(null);
   }, [setDoc]);
 
   const handleReset = useCallback(() => {
@@ -433,6 +415,8 @@ export default function useProjectState() {
         fileName: fileNames[c.fileId] || '',
         sourceStart: c.sourceStart,
         sourceEnd: c.sourceEnd,
+        introEnd: c.introEnd,
+        videoLayout: c.videoLayout,
         speed: c.speed || 1,
         transform: c.transform || { ...DEFAULT_TRANSFORM },
         audio: c.audio || { ...DEFAULT_AUDIO },
@@ -474,6 +458,8 @@ export default function useProjectState() {
         fileId: fileId || nextId('file'),
         sourceStart: c.sourceStart,
         sourceEnd: c.sourceEnd,
+        introEnd: c.introEnd,
+        videoLayout: c.videoLayout,
         speed: c.speed || 1,
         transform: c.transform || { ...DEFAULT_TRANSFORM },
         audio: c.audio || { ...DEFAULT_AUDIO },
