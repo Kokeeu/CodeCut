@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import VideoUploader from './components/VideoUploader.jsx';
+import YouTubeImporter from './components/YouTubeImporter.jsx';
 import VideoPreview from './components/VideoPreview.jsx';
 import TopBar from './components/TopBar.jsx';
 import LeftSidebar from './components/LeftSidebar.jsx';
@@ -21,6 +22,7 @@ import useProjectState from './hooks/useProjectState.js';
 import { getTrackWidth, clampZoom } from './lib/timelineScale.js';
 import { TEMPLATES } from './lib/projectDefaults.js';
 import { resolvePlayback, clipSelectSourceOffset, clipAdvanceSourceOffset } from './lib/transitions.js';
+import { MAX_MEDIA_FILES } from './lib/mediaImport.js';
 
 export default function App() {
   const project = useProjectState();
@@ -268,12 +270,18 @@ export default function App() {
       {!hasFiles ? (
         <div className="flex-1 flex items-center justify-center p-4 sm:p-8 overflow-y-auto">
           <div className="w-full max-w-lg flex flex-col gap-6 animate-fade-in">
-            <VideoUploader onFilesAdded={handleFilesAdded} compact={false} />
+            <VideoUploader onFilesAdded={handleFilesAdded} remainingSlots={MAX_MEDIA_FILES - files.length} compact={false} />
+            <div className="flex items-center gap-3">
+              <div className="h-px bg-glass-border flex-1" />
+              <span className="text-[10px] uppercase tracking-wider text-neutral-600">o</span>
+              <div className="h-px bg-glass-border flex-1" />
+            </div>
+            <YouTubeImporter onFilesAdded={handleFilesAdded} currentFileCount={files.length} />
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm text-neutral-400">
               <div className="p-3 rounded-xl bg-glass-panel border border-glass-border">
                 <div className="text-xl mb-1 text-gradient-accent font-bold">1</div>
                 <div className="font-semibold text-neutral-200 text-xs">Upload</div>
-                <p className="text-[11px] mt-1">Sube uno o varios videos (hasta 10, 500 MB c/u).</p>
+                <p className="text-[11px] mt-1">Sube archivos o importa enlaces de YouTube (hasta 10, 1 GB c/u).</p>
               </div>
               <div className="p-3 rounded-xl bg-glass-panel border border-glass-border">
                 <div className="text-xl mb-1 text-gradient-accent font-bold">2</div>

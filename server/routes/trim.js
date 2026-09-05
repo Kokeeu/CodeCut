@@ -5,7 +5,7 @@ const fs = require('fs');
 const { runPipeline, validateClips, safeUnlink, collectPipInputs, OUTPUT_W, OUTPUT_H } = require('../lib/ffmpegPipeline');
 const { validateInputVideos } = require('../lib/validateInputs');
 const { jobQueue } = require('../lib/queue');
-const { setJob, getJob, updateJob, deleteJob, ffmpegProcesses, expireJobLater } = require('../lib/jobs');
+const { setJob, getJob, updateJob, deleteJob, jobCancelers, expireJobLater } = require('../lib/jobs');
 
 const router = express.Router();
 
@@ -15,7 +15,7 @@ if (!fs.existsSync(TEMP_DIR)) {
 }
 
 const MAX_FILES = 10;
-const MAX_SIZE_MB = 500;
+const MAX_SIZE_MB = 1024;
 
 const upload = multer({
   dest: TEMP_DIR,
@@ -127,12 +127,14 @@ router.post('/', upload.fields([
     outputPath,
     outputName,
     inputPaths,
+    cleanupPaths: [...inputPaths, outputPath],
     createdAt: Date.now(),
   });
 
   res.status(202).json({ jobId, status: 'queued' });
 
   jobQueue.enqueue(jobId, async () => {
+    if (!getJob(jobId) || getJob(jobId).status === 'cancelled') return;
     updateJob(jobId, { status: 'processing', progress: 0 });
 
     try {
@@ -150,7 +152,7 @@ router.post('/', upload.fields([
         },
       });
 
-      ffmpegProcesses.set(jobId, () => {
+      jobCancelers.set(jobId, () => {
         if (pipelinePromise._kill) pipelinePromise._kill();
       });
 
@@ -162,9 +164,10 @@ router.post('/', upload.fields([
       safeUnlinkAll([...inputPaths, outputPath]);
       expireJobLater(jobId);
     } finally {
-      ffmpegProcesses.delete(jobId);
+      jobCancelers.delete(jobId);
     }
-  }).catch((err) => {
+  }, { priority: 10 }).catch((err) => {
+    if (!getJob(jobId) || getJob(jobId).status === 'cancelled') return;
     updateJob(jobId, { status: 'error', error: err.message || String(err) });
     safeUnlinkAll([...inputPaths, outputPath]);
     expireJobLater(jobId);
@@ -249,13 +252,14 @@ router.delete('/:jobId', (req, res) => {
     return res.status(404).json({ error: 'Job not found.' });
   }
 
-  const killFn = ffmpegProcesses.get(req.params.jobId);
+  const removedFromQueue = jobQueue.cancel(req.params.jobId);
+  const killFn = jobCancelers.get(req.params.jobId);
   if (killFn) {
     killFn();
-    ffmpegProcesses.delete(req.params.jobId);
+    jobCancelers.delete(req.params.jobId);
   }
 
-  if (job.status === 'processing' || job.status === 'queued') {
+  if (job.status === 'processing' || job.status === 'queued' || removedFromQueue) {
     safeUnlinkAll([...(job.inputPaths || []), job.outputPath]);
   }
 

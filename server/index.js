@@ -8,6 +8,7 @@ const ffprobeStatic = require('ffprobe-static');
 const ffmpeg = require('fluent-ffmpeg');
 
 const trimRoute = require('./routes/trim');
+const youtubeRoute = require('./routes/youtube');
 const { startCleanupCron } = require('./lib/cron');
 
 if (ffmpegStatic) {
@@ -32,7 +33,7 @@ if (!fs.existsSync(TEMP_DIR)) {
   fs.mkdirSync(TEMP_DIR, { recursive: true });
 }
 
-app.use(cors());
+app.use(cors({ exposedHeaders: ['Content-Disposition', 'X-Codecut-Filename'] }));
 app.use(compression({
   filter: (req, res) => {
     if (req.path.includes('/progress/')) return false;
@@ -46,6 +47,7 @@ app.get('/api/health', (_req, res) => {
 });
 
 app.use('/api/trim', trimRoute);
+app.use('/api/youtube', youtubeRoute);
 
 app.use((err, _req, res, _next) => {
   console.error('[server] Error:', err);

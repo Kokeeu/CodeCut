@@ -5,9 +5,14 @@
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
+    "prestart": "node scripts/setup_ytdlp.js",
     "start": "node index.js",
+    "predev": "node scripts/setup_ytdlp.js",
     "dev": "node index.js",
-    "test": "node scripts/smoke_all.js"
+    "test": "node scripts/smoke_all.js",
+    "test:unit": "node --test test/youtube.test.js",
+    "setup:ytdlp": "node scripts/setup_ytdlp.js",
+    "update:ytdlp": "node scripts/setup_ytdlp.js --force"
   },
   "dependencies": {
     "compression": "^1.8.1",

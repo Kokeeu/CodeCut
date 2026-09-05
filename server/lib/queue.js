@@ -3,30 +3,42 @@ const os = require('os');
 const MAX_CONCURRENT = Math.min(2, os.cpus().length);
 
 class JobQueue {
-  constructor() {
+  constructor(maxConcurrent = MAX_CONCURRENT) {
     this.queue = [];
     this.activeJobs = new Set();
-    this.onJobComplete = null;
+    this.maxConcurrent = maxConcurrent;
+    this.sequence = 0;
   }
 
-  async enqueue(jobId, jobFn) {
+  async enqueue(jobId, jobFn, { priority = 0 } = {}) {
     return new Promise((resolve, reject) => {
       this.queue.push({
         jobId,
         jobFn,
+        priority,
+        sequence: this.sequence++,
         resolve,
         reject,
       });
+      this.queue.sort((a, b) => b.priority - a.priority || a.sequence - b.sequence);
       this.processQueue();
     });
   }
 
+  cancel(jobId) {
+    const index = this.queue.findIndex((job) => job.jobId === jobId);
+    if (index < 0) return false;
+    const [job] = this.queue.splice(index, 1);
+    job.resolve({ cancelled: true });
+    return true;
+  }
+
   async processQueue() {
-    if (this.activeJobs.size >= MAX_CONCURRENT) {
+    if (this.activeJobs.size >= this.maxConcurrent) {
       return;
     }
 
-    while (this.queue.length > 0 && this.activeJobs.size < MAX_CONCURRENT) {
+    while (this.queue.length > 0 && this.activeJobs.size < this.maxConcurrent) {
       const job = this.queue.shift();
       this.activeJobs.add(job.jobId);
 
@@ -46,7 +58,7 @@ class JobQueue {
     return {
       queued: this.queue.length,
       active: this.activeJobs.size,
-      maxConcurrent: MAX_CONCURRENT,
+      maxConcurrent: this.maxConcurrent,
     };
   }
 
@@ -58,4 +70,4 @@ class JobQueue {
 
 const jobQueue = new JobQueue();
 
-module.exports = { jobQueue, MAX_CONCURRENT };
+module.exports = { JobQueue, jobQueue, MAX_CONCURRENT };

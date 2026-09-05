@@ -3,14 +3,32 @@ const path = require('path');
 
 const TEMP_DIR = path.join(__dirname, '..', 'temp');
 const JOBS_DIR = path.join(TEMP_DIR, 'jobs');
-const JOB_TTL_MS = 5 * 60 * 1000;
+const JOB_TTL_MS = 15 * 60 * 1000;
 
 if (!fs.existsSync(JOBS_DIR)) {
   fs.mkdirSync(JOBS_DIR, { recursive: true });
 }
 
 const jobs = new Map();
-const ffmpegProcesses = new Map();
+const jobCancelers = new Map();
+const expiryTimers = new Map();
+
+function isInsideTemp(candidate) {
+  const relative = path.relative(path.resolve(TEMP_DIR), path.resolve(candidate));
+  return relative && !relative.startsWith('..') && !path.isAbsolute(relative);
+}
+
+function cleanupJobFiles(job) {
+  const paths = [...new Set([...(job?.cleanupPaths || []), job?.outputPath].filter(Boolean))];
+  paths.forEach((candidate) => {
+    try {
+      if (!isInsideTemp(candidate) || !fs.existsSync(candidate)) return;
+      const stat = fs.statSync(candidate);
+      if (stat.isDirectory()) fs.rmSync(candidate, { recursive: true, force: true });
+      else fs.unlinkSync(candidate);
+    } catch (_) {}
+  });
+}
 
 function jobPath(id) {
   return path.join(JOBS_DIR, `${id}.json`);
@@ -21,12 +39,21 @@ function persistJob(job) {
   try {
     const payload = {
       id: job.id,
+      kind: job.kind || 'export',
       status: job.status,
       progress: job.progress || 0,
+      stage: job.stage || null,
       outputPath: job.outputPath,
       outputName: job.outputName,
       inputPaths: job.inputPaths || [],
+      cleanupPaths: job.cleanupPaths || [],
+      sourceUrl: job.sourceUrl || null,
+      title: job.title || null,
+      mimeType: job.mimeType || null,
+      size: job.size || null,
+      maxHeight: job.maxHeight || null,
       createdAt: job.createdAt,
+      completedAt: job.completedAt || null,
       error: job.error || null,
     };
     fs.writeFileSync(jobPath(job.id), JSON.stringify(payload));
@@ -48,12 +75,17 @@ function toPublic(job) {
   if (!job) return null;
   return {
     id: job.id,
+    kind: job.kind || 'export',
     status: job.status,
     progress: job.progress || 0,
-    outputPath: job.outputPath,
     outputName: job.outputName,
-    inputPaths: job.inputPaths || [],
+    stage: job.stage || null,
+    title: job.title || null,
+    mimeType: job.mimeType || null,
+    size: job.size || null,
+    maxHeight: job.maxHeight || null,
     createdAt: job.createdAt,
+    completedAt: job.completedAt || null,
     error: job.error || null,
   };
 }
@@ -74,6 +106,7 @@ function updateJob(id, patch) {
   const prevProgress = job.progress || 0;
   const prevStatus = job.status;
   Object.assign(job, patch);
+  if (['ready', 'error', 'cancelled'].includes(job.status) && !job.completedAt) job.completedAt = Date.now();
   const progressBucketChanged = Math.round((job.progress || 0) * 20) !== Math.round(prevProgress * 20);
   if (job.status !== prevStatus || patch.error || progressBucketChanged) {
     persistJob(job);
@@ -83,7 +116,10 @@ function updateJob(id, patch) {
 
 function deleteJob(id) {
   jobs.delete(id);
-  ffmpegProcesses.delete(id);
+  jobCancelers.delete(id);
+  const timer = expiryTimers.get(id);
+  if (timer) clearTimeout(timer);
+  expiryTimers.delete(id);
   removePersisted(id);
 }
 
@@ -100,20 +136,25 @@ function loadJobsFromDisk() {
           fs.unlinkSync(full);
           continue;
         }
-        if (now - (job.createdAt || 0) > JOB_TTL_MS) {
+        const ageBase = job.completedAt || job.createdAt || 0;
+        if (now - ageBase > JOB_TTL_MS) {
+          cleanupJobFiles(job);
           fs.unlinkSync(full);
           continue;
         }
-        if (job.status === 'queued' || job.status === 'processing') {
+        if (['queued', 'processing', 'downloading'].includes(job.status)) {
           job.status = 'error';
-          job.error = 'Server restarted while this export was running. Please export again.';
+          job.error = `Server restarted while this ${job.kind === 'youtube' ? 'import' : 'export'} was running. Please try again.`;
+          job.completedAt = now;
         }
         if (job.status === 'ready' && job.outputPath && !fs.existsSync(job.outputPath)) {
           job.status = 'error';
-          job.error = 'Export file is no longer available. Please export again.';
+          job.error = `${job.kind === 'youtube' ? 'Imported' : 'Exported'} file is no longer available. Please try again.`;
+          job.completedAt = now;
         }
         jobs.set(job.id, job);
         persistJob(job);
+        expireJobLater(job.id);
       } catch {
         try { fs.unlinkSync(full); } catch { /* ignore */ }
       }
@@ -124,25 +165,27 @@ function loadJobsFromDisk() {
 }
 
 function expireJobLater(id) {
-  setTimeout(() => {
+  const previous = expiryTimers.get(id);
+  if (previous) clearTimeout(previous);
+  const job = jobs.get(id);
+  if (!job) return;
+  const elapsed = Date.now() - (job.completedAt || Date.now());
+  const delay = Math.max(0, JOB_TTL_MS - elapsed);
+  const timer = setTimeout(() => {
     const job = jobs.get(id);
     if (!job) return;
-    if (job.status === 'ready' && job.outputPath) {
-      try {
-        if (fs.existsSync(job.outputPath)) fs.unlinkSync(job.outputPath);
-      } catch {
-        // ignore
-      }
-    }
+    cleanupJobFiles(job);
     deleteJob(id);
-  }, JOB_TTL_MS);
+  }, delay);
+  timer.unref?.();
+  expiryTimers.set(id, timer);
 }
 
 loadJobsFromDisk();
 
 module.exports = {
   jobs,
-  ffmpegProcesses,
+  jobCancelers,
   JOB_TTL_MS,
   setJob,
   getJob,
@@ -150,5 +193,6 @@ module.exports = {
   deleteJob,
   persistJob,
   expireJobLater,
+  cleanupJobFiles,
   toPublic,
 };

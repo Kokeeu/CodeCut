@@ -1,5 +1,6 @@
 import VideoUploader from './VideoUploader.jsx';
 import LazyImage from './LazyImage.jsx';
+import { MAX_MEDIA_FILES } from '../lib/mediaImport.js';
 
 function formatTime(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
@@ -109,7 +110,7 @@ export default function FilePool({ files, onAddClip, onFilesAdded, vertical }) {
         </div>
       ))}
       <div className="shrink-0 flex items-center">
-        <VideoUploader onFilesAdded={onFilesAdded} compact />
+        <VideoUploader onFilesAdded={onFilesAdded} remainingSlots={MAX_MEDIA_FILES - files.length} compact />
       </div>
     </div>
   );

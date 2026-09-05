@@ -2,6 +2,8 @@ import { useState } from 'react';
 import FilePool from './FilePool.jsx';
 import TemplatesPanel from './TemplatesPanel.jsx';
 import VideoUploader from './VideoUploader.jsx';
+import YouTubeImporter from './YouTubeImporter.jsx';
+import { MAX_MEDIA_FILES } from '../lib/mediaImport.js';
 
 const TABS = [
   { id: 'media', label: 'Media' },
@@ -145,7 +147,8 @@ export default function LeftSidebar({
         {activeTab === 'media' && (
           <div className="flex flex-col gap-2 animate-fade-in">
             <FilePool files={files} onAddClip={onAddClip} onFilesAdded={onFilesAdded} vertical />
-            <VideoUploader onFilesAdded={onFilesAdded} compact />
+            <VideoUploader onFilesAdded={onFilesAdded} remainingSlots={MAX_MEDIA_FILES - files.length} compact />
+            <YouTubeImporter onFilesAdded={onFilesAdded} currentFileCount={files.length} compact />
           </div>
         )}
 

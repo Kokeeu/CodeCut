@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import useUndoableState from './useUndoableState.js';
 import {
   DEFAULT_AUDIO,
@@ -14,6 +14,7 @@ import {
 } from '../lib/projectDefaults.js';
 import { sanitizeTransition } from '../lib/transitions.js';
 import { applyClipTemplate, sliceClipTexts } from '../lib/clipTemplates.js';
+import { MAX_MEDIA_FILES } from '../lib/mediaImport.js';
 import {
   blobToFile,
   clearMediaStore,
@@ -94,6 +95,8 @@ const emptyDocument = {
 
 export default function useProjectState() {
   const [files, setFiles] = useState([]);
+  const filesRef = useRef(files);
+  filesRef.current = files;
   const [doc, setDoc, undo] = useUndoableState(emptyDocument);
   const { clips, transitions, meta } = doc;
   const [activeClipId, setActiveClipId] = useState(null);
@@ -141,7 +144,18 @@ export default function useProjectState() {
   }, [setDoc]);
 
   const handleFilesAdded = useCallback((metas) => {
-    const newFiles = metas.map((m) => ({
+    const currentFiles = filesRef.current;
+    const pendingNames = new Set(currentFiles.filter((f) => f._pending).map((f) => f.name));
+    const replacements = metas.filter((m) => pendingNames.has(m.file?.name));
+    const additions = metas.filter((m) => !pendingNames.has(m.file?.name));
+    const availableSlots = Math.max(0, MAX_MEDIA_FILES - currentFiles.length);
+    const acceptedMetas = [...replacements, ...additions.slice(0, availableSlots)];
+    const rejectedMetas = additions.slice(availableSlots);
+    rejectedMetas.forEach((m) => {
+      if (m.url) URL.revokeObjectURL(m.url);
+    });
+
+    const newFiles = acceptedMetas.map((m) => ({
       id: nextId('file'),
       file: m.file,
       url: m.url,
@@ -152,29 +166,27 @@ export default function useProjectState() {
       filmstrip: m.filmstrip ? base64ToBlobUrl(m.filmstrip) : null,
       filmstripBase64: m.filmstrip || null,
     }));
-    if (newFiles.length === 0) return;
+    if (newFiles.length === 0) return { added: 0, rejected: rejectedMetas.length };
 
     newFiles.forEach((f) => {
       if (f.file) putMediaFile(f.id, f.file);
     });
 
-    setFiles((prev) => {
-      const pending = prev.filter((f) => f._pending);
-      const regular = prev.filter((f) => !f._pending);
-
-      const updatedPending = pending.map((pf) => {
-        const match = newFiles.find((nf) => nf.name === pf.name);
-        if (match) {
-          if (pf.url) URL.revokeObjectURL(pf.url);
-          if (match.file) putMediaFile(pf.id, match.file);
-          return { ...match, id: pf.id, _pending: false };
-        }
-        return pf;
-      });
-
-      const unmatchedNew = newFiles.filter((nf) => !pending.some((pf) => pf.name === nf.name));
-      return [...regular, ...updatedPending, ...unmatchedNew].slice(0, 10);
+    const pending = currentFiles.filter((f) => f._pending);
+    const regular = currentFiles.filter((f) => !f._pending);
+    const updatedPending = pending.map((pf) => {
+      const match = newFiles.find((nf) => nf.name === pf.name);
+      if (match) {
+        if (pf.url) URL.revokeObjectURL(pf.url);
+        if (match.file) putMediaFile(pf.id, match.file);
+        return { ...match, id: pf.id, _pending: false };
+      }
+      return pf;
     });
+    const unmatchedNew = newFiles.filter((nf) => !pending.some((pf) => pf.name === nf.name));
+    const nextFiles = [...regular, ...updatedPending, ...unmatchedNew];
+    filesRef.current = nextFiles;
+    setFiles(nextFiles);
 
     setDoc((prev) => {
       if (prev.clips.length > 0) return prev;
@@ -184,6 +196,7 @@ export default function useProjectState() {
       setActiveClipId(clip.id);
       return { ...prev, clips: [clip] };
     }, 'add-first-clip');
+    return { added: newFiles.length, rejected: rejectedMetas.length };
   }, [setDoc]);
 
   const handleAddClip = useCallback((fileId) => {
