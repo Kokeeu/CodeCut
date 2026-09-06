@@ -10,7 +10,7 @@
     "predev": "node scripts/setup_ytdlp.js",
     "dev": "node index.js",
     "test": "node scripts/smoke_all.js",
-    "test:unit": "node --test test/youtube.test.js",
+    "test:unit": "node --test test/youtube.test.js test/exportConfig.test.js",
     "setup:ytdlp": "node scripts/setup_ytdlp.js",
     "update:ytdlp": "node scripts/setup_ytdlp.js --force"
   },

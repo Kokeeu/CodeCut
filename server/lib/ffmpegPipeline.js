@@ -1,5 +1,6 @@
 const { getAtempoChain } = require('./speed.js');
 const { getAnimation, getTypewriterSegments, getKaraokeSegments } = require('./textAnimations.js');
+const { getEncodingSettings } = require('./exportConfig.js');
 
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegStatic = require('ffmpeg-static');
@@ -12,8 +13,7 @@ if (ffmpegStatic) {
 
 const OUTPUT_W = 1080;
 const OUTPUT_H = 1920;
-const OUTPUT_FPS = 30;
-const AUDIO_RATE = 44100;
+const AUDIO_RATE = 48000;
 
 const BG_BRIGHTNESS = -0.05;
 const BG_SATURATION = 0.5;
@@ -238,11 +238,12 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig, pip
   const outA = 'aout';
   const blurSigma = Math.max(0, Math.min(200, Number(meta && meta.blur) || 0));
   const blurEnabled = !(meta && meta.blurEnabled === false);
-
-  const resolution = exportConfig?.resolution || '1080';
-  const OUTPUT_W_DYN = resolution === '720' ? 720 : 1080;
-  const OUTPUT_H_DYN = resolution === '720' ? 1280 : 1920;
-  const MAIN_Y_DYN = resolution === '720' ? 240 : 360;
+  const encoding = getEncodingSettings(exportConfig);
+  const OUTPUT_W_DYN = encoding.width;
+  const OUTPUT_H_DYN = encoding.height;
+  const outputFps = encoding.fps;
+  const scaleFactor = OUTPUT_W_DYN / OUTPUT_W;
+  const MAIN_Y_DYN = Math.round(MAIN_Y * scaleFactor);
   const MAIN_MAX_W = OUTPUT_W_DYN;
 
   for (let i = 0; i < clips.length; i++) {
@@ -255,7 +256,7 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig, pip
     if (speed !== 1) {
       videoFilter += `,setpts=PTS/${speed}`;
     }
-    videoFilter += `,fps=${OUTPUT_FPS},format=yuv420p,setsar=1[s${i}raw]`;
+    videoFilter += `,fps=${outputFps},format=yuv420p,setsar=1[s${i}raw]`;
     filters.push(videoFilter);
 
     const audio = c.audio || { volume: 1, mute: false, fadeIn: 0, fadeOut: 0 };
@@ -303,8 +304,8 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig, pip
     }
     const cardInput = introDuration > 0 ? `s${i}card` : `s${i}raw`;
     const mainW = Math.max(2, Math.round(MAIN_MAX_W * tr.scale));
-    const xExpr = `(W-w)/2${fmtSigned(tr.x)}`;
-    const yExpr = `${MAIN_Y_DYN}${fmtSigned(tr.y)}`;
+    const xExpr = `(W-w)/2${fmtSigned(tr.x * scaleFactor)}`;
+    const yExpr = `${MAIN_Y_DYN}${fmtSigned(tr.y * scaleFactor)}`;
     if (blurEnabled) {
       filters.push(`[${cardInput}]split=2[m${i}][bgr${i}]`);
       filters.push(`[m${i}]scale=${mainW}:-2:flags=lanczos,setsar=1[m${i}f]`);
@@ -315,7 +316,7 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig, pip
     } else {
       filters.push(`[${cardInput}]scale=${mainW}:-2:flags=lanczos,setsar=1[m${i}f]`);
       filters.push(
-        `color=c=black:s=${OUTPUT_W_DYN}x${OUTPUT_H_DYN}:r=${OUTPUT_FPS}:d=${clipDur.toFixed(3)}[bg${i}]`
+        `color=c=black:s=${OUTPUT_W_DYN}x${OUTPUT_H_DYN}:r=${outputFps}:d=${clipDur.toFixed(3)}[bg${i}]`
       );
     }
     const cardOutput = introDuration > 0 ? `c${i}card` : `c${i}pre`;
@@ -331,7 +332,7 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig, pip
       const rect = getPipRect(pip, OUTPUT_W_DYN, OUTPUT_H_DYN);
       const opacity = Math.max(0.05, Math.min(1, Number(pip.opacity) ?? 1));
       const bw = pip.border ? Math.max(1, Math.round((Number(pip.borderWidth) || 4) * (OUTPUT_W_DYN / OUTPUT_W))) : 0;
-      let pipChain = `[${pipIdx}:v]setpts=PTS-STARTPTS,fps=${OUTPUT_FPS},scale=${rect.width}:${rect.height}:force_original_aspect_ratio=increase:flags=lanczos,crop=${rect.width}:${rect.height},format=rgba`;
+      let pipChain = `[${pipIdx}:v]setpts=PTS-STARTPTS,fps=${outputFps},scale=${rect.width}:${rect.height}:force_original_aspect_ratio=increase:flags=lanczos,crop=${rect.width}:${rect.height},format=rgba`;
       if (opacity < 0.999) {
         pipChain += `,colorchannelmixer=aa=${opacity.toFixed(3)}`;
       }
@@ -405,7 +406,6 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig, pip
   }
 
   let prevLabel = 'vc';
-  const scaleFactor = OUTPUT_W_DYN / 1080;
   clips.forEach((clip, ci) => {
     const clipStart = composedStart[ci];
     const speed = Number(clip.speed) || 1;
@@ -574,12 +574,13 @@ function parseTimeToSeconds(timeStr) {
 function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog, onProgress, exportConfig, pipInputIndexByClip, ratingOverlayInputIndexByClip }) {
   const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const textFiles = writeTextFiles(clips, runId);
+  const encoding = getEncodingSettings(exportConfig);
   const filterGraph = buildFilterGraph(
     clips,
     transitions,
     meta,
     textFiles,
-    exportConfig,
+    encoding,
     pipInputIndexByClip,
     ratingOverlayInputIndexByClip
   );
@@ -587,14 +588,6 @@ function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog, 
   const totalDuration = clips.reduce((sum, c) => {
     return sum + (Number(c.sourceEnd) - Number(c.sourceStart)) / (Number(c.speed) || 1);
   }, 0);
-
-  const resolution = exportConfig?.resolution || '1080';
-  const fps = exportConfig?.fps || 30;
-  const quality = exportConfig?.quality || 'high';
-  const crfMap = { medium: 23, high: 20, ultra: 16 };
-  const crf = crfMap[quality] || 20;
-
-  const preset = totalDuration < 30 ? 'medium' : 'veryfast';
 
   const STALL_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -641,11 +634,19 @@ function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog, 
       .complexFilter(filterGraph, ['vout', 'aout'])
       .outputOptions([
         '-c:v libx264',
-        `-preset ${preset}`,
-        `-crf ${crf}`,
-        `-r ${fps}`,
+        `-preset ${encoding.preset}`,
+        `-crf ${encoding.crf}`,
+        `-maxrate ${encoding.maxRateKbps}k`,
+        `-bufsize ${encoding.bufferSizeKbps}k`,
+        `-r ${encoding.fps}`,
+        `-g ${encoding.fps * 2}`,
+        `-keyint_min ${encoding.fps}`,
+        '-profile:v high',
+        '-tag:v avc1',
         '-c:a aac',
-        '-b:a 128k',
+        `-b:a ${encoding.audioBitrateKbps}k`,
+        `-ar ${AUDIO_RATE}`,
+        '-ac 2',
         '-movflags +faststart',
         '-pix_fmt yuv420p',
         '-shortest',

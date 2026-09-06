@@ -1,6 +1,6 @@
 # Codecut 9:16
 
-Editor de video multi-clip estilo CapCut/TikTok. Sube varios videos, córtalos, reordénalos, añade textos, transiciones, velocidad, audio, PIP y exporta a vertical 9:16 (1080×1920) con FFmpeg.
+Editor de video multi-clip estilo CapCut/TikTok. Sube varios videos, córtalos, reordénalos, añade textos, transiciones, velocidad, audio, PIP y exporta a vertical 9:16 desde 720×1280 hasta 2304×4096 con FFmpeg.
 
 Frontend: React + Vite + Tailwind. Backend: Node.js + Express + FFmpeg (`ffmpeg-static`) + `yt-dlp`.
 
@@ -80,6 +80,8 @@ Flujo asíncrono con progreso SSE:
 2. `GET /api/trim/progress/:jobId` — SSE `{ progress, status }`
 3. `GET /api/trim/download/:jobId` — MP4 cuando `status` es `ready`
 4. `DELETE /api/trim/:jobId` — cancela el job
+
+`exportConfig` admite resoluciones `720`, `1080`, `1440`, `2160` y `2304`, 24/30/60 fps y calidades `medium`, `high` y `ultra`. El encoder usa H.264 con CRF y un techo VBR adaptado a resolución/fps, AAC estéreo a 48 kHz y faststart. El preset de TikTok usa 1080×1920, 30 fps y calidad alta; 2304×4096 corresponde al máximo 9:16 dentro del límite de 4096 px por lado de la Content Posting API.
 
 Jobs se persisten en `server/temp/jobs/` y caducan 15 minutos después de terminar. Al reiniciar el server, jobs a medias quedan marcados como error.
 

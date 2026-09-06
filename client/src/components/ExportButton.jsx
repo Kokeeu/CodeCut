@@ -1,30 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { sanitizeTransition } from '../lib/transitions.js';
 import { renderCollaborativeOverlay } from '../lib/collaborativeRanking.js';
-
-const PLATFORM_PRESETS = {
-  tiktok: { label: 'TikTok', resolution: '1080', fps: 30, icon: '📱' },
-  reels: { label: 'Reels', resolution: '1080', fps: 30, icon: '📸' },
-  shorts: { label: 'Shorts', resolution: '1080', fps: 60, icon: '▶️' },
-  custom: { label: 'Custom', resolution: '1080', fps: 30, icon: '⚙️' },
-};
-
-const RESOLUTIONS = [
-  { value: '720', label: '720p (720x1280)' },
-  { value: '1080', label: '1080p (1080x1920)' },
-];
-
-const FPS_OPTIONS = [
-  { value: 24, label: '24 fps' },
-  { value: 30, label: '30 fps' },
-  { value: 60, label: '60 fps' },
-];
-
-const QUALITY_OPTIONS = [
-  { value: 'medium', label: 'Medium (smaller file)' },
-  { value: 'high', label: 'High (recommended)' },
-  { value: 'ultra', label: 'Ultra (best quality)' },
-];
+import {
+  DEFAULT_EXPORT_CONFIG,
+  FPS_OPTIONS,
+  PLATFORM_PRESETS,
+  QUALITY_OPTIONS,
+  RESOLUTIONS,
+  getExportEncodingSummary,
+} from '../lib/exportSettings.js';
 
 export default function ExportButton({ files, clips, transitions, meta, exportConfig, onExportConfigChange, compact }) {
   const [status, setStatus] = useState('idle');
@@ -36,7 +20,8 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
   const jobIdRef = useRef(null);
 
   const disabled = clips.length === 0 || files.length === 0;
-  const config = exportConfig || { resolution: '1080', fps: 30, quality: 'high', platform: 'tiktok' };
+  const config = exportConfig || DEFAULT_EXPORT_CONFIG;
+  const encodingSummary = getExportEncodingSummary(config);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -67,7 +52,12 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
   const applyPreset = (platform) => {
     const preset = PLATFORM_PRESETS[platform];
     if (preset && platform !== 'custom') {
-      updateConfig({ platform, resolution: preset.resolution, fps: preset.fps });
+      updateConfig({
+        platform,
+        resolution: preset.resolution,
+        fps: preset.fps,
+        quality: preset.quality,
+      });
     } else {
       updateConfig({ platform });
     }
@@ -335,6 +325,11 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
                   </button>
                 ))}
               </div>
+              {config.platform === 'tiktok' && (
+                <div className="mt-1.5 text-[9px] leading-relaxed text-neutral-500">
+                  Recommended preset: 1080x1920. TikTok API limit: 2304x4096 at 9:16 and 60 fps.
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-2 mb-2">
@@ -372,9 +367,12 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
                 className="w-full px-2 py-1 rounded text-[10px]"
               >
                 {QUALITY_OPTIONS.map((q) => (
-                  <option key={q.value} value={q.value}>{q.label}</option>
+                  <option key={q.value} value={q.value}>{q.label} · {q.description}</option>
                 ))}
               </select>
+              <div className="mt-1 text-[9px] leading-relaxed text-neutral-500">
+                H.264 VBR · CRF {encodingSummary.crf} · up to {encodingSummary.maxVideoBitrateMbps} Mbps · AAC {encodingSummary.audioBitrateKbps} kbps
+              </div>
             </div>
 
             <button
@@ -459,6 +457,11 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
                 </button>
               ))}
             </div>
+            {config.platform === 'tiktok' && (
+              <div className="mt-2 text-[10px] leading-relaxed text-neutral-500">
+                Recommended preset: 1080x1920. TikTok accepts up to 2304x4096 at 9:16 and 60 fps through its API.
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3 mb-3">
@@ -496,9 +499,14 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
               className="w-full px-3 py-1.5 rounded text-xs"
             >
               {QUALITY_OPTIONS.map((q) => (
-                <option key={q.value} value={q.value}>{q.label}</option>
+                <option key={q.value} value={q.value}>{q.label} · {q.description}</option>
               ))}
             </select>
+            <div className="mt-1.5 text-[10px] leading-relaxed text-neutral-500">
+              H.264 constrained VBR · CRF {encodingSummary.crf} · up to {encodingSummary.maxVideoBitrateMbps} Mbps
+              {' · '}AAC {encodingSummary.audioBitrateKbps} kbps
+              {' · '}≤~{encodingSummary.maxMegabytesPerMinute} MB/min
+            </div>
           </div>
 
           <button

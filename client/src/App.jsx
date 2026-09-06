@@ -23,6 +23,7 @@ import { getTrackWidth, clampZoom } from './lib/timelineScale.js';
 import { TEMPLATES } from './lib/projectDefaults.js';
 import { resolvePlayback, clipSelectSourceOffset, clipAdvanceSourceOffset } from './lib/transitions.js';
 import { MAX_MEDIA_FILES } from './lib/mediaImport.js';
+import { DEFAULT_EXPORT_CONFIG } from './lib/exportSettings.js';
 
 export default function App() {
   const project = useProjectState();
@@ -43,7 +44,7 @@ export default function App() {
   const [showGuides, setShowGuides] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
-  const [exportConfig, setExportConfig] = useState({ resolution: '1080', fps: 30, quality: 'high', platform: 'tiktok' });
+  const [exportConfig, setExportConfig] = useState(DEFAULT_EXPORT_CONFIG);
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
