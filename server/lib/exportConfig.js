@@ -9,9 +9,9 @@ const RESOLUTIONS = {
 const FPS_OPTIONS = new Set([24, 30, 60]);
 
 const QUALITY_PROFILES = {
-  medium: { crf: 23, preset: 'fast', audioBitrateKbps: 128 },
-  high: { crf: 19, preset: 'medium', audioBitrateKbps: 192 },
-  ultra: { crf: 16, preset: 'slow', audioBitrateKbps: 256 },
+  medium: { crf: 23, audioBitrateKbps: 128 },
+  high: { crf: 19, audioBitrateKbps: 192 },
+  ultra: { crf: 16, audioBitrateKbps: 256 },
 };
 
 const BITRATE_CEILINGS_KBPS = {
@@ -38,11 +38,22 @@ function getEncodingSettings(config = {}) {
   const rawMaxRate = BITRATE_CEILINGS_KBPS[normalized.resolution][normalized.quality]
     * FPS_BITRATE_MULTIPLIERS[normalized.fps];
   const maxRateKbps = Math.round(rawMaxRate / 100) * 100;
+  const width = dimensions.width;
+  const preset = normalized.quality === 'medium'
+    ? 'fast'
+    : normalized.quality === 'high'
+      ? (width > 1080 ? 'fast' : 'medium')
+      : width >= 2160
+        ? 'fast'
+        : width > 1080
+          ? 'medium'
+          : 'slow';
 
   return {
     ...normalized,
     ...dimensions,
     ...quality,
+    preset,
     maxRateKbps,
     bufferSizeKbps: maxRateKbps * 2,
   };

@@ -588,6 +588,7 @@ function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog, 
   const totalDuration = clips.reduce((sum, c) => {
     return sum + (Number(c.sourceEnd) - Number(c.sourceStart)) / (Number(c.speed) || 1);
   }, 0);
+  const totalFrames = Math.max(1, Math.round(totalDuration * encoding.fps));
 
   const STALL_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -597,6 +598,13 @@ function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog, 
     let timeoutHandle = null;
     let settled = false;
     let cleanedUp = false;
+    let lastProgress = 0;
+
+    const reportProgress = (value) => {
+      if (!onProgress || !Number.isFinite(value)) return;
+      lastProgress = Math.max(lastProgress, Math.min(1, value));
+      onProgress(lastProgress);
+    };
 
     const cleanup = () => {
       if (cleanedUp) return;
@@ -654,19 +662,21 @@ function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog, 
       .on('start', (cmd) => {
         if (onLog) onLog('start', cmd);
         console.log('[pipeline] ffmpeg start:', cmd);
+        reportProgress(0.005);
         resetStallTimeout();
       })
       .on('stderr', (line) => {
         if (onLog) onLog('stderr', line);
 
         const timeMatch = line.match(/time=(\d+:\d+:\d+\.\d+)/);
-        if (timeMatch) {
+        const frameMatch = line.match(/frame=\s*(\d+)/);
+        if (timeMatch || frameMatch) {
           resetStallTimeout();
-          if (onProgress && totalDuration > 0) {
-            const currentTime = parseTimeToSeconds(timeMatch[1]);
-            const progress = Math.min(1, currentTime / totalDuration);
-            onProgress(progress);
-          }
+          const timeProgress = timeMatch && totalDuration > 0
+            ? parseTimeToSeconds(timeMatch[1]) / totalDuration
+            : 0;
+          const frameProgress = frameMatch ? Number(frameMatch[1]) / totalFrames : 0;
+          reportProgress(Math.max(timeProgress, frameProgress));
         }
       })
       .on('error', (err) => {
@@ -682,7 +692,7 @@ function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog, 
         if (settled) return;
         settled = true;
         if (onLog) onLog('end', null);
-        if (onProgress) onProgress(1);
+        reportProgress(1);
         console.log('[pipeline] done ->', outputPath);
         cleanup();
         resolve();

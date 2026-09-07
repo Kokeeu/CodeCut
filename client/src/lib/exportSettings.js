@@ -16,8 +16,8 @@ export const RESOLUTIONS = [
   { value: '720', width: 720, height: 1280, label: '720p (720x1280)' },
   { value: '1080', width: 1080, height: 1920, label: '1080p (1080x1920) · recommended' },
   { value: '1440', width: 1440, height: 2560, label: '1440p (1440x2560)' },
-  { value: '2160', width: 2160, height: 3840, label: '4K UHD (2160x3840)' },
-  { value: '2304', width: 2304, height: 4096, label: 'TikTok API max (2304x4096)' },
+  { value: '2160', width: 2160, height: 3840, label: '4K UHD (2160x3840) · slow' },
+  { value: '2304', width: 2304, height: 4096, label: 'TikTok API max (2304x4096) · slow' },
 ];
 
 export const FPS_OPTIONS = [

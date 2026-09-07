@@ -28,6 +28,7 @@ test('supports TikTok API maximum 9:16 dimensions and 60 fps', () => {
   assert.equal(settings.width, 2304);
   assert.equal(settings.height, 4096);
   assert.equal(settings.maxRateKbps, 97200);
+  assert.equal(settings.preset, 'fast');
 });
 
 test('renders the selected frame rate and scales the canvas transform', () => {

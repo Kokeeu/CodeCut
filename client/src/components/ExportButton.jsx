@@ -10,6 +10,13 @@ import {
   getExportEncodingSummary,
 } from '../lib/exportSettings.js';
 
+function formatProgress(progress) {
+  const percent = Math.max(0, Math.min(100, progress * 100));
+  if (percent > 0 && percent < 1) return '<1%';
+  if (percent < 10) return `${percent.toFixed(1)}%`;
+  return `${Math.round(percent)}%`;
+}
+
 export default function ExportButton({ files, clips, transitions, meta, exportConfig, onExportConfigChange, compact }) {
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState(null);
@@ -22,6 +29,7 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
   const disabled = clips.length === 0 || files.length === 0;
   const config = exportConfig || DEFAULT_EXPORT_CONFIG;
   const encodingSummary = getExportEncodingSummary(config);
+  const progressLabel = formatProgress(progress);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -69,12 +77,24 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
     if (clearError) setError(null);
   };
 
-  const cancelExport = () => {
-    if (jobIdRef.current) {
-      fetch(`/api/trim/${jobIdRef.current}`, { method: 'DELETE' }).catch(() => {});
-      jobIdRef.current = null;
-    }
+  const cancelExport = async () => {
+    const jobId = jobIdRef.current;
+    const eventSource = eventSourceRef.current;
+    jobIdRef.current = null;
+    eventSourceRef.current = null;
+    if (eventSource) eventSource.close();
     resetExport();
+
+    if (!jobId) return;
+    try {
+      const response = await fetch(`/api/trim/${jobId}`, { method: 'DELETE' });
+      if (!response.ok && response.status !== 404) {
+        throw new Error(`Cancel failed (${response.status})`);
+      }
+    } catch (err) {
+      console.error('Cancel error:', err);
+      setError('Could not cancel the export. Check the server connection.');
+    }
   };
 
   const handleDownload = (jobId) => {
@@ -113,6 +133,7 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
     eventSourceRef.current = eventSource;
 
     eventSource.onmessage = (event) => {
+      if (eventSourceRef.current !== eventSource || jobIdRef.current !== jobId) return;
       try {
         const data = JSON.parse(event.data);
         const newProgress = Number(data.progress);
@@ -122,13 +143,13 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
 
         if (data.status === 'ready') {
           eventSource.close();
-          eventSourceRef.current = null;
-          jobIdRef.current = null;
+          if (eventSourceRef.current === eventSource) eventSourceRef.current = null;
+          if (jobIdRef.current === jobId) jobIdRef.current = null;
           handleDownload(jobId);
         } else if (data.status === 'error') {
           eventSource.close();
-          eventSourceRef.current = null;
-          jobIdRef.current = null;
+          if (eventSourceRef.current === eventSource) eventSourceRef.current = null;
+          if (jobIdRef.current === jobId) jobIdRef.current = null;
           setError(data.error || 'Processing failed');
           resetExport({ clearError: false });
         }
@@ -138,6 +159,7 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
     };
 
     eventSource.onerror = () => {
+      if (eventSourceRef.current !== eventSource || jobIdRef.current !== jobId) return;
       if (eventSource.readyState === EventSource.CLOSED) {
         return;
       }
@@ -265,7 +287,7 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
   const labels = {
     idle: `Export ${config.resolution}p ${config.fps}fps`,
     uploading: 'Uploading...',
-    processing: `Processing... ${Math.round(progress * 100)}%`,
+    processing: `Processing... ${progressLabel}`,
     downloading: 'Preparing download...',
     done: 'Done ✓',
   };
@@ -281,7 +303,7 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
       {showLabel && (
         <div className="flex justify-between mt-1 text-xs text-neutral-400">
           <span>{status === 'uploading' ? 'Uploading' : 'Processing'}</span>
-          <span>{Math.round(progress * 100)}%</span>
+          <span>{progressLabel}</span>
         </div>
       )}
     </div>
@@ -299,7 +321,7 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
             'disabled:bg-editor-surface disabled:text-neutral-500 disabled:cursor-not-allowed',
           ].join(' ')}
         >
-          {(status === 'uploading' || status === 'processing') ? `${Math.round(progress * 100)}%` : labels[status] || labels.idle}
+          {(status === 'uploading' || status === 'processing') ? progressLabel : labels[status] || labels.idle}
         </button>
 
         {showSettings && status === 'idle' && (
@@ -373,6 +395,11 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
               <div className="mt-1 text-[9px] leading-relaxed text-neutral-500">
                 H.264 VBR · CRF {encodingSummary.crf} · up to {encodingSummary.maxVideoBitrateMbps} Mbps · AAC {encodingSummary.audioBitrateKbps} kbps
               </div>
+              {encodingSummary.width >= 2160 && (
+                <div className="mt-1 text-[9px] leading-relaxed text-amber-400/80">
+                  4K CPU export is intensive. Use 1080p High for a much faster TikTok-ready file.
+                </div>
+              )}
             </div>
 
             <button
@@ -392,7 +419,7 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
                 {status === 'uploading' ? 'Uploading' : 'Processing'}
               </div>
               <div className="text-[11px] font-mono text-accent">
-                {Math.round(progress * 100)}%
+                {progressLabel}
               </div>
             </div>
             <div className="relative h-1.5 bg-editor-border rounded-full overflow-hidden">
@@ -507,6 +534,11 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
               {' · '}AAC {encodingSummary.audioBitrateKbps} kbps
               {' · '}≤~{encodingSummary.maxMegabytesPerMinute} MB/min
             </div>
+            {encodingSummary.width >= 2160 && (
+              <div className="mt-1.5 text-[10px] leading-relaxed text-amber-400/80">
+                4K CPU export is intensive and can take several minutes. 1080p High is recommended for TikTok.
+              </div>
+            )}
           </div>
 
           <button
