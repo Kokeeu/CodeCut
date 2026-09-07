@@ -1,11 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, useMemo } from 'react';
-import { FONT_CSS } from './CardMetadata.jsx';
-import { getAnimation, getKaraokeHighlight } from '../lib/textAnimations.js';
 import useThrottledCallback from '../hooks/useThrottledCallback.js';
-import { getPipRect, getTextAlignTransform } from '../lib/pipLayout.js';
-import { BG_BRIGHTNESS, BG_SATURATION } from '../lib/projectDefaults.js';
 import { getPreviewTransitionStyles } from '../lib/transitions.js';
-import CollaborativeRatingOverlay from './CollaborativeRatingOverlay.jsx';
+import ClipMedia from './preview/ClipMedia.jsx';
 
 function formatTime(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
@@ -15,196 +11,12 @@ function formatTime(seconds) {
 }
 
 const EXPORT_H = 1920;
-const EXPORT_W = 1080;
-const MAIN_Y = 360;
 const OUTPUT_FPS = 30;
 
 const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 
 const CORNERS = ['nw', 'ne', 'sw', 'se'];
 const CORNER_CURSOR = { nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize' };
-
-function hexToRgba(hex, alpha) {
-  const h = hex || '#000000';
-  const r = parseInt(h.slice(1, 3), 16);
-  const g = parseInt(h.slice(3, 5), 16);
-  const b = parseInt(h.slice(5, 7), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
-}
-
-function ClipMedia({
-  clip, fileUrl, videoRef, bgRef, pipRef, meta, displayScale, files,
-  currentOffset, interactive, selectedTextId, onSelectText, startTextDrag, textRefs,
-  onPlay, onPause,
-}) {
-  if (!clip) return null;
-  const t = clip.transform || { x: 0, y: 0, scale: 1 };
-  const texts = clip.texts || [];
-  const introActive = clip.videoLayout === 'cover'
-    || (Number.isFinite(clip.introEnd) && clip.sourceStart + currentOffset < clip.introEnd);
-  const blurPx = (Number(meta?.blur) || 0) * displayScale;
-  const previewBrightness = 1 + BG_BRIGHTNESS;
-  const previewSaturate = BG_SATURATION;
-
-  return (
-    <>
-      {fileUrl && meta?.blurEnabled !== false && (
-        <video
-          ref={bgRef}
-          src={fileUrl}
-          muted
-          playsInline
-          className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-          style={{ filter: `blur(${blurPx}px) brightness(${previewBrightness}) saturate(${previewSaturate})` }}
-        />
-      )}
-      {meta?.blurEnabled === false && (
-        <div className="absolute inset-0 bg-black pointer-events-none" />
-      )}
-      {fileUrl ? (
-        <video
-          ref={videoRef}
-          src={fileUrl}
-          playsInline
-          onPlay={onPlay}
-          onPause={onPause}
-          className="pointer-events-none"
-          style={introActive ? {
-            position: 'absolute',
-            inset: 0,
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-          } : {
-            position: 'absolute',
-            width: `${EXPORT_W * Math.max(0.1, Math.min(10, t.scale || 1)) * displayScale}px`,
-            maxWidth: 'none',
-            left: '50%',
-            top: `${MAIN_Y * displayScale}px`,
-            transform: `translateX(-50%) translate(${t.x * displayScale}px, ${t.y * displayScale}px)`,
-          }}
-        />
-      ) : null}
-      {clip.pip?.enabled && clip.pip.fileId && (() => {
-        const pipFile = files?.find((f) => f.id === clip.pip.fileId);
-        if (!pipFile?.url) return null;
-        const rect = getPipRect(clip.pip, EXPORT_W, EXPORT_H);
-        return (
-          <video
-            ref={pipRef}
-            src={pipFile.url}
-            playsInline
-            muted
-            className="pointer-events-none"
-            style={{
-              position: 'absolute',
-              width: `${rect.width * displayScale}px`,
-              height: `${rect.height * displayScale}px`,
-              left: `${rect.x * displayScale}px`,
-              top: `${rect.y * displayScale}px`,
-              opacity: Math.max(0, Math.min(1, clip.pip.opacity ?? 1)),
-              border: clip.pip.border ? `${(clip.pip.borderWidth || 4) * displayScale}px solid white` : 'none',
-              borderRadius: `${(clip.pip.borderRadius || 8) * displayScale}px`,
-              objectFit: 'cover',
-              boxSizing: 'content-box',
-            }}
-          />
-        );
-      })()}
-      {meta?.collaborativeRanking?.enabled && (
-        <CollaborativeRatingOverlay
-          participants={meta.collaborativeRanking.participants || []}
-          rating={clip.collaborativeRating}
-          scale={displayScale}
-        />
-      )}
-      {texts.map((tx) => {
-        const isVisible = tx.startOffset == null || tx.endOffset == null
-          || (currentOffset >= tx.startOffset && currentOffset <= tx.endOffset);
-        const selected = interactive && tx.id === selectedTextId;
-        if (!isVisible && !selected) return null;
-
-        let animStyle = {};
-        let displayText = tx.text;
-        let karaokeHighlight = '';
-
-        if (tx.animation?.type && isVisible) {
-          const animDef = getAnimation(tx.animation.type);
-          const elapsed = currentOffset - (tx.startOffset || 0);
-          const animDur = Math.max(0.1, tx.animation.duration || 0.5);
-          const progress = Math.min(1, elapsed / animDur);
-
-          if (animDef.isTypewriter) {
-            const len = (tx.text || '').length;
-            displayText = (tx.text || '').slice(0, Math.floor(progress * len));
-          } else if (animDef.isKaraoke) {
-            karaokeHighlight = getKaraokeHighlight(tx.text || '', progress);
-          } else if (animDef.getPreviewStyle) {
-            animStyle = animDef.getPreviewStyle(progress, tx.x, tx.y, tx.text) || {};
-          }
-        }
-
-        const alignTx = getTextAlignTransform(tx.align || 'left');
-        const transforms = [
-          alignTx !== 'none' ? alignTx : null,
-          animStyle.transform || null,
-          tx.rotation ? `rotate(${tx.rotation}deg)` : null,
-        ].filter(Boolean);
-        const { transform: _animTransform, _karaokeHighlight, _visibleText, ...restAnim } = animStyle;
-        const textStyle = {
-          position: 'absolute',
-          left: `${(tx.x || 0) * displayScale}px`,
-          top: `${(tx.y || 0) * displayScale}px`,
-          color: tx.color || '#ffffff',
-          fontFamily: FONT_CSS[tx.font] || FONT_CSS.inter,
-          fontSize: `${Math.max(12, Math.min(400, tx.size || 60)) * displayScale}px`,
-          fontWeight: 700,
-          lineHeight: 1.2,
-          cursor: interactive ? 'move' : 'default',
-          userSelect: 'none',
-          whiteSpace: 'pre',
-          outline: selected ? '1.5px dashed #a855f7' : 'none',
-          outlineOffset: '4px',
-          zIndex: selected ? 30 : 20,
-          opacity: !isVisible && selected ? 0.3 : 1,
-          transformOrigin: tx.align === 'center' ? 'center top' : (tx.align === 'right' ? 'right top' : 'left top'),
-          transform: transforms.length ? transforms.join(' ') : undefined,
-          pointerEvents: interactive ? 'auto' : 'none',
-          ...restAnim,
-        };
-        if (tx.strokeEnabled && tx.strokeWidth > 0) {
-          textStyle.WebkitTextStroke = `${(tx.strokeWidth || 2) * displayScale}px ${tx.strokeColor || '#000000'}`;
-        } else {
-          textStyle.textShadow = '0 2px 8px rgba(0,0,0,0.7)';
-        }
-        if (tx.bgEnabled) {
-          textStyle.backgroundColor = hexToRgba(tx.bgColor || '#000000', tx.bgOpacity ?? 0.7);
-          textStyle.padding = `${(tx.bgPadding || 12) * displayScale}px`;
-          textStyle.borderRadius = `${(tx.bgRadius || 8) * displayScale}px`;
-        }
-        return (
-          <div
-            key={tx.id}
-            data-text-item={interactive ? true : undefined}
-            ref={interactive ? (el) => { if (el) textRefs.current[tx.id] = el; else delete textRefs.current[tx.id]; } : undefined}
-            onPointerDown={interactive ? (e) => startTextDrag(e, tx.id) : undefined}
-            onClick={interactive ? (e) => { e.stopPropagation(); onSelectText?.(tx.id); } : undefined}
-            style={textStyle}
-          >
-            {karaokeHighlight ? (
-              <span style={{ position: 'relative', display: 'inline-block' }}>
-                <span style={{ opacity: 0.35 }}>{displayText}</span>
-                <span style={{ position: 'absolute', left: 0, top: 0, color: tx.color || '#ffffff' }}>
-                  {karaokeHighlight}
-                </span>
-              </span>
-            ) : displayText}
-          </div>
-        );
-      })}
-    </>
-  );
-}
 
 const VideoPreview = forwardRef(function VideoPreview(
   {

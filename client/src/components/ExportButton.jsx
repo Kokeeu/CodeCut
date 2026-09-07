@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { sanitizeTransition } from '../lib/transitions.js';
 import { renderCollaborativeOverlay } from '../lib/collaborativeRanking.js';
+import useExportJob from '../hooks/useExportJob.js';
+import { createExportFormData } from '../lib/exportRequest.js';
 import {
   DEFAULT_EXPORT_CONFIG,
   FPS_OPTIONS,
@@ -18,16 +19,12 @@ function formatProgress(progress) {
 }
 
 export default function ExportButton({ files, clips, transitions, meta, exportConfig, onExportConfigChange, compact }) {
-  const [status, setStatus] = useState('idle');
-  const [error, setError] = useState(null);
-  const [progress, setProgress] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const containerRef = useRef(null);
-  const eventSourceRef = useRef(null);
-  const jobIdRef = useRef(null);
 
   const disabled = clips.length === 0 || files.length === 0;
   const config = exportConfig || DEFAULT_EXPORT_CONFIG;
+  const { status, error, progress, start, cancel: cancelExport, fail } = useExportJob(config);
   const encodingSummary = getExportEncodingSummary(config);
   const progressLabel = formatProgress(progress);
 
@@ -42,15 +39,6 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showSettings]);
-
-  useEffect(() => {
-    return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-      }
-    };
-  }, []);
 
   const updateConfig = (partial) => {
     const next = { ...config, ...partial };
@@ -71,217 +59,29 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
     }
   };
 
-  const resetExport = ({ clearError = true } = {}) => {
-    setStatus('idle');
-    setProgress(0);
-    if (clearError) setError(null);
-  };
-
-  const cancelExport = async () => {
-    const jobId = jobIdRef.current;
-    const eventSource = eventSourceRef.current;
-    jobIdRef.current = null;
-    eventSourceRef.current = null;
-    if (eventSource) eventSource.close();
-    resetExport();
-
-    if (!jobId) return;
-    try {
-      const response = await fetch(`/api/trim/${jobId}`, { method: 'DELETE' });
-      if (!response.ok && response.status !== 404) {
-        throw new Error(`Cancel failed (${response.status})`);
-      }
-    } catch (err) {
-      console.error('Cancel error:', err);
-      setError('Could not cancel the export. Check the server connection.');
-    }
-  };
-
-  const handleDownload = (jobId) => {
-    setStatus('downloading');
-    fetch(`/api/trim/download/${jobId}`)
-      .then((dlRes) => {
-        if (!dlRes.ok) throw new Error('Download failed');
-        return dlRes.blob();
-      })
-      .then((blob) => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `codecut-${config.resolution}p-${Date.now()}.mp4`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-        setStatus('done');
-        setTimeout(() => {
-          resetExport();
-        }, 2500);
-      })
-      .catch((err) => {
-        console.error('Download error:', err);
-        setError(err.message || 'Download failed');
-        resetExport({ clearError: false });
-      });
-  };
-
-  const setupEventSource = (jobId) => {
-    setStatus('processing');
-    setProgress(0);
-
-    const eventSource = new EventSource(`/api/trim/progress/${jobId}`);
-    eventSourceRef.current = eventSource;
-
-    eventSource.onmessage = (event) => {
-      if (eventSourceRef.current !== eventSource || jobIdRef.current !== jobId) return;
-      try {
-        const data = JSON.parse(event.data);
-        const newProgress = Number(data.progress);
-        if (Number.isFinite(newProgress)) {
-          setProgress(newProgress);
-        }
-
-        if (data.status === 'ready') {
-          eventSource.close();
-          if (eventSourceRef.current === eventSource) eventSourceRef.current = null;
-          if (jobIdRef.current === jobId) jobIdRef.current = null;
-          handleDownload(jobId);
-        } else if (data.status === 'error') {
-          eventSource.close();
-          if (eventSourceRef.current === eventSource) eventSourceRef.current = null;
-          if (jobIdRef.current === jobId) jobIdRef.current = null;
-          setError(data.error || 'Processing failed');
-          resetExport({ clearError: false });
-        }
-      } catch (err) {
-        console.error('Error parsing progress data:', err);
-      }
-    };
-
-    eventSource.onerror = () => {
-      if (eventSourceRef.current !== eventSource || jobIdRef.current !== jobId) return;
-      if (eventSource.readyState === EventSource.CLOSED) {
-        return;
-      }
-      eventSource.close();
-      eventSourceRef.current = null;
-      jobIdRef.current = null;
-      setError('Connection lost');
-      resetExport({ clearError: false });
-    };
-  };
-
   const onExport = async () => {
     if (disabled) return;
     setShowSettings(false);
 
     const missingFiles = files.filter((f) => !f.file);
     if (missingFiles.length > 0) {
-      setError('Some video files are missing. Please re-upload them after loading a project.');
+      fail(new Error('Some video files are missing. Please re-upload them after loading a project.'));
       return;
     }
 
-    setStatus('uploading');
-    setError(null);
-    setProgress(0);
-
-    try {
-      const form = new FormData();
-      const fileIndexById = {};
-      files.forEach((f, i) => {
-        fileIndexById[f.id] = i;
-        form.append('videos', f.file, f.name);
-      });
-
+    await start(async () => {
       const ratingOverlayBlobs = await Promise.all(
         clips.map((clip) => renderCollaborativeOverlay(meta, clip))
       );
-      let ratingOverlayFileIndex = 0;
-
-      const clipsPayload = clips.map((c, clipIndex) => ({
-        id: c.id,
-        fileIndex: fileIndexById[c.fileId],
-        sourceStart: c.sourceStart,
-        sourceEnd: c.sourceEnd,
-        introEnd: c.introEnd,
-        videoLayout: c.videoLayout,
-        speed: c.speed || 1,
-        duration: (c.sourceEnd - c.sourceStart) / (c.speed || 1),
-        transform: c.transform || { x: 0, y: 0, scale: 1 },
-        audio: c.audio || { volume: 1, mute: false, fadeIn: 0, fadeOut: 0 },
-        pip: c.pip?.enabled && Number.isInteger(fileIndexById[c.pip.fileId])
-          ? {
-              enabled: true,
-              fileIndex: fileIndexById[c.pip.fileId],
-              position: c.pip.position || 'bottom-right',
-              size: c.pip.size || 30,
-              opacity: c.pip.opacity ?? 1,
-              border: c.pip.border ?? true,
-              borderWidth: c.pip.borderWidth || 4,
-              borderRadius: c.pip.borderRadius || 8,
-            }
-          : null,
-        collaborativeRating: c.collaborativeRating || null,
-        ratingOverlayFileIndex: ratingOverlayBlobs[clipIndex]
-          ? ratingOverlayFileIndex++
-          : null,
-        texts: (c.texts || []).map((t) => ({
-          ...t,
-          animation: t.animation || null,
-        })),
-      }));
-
-      ratingOverlayBlobs.forEach((blob, index) => {
-        if (blob) form.append('ratingOverlays', blob, `rating-overlay-${index}.png`);
+      return createExportFormData({
+        files,
+        clips,
+        transitions,
+        meta,
+        exportConfig: config,
+        ratingOverlayBlobs,
       });
-
-      const transitionsMap = {};
-      clips.forEach((c, i) => {
-        if (i < clips.length - 1) {
-          const t = sanitizeTransition(transitions[i]);
-          transitionsMap[`${c.id}|${clips[i + 1].id}`] = {
-            type: t.type,
-            durationSec: t.durationSec,
-          };
-        }
-      });
-
-      form.append('clips', JSON.stringify(clipsPayload));
-      form.append('transitions', JSON.stringify(transitionsMap));
-      const collaborativeRanking = meta?.collaborativeRanking
-        ? {
-            ...meta.collaborativeRanking,
-            participants: (meta.collaborativeRanking.participants || []).map(({ image: _image, ...participant }) => participant),
-          }
-        : undefined;
-      form.append('meta', JSON.stringify({
-        ...(meta || {}),
-        ...(collaborativeRanking ? { collaborativeRanking } : {}),
-      }));
-      form.append('exportConfig', JSON.stringify(config));
-
-      const res = await fetch('/api/trim', { method: 'POST', body: form });
-
-      if (!res.ok) {
-        const text = await res.text();
-        let msg = `Request failed (${res.status})`;
-        try {
-          const json = JSON.parse(text);
-          if (json.error) msg = json.error;
-        } catch (_) {
-          if (text) msg = text;
-        }
-        throw new Error(msg);
-      }
-
-      const { jobId } = await res.json();
-      jobIdRef.current = jobId;
-      setupEventSource(jobId);
-    } catch (e) {
-      console.error(e);
-      setError(e.message || 'Export failed');
-      resetExport({ clearError: false });
-    }
+    });
   };
 
   const labels = {

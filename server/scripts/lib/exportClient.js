@@ -50,7 +50,12 @@ function postMultipart({ files, fields, host = 'localhost', port = 4000, pathNam
   });
 }
 
-function waitForJob(jobId, { host = 'localhost', port = 4000, timeoutMs = 120000 } = {}) {
+function waitForJob(jobId, {
+  host = 'localhost',
+  port = 4000,
+  timeoutMs = 120000,
+  onUpdate,
+} = {}) {
   return new Promise((resolve, reject) => {
     const req = http.get({
       host,
@@ -76,6 +81,7 @@ function waitForJob(jobId, { host = 'localhost', port = 4000, timeoutMs = 120000
           if (!line) continue;
           try {
             const data = JSON.parse(line.slice(6));
+            onUpdate?.(data);
             if (data.status === 'ready') {
               clearTimeout(timer);
               res.destroy();
@@ -126,7 +132,7 @@ function downloadJob(jobId, destPath, { host = 'localhost', port = 4000 } = {}) 
   });
 }
 
-async function exportProject({ files, fields, destPath, host = 'localhost', port = 4000 }) {
+async function exportProject({ files, fields, destPath, host = 'localhost', port = 4000, onUpdate }) {
   const res = await postMultipart({ files, fields, host, port });
   if (res.status !== 202) {
     throw new Error(`Expected 202, got ${res.status}: ${res.body.toString('utf8')}`);
@@ -138,7 +144,7 @@ async function exportProject({ files, fields, destPath, host = 'localhost', port
     throw new Error(`Invalid JSON from /api/trim: ${res.body.toString('utf8')}`);
   }
   if (!payload.jobId) throw new Error('Missing jobId in /api/trim response');
-  await waitForJob(payload.jobId, { host, port });
+  await waitForJob(payload.jobId, { host, port, onUpdate });
   await downloadJob(payload.jobId, destPath, { host, port });
   return { jobId: payload.jobId, destPath, status: 202 };
 }

@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const EventEmitter = require('events');
 
 const TEMP_DIR = path.join(__dirname, '..', 'temp');
 const JOBS_DIR = path.join(TEMP_DIR, 'jobs');
@@ -12,6 +13,10 @@ if (!fs.existsSync(JOBS_DIR)) {
 const jobs = new Map();
 const jobCancelers = new Map();
 const expiryTimers = new Map();
+const pendingPersistence = new Map();
+const activePersistence = new Set();
+const jobEvents = new EventEmitter();
+jobEvents.setMaxListeners(0);
 
 function isInsideTemp(candidate) {
   const relative = path.relative(path.resolve(TEMP_DIR), path.resolve(candidate));
@@ -34,41 +39,61 @@ function jobPath(id) {
   return path.join(JOBS_DIR, `${id}.json`);
 }
 
-function persistJob(job) {
-  if (!job || !job.id) return;
+async function flushPersistence(id) {
+  if (activePersistence.has(id)) return;
+  activePersistence.add(id);
+  const target = jobPath(id);
+  const temporary = `${target}.${process.pid}.tmp`;
   try {
-    const payload = {
-      id: job.id,
-      kind: job.kind || 'export',
-      status: job.status,
-      progress: job.progress || 0,
-      stage: job.stage || null,
-      outputPath: job.outputPath,
-      outputName: job.outputName,
-      inputPaths: job.inputPaths || [],
-      cleanupPaths: job.cleanupPaths || [],
-      sourceUrl: job.sourceUrl || null,
-      title: job.title || null,
-      mimeType: job.mimeType || null,
-      size: job.size || null,
-      maxHeight: job.maxHeight || null,
-      createdAt: job.createdAt,
-      completedAt: job.completedAt || null,
-      error: job.error || null,
-    };
-    fs.writeFileSync(jobPath(job.id), JSON.stringify(payload));
+    while (pendingPersistence.has(id)) {
+      const payload = pendingPersistence.get(id);
+      pendingPersistence.delete(id);
+      if (!jobs.has(id)) break;
+      await fs.promises.writeFile(temporary, payload);
+      if (!jobs.has(id)) {
+        await fs.promises.rm(temporary, { force: true });
+        break;
+      }
+      await fs.promises.rename(temporary, target);
+      if (!jobs.has(id)) await fs.promises.rm(target, { force: true });
+    }
   } catch (err) {
     console.warn('[jobs] persist failed:', err.message);
+    await fs.promises.rm(temporary, { force: true }).catch(() => {});
+  } finally {
+    activePersistence.delete(id);
+    if (pendingPersistence.has(id)) void flushPersistence(id);
   }
 }
 
+function persistJob(job) {
+  if (!job || !job.id) return;
+  const payload = {
+    id: job.id,
+    kind: job.kind || 'export',
+    status: job.status,
+    progress: job.progress || 0,
+    stage: job.stage || null,
+    outputPath: job.outputPath,
+    outputName: job.outputName,
+    inputPaths: job.inputPaths || [],
+    cleanupPaths: job.cleanupPaths || [],
+    sourceUrl: job.sourceUrl || null,
+    title: job.title || null,
+    mimeType: job.mimeType || null,
+    size: job.size || null,
+    maxHeight: job.maxHeight || null,
+    createdAt: job.createdAt,
+    completedAt: job.completedAt || null,
+    error: job.error || null,
+  };
+  pendingPersistence.set(job.id, JSON.stringify(payload));
+  void flushPersistence(job.id);
+}
+
 function removePersisted(id) {
-  try {
-    const p = jobPath(id);
-    if (fs.existsSync(p)) fs.unlinkSync(p);
-  } catch {
-    // ignore
-  }
+  pendingPersistence.delete(id);
+  void fs.promises.rm(jobPath(id), { force: true }).catch(() => {});
 }
 
 function toPublic(job) {
@@ -93,6 +118,7 @@ function toPublic(job) {
 function setJob(job) {
   jobs.set(job.id, job);
   persistJob(job);
+  jobEvents.emit(job.id, toPublic(job));
   return job;
 }
 
@@ -111,6 +137,7 @@ function updateJob(id, patch) {
   if (job.status !== prevStatus || patch.error || progressBucketChanged) {
     persistJob(job);
   }
+  jobEvents.emit(id, toPublic(job));
   return job;
 }
 
@@ -121,6 +148,12 @@ function deleteJob(id) {
   if (timer) clearTimeout(timer);
   expiryTimers.delete(id);
   removePersisted(id);
+  jobEvents.emit(id, null);
+}
+
+function subscribeToJob(id, listener) {
+  jobEvents.on(id, listener);
+  return () => jobEvents.off(id, listener);
 }
 
 function loadJobsFromDisk() {
@@ -195,4 +228,5 @@ module.exports = {
   expireJobLater,
   cleanupJobFiles,
   toPublic,
+  subscribeToJob,
 };

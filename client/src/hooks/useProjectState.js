@@ -6,14 +6,17 @@ import {
   DEFAULT_PIP,
   DEFAULT_TEXT_STYLE,
   DEFAULT_TRANSFORM,
-  DEFAULT_TRANSITION,
   PROJECT_VERSION,
   makeDefaultParticipants,
   makeClip,
   nextId,
 } from '../lib/projectDefaults.js';
-import { sanitizeTransition } from '../lib/transitions.js';
 import { applyClipTemplate, sliceClipTexts } from '../lib/clipTemplates.js';
+import {
+  createEmptyDocument,
+  normalizeTransitions,
+  reduceProjectDocument,
+} from '../lib/projectDocument.js';
 import { MAX_MEDIA_FILES } from '../lib/mediaImport.js';
 import {
   blobToFile,
@@ -22,17 +25,6 @@ import {
   getMediaFileByName,
   putMediaFile,
 } from '../lib/mediaStore.js';
-
-function normalizeTransitions(raw, clipCount) {
-  const next = (raw || []).map((t) => sanitizeTransition(t));
-  if (clipCount > 0) {
-    while (next.length < clipCount - 1) next.push({ ...DEFAULT_TRANSITION });
-    next.length = Math.max(0, clipCount - 1);
-  } else {
-    next.length = 0;
-  }
-  return next;
-}
 
 function base64ToBlobUrl(base64) {
   if (!base64) return null;
@@ -87,17 +79,11 @@ function hydrateMediaRecord(row, fallbackId) {
   };
 }
 
-const emptyDocument = {
-  clips: [],
-  transitions: [],
-  meta: { ...DEFAULT_META },
-};
-
 export default function useProjectState() {
   const [files, setFiles] = useState([]);
   const filesRef = useRef(files);
   filesRef.current = files;
-  const [doc, setDoc, undo] = useUndoableState(emptyDocument);
+  const [doc, setDoc, undo] = useUndoableState(createEmptyDocument());
   const { clips, transitions, meta } = doc;
   const [activeClipId, setActiveClipId] = useState(null);
   const [currentOffset, setCurrentOffset] = useState(0);
@@ -122,26 +108,14 @@ export default function useProjectState() {
 
   const pendingFiles = useMemo(() => files.filter((f) => f._pending || !f.file), [files]);
 
-  const setClips = useCallback((updater, tag) => {
-    setDoc((prev) => ({
-      ...prev,
-      clips: typeof updater === 'function' ? updater(prev.clips) : updater,
-    }), tag);
+  const dispatchDocument = useCallback((action, tag) => {
+    setDoc((previous) => reduceProjectDocument(previous, action), tag);
   }, [setDoc]);
 
-  const setTransitions = useCallback((updater, tag) => {
-    setDoc((prev) => ({
-      ...prev,
-      transitions: typeof updater === 'function' ? updater(prev.transitions) : updater,
-    }), tag);
-  }, [setDoc]);
-
-  const setMeta = useCallback((updater, tag) => {
-    setDoc((prev) => ({
-      ...prev,
-      meta: typeof updater === 'function' ? updater(prev.meta) : updater,
-    }), tag);
-  }, [setDoc]);
+  const setMeta = useCallback((nextMeta, tag) => {
+    const resolved = typeof nextMeta === 'function' ? nextMeta(meta) : nextMeta;
+    dispatchDocument({ type: 'meta/replaced', meta: resolved }, tag);
+  }, [dispatchDocument, meta]);
 
   const handleFilesAdded = useCallback((metas) => {
     const currentFiles = filesRef.current;
@@ -188,143 +162,92 @@ export default function useProjectState() {
     filesRef.current = nextFiles;
     setFiles(nextFiles);
 
-    setDoc((prev) => {
-      if (prev.clips.length > 0) return prev;
-      const first = newFiles.find((f) => f.duration > 0);
-      if (!first) return prev;
+    const first = newFiles.find((file) => file.duration > 0);
+    if (clips.length === 0 && first) {
       const clip = makeClip(first.id, first.duration);
+      dispatchDocument({ type: 'clip/first-added', clip }, 'add-first-clip');
       setActiveClipId(clip.id);
-      return { ...prev, clips: [clip] };
-    }, 'add-first-clip');
+    }
     return { added: newFiles.length, rejected: rejectedMetas.length };
-  }, [setDoc]);
+  }, [clips.length, dispatchDocument]);
 
   const handleAddClip = useCallback((fileId) => {
     const f = fileById[fileId];
     if (!f || !f.duration || f._pending) return;
     const clip = makeClip(fileId, f.duration - 0.01);
-    setDoc((prev) => ({
-      ...prev,
-      clips: [...prev.clips, clip],
-      transitions: prev.clips.length === 0 ? [] : [...prev.transitions, { ...DEFAULT_TRANSITION }],
-    }), 'add-clip');
+    dispatchDocument({ type: 'clip/added', clip }, 'add-clip');
     setActiveClipId(clip.id);
     setCurrentOffset(0);
-  }, [fileById, setDoc]);
+  }, [fileById, dispatchDocument]);
 
   const handleDeleteClip = useCallback((clipId) => {
-    setDoc((prev) => {
-      const idx = prev.clips.findIndex((c) => c.id === clipId);
-      if (idx < 0 || prev.clips.length <= 1) return prev;
-      const nextClips = prev.clips.filter((c) => c.id !== clipId);
-      const nextTransitions = [...prev.transitions];
-      nextTransitions.splice(idx === 0 ? 0 : idx - 1, 1);
-      const newActive = nextClips[Math.min(idx, nextClips.length - 1)] || null;
-      setActiveClipId(newActive ? newActive.id : null);
-      setCurrentOffset(0);
-      return { ...prev, clips: nextClips, transitions: nextTransitions };
-    }, 'delete-clip');
-  }, [setDoc]);
+    const index = clips.findIndex((clip) => clip.id === clipId);
+    if (index < 0 || clips.length <= 1) return;
+    const nextClips = clips.filter((clip) => clip.id !== clipId);
+    const nextActive = nextClips[Math.min(index, nextClips.length - 1)] || null;
+    dispatchDocument({ type: 'clip/deleted', clipId }, 'delete-clip');
+    setActiveClipId(nextActive?.id || null);
+    setCurrentOffset(0);
+  }, [clips, dispatchDocument]);
 
   const handleDuplicateClip = useCallback((clipId) => {
-    setDoc((prev) => {
-      const idx = prev.clips.findIndex((c) => c.id === clipId);
-      if (idx < 0) return prev;
-      const source = prev.clips[idx];
-      const dup = {
-        ...source,
-        id: nextId('clip'),
-        texts: (source.texts || []).map((t) => ({ ...t, id: nextId('text') })),
-        transform: { ...(source.transform || DEFAULT_TRANSFORM) },
-        audio: { ...(source.audio || DEFAULT_AUDIO) },
-        pip: { ...(source.pip || DEFAULT_PIP) },
-        collaborativeRating: source.collaborativeRating
-          ? { ...source.collaborativeRating, scores: { ...(source.collaborativeRating.scores || {}) } }
-          : null,
-      };
-      const nextClips = [...prev.clips];
-      nextClips.splice(idx + 1, 0, dup);
-      const nextTransitions = [...prev.transitions];
-      nextTransitions.splice(idx, 0, { ...DEFAULT_TRANSITION });
-      setActiveClipId(dup.id);
-      return { ...prev, clips: nextClips, transitions: nextTransitions };
-    }, 'duplicate-clip');
-  }, [setDoc]);
+    const source = clips.find((clip) => clip.id === clipId);
+    if (!source) return;
+    const duplicate = {
+      ...source,
+      id: nextId('clip'),
+      texts: (source.texts || []).map((text) => ({ ...text, id: nextId('text') })),
+      transform: { ...(source.transform || DEFAULT_TRANSFORM) },
+      audio: { ...(source.audio || DEFAULT_AUDIO) },
+      pip: { ...(source.pip || DEFAULT_PIP) },
+      collaborativeRating: source.collaborativeRating
+        ? { ...source.collaborativeRating, scores: { ...(source.collaborativeRating.scores || {}) } }
+        : null,
+    };
+    dispatchDocument({ type: 'clip/duplicated', sourceClipId: clipId, clip: duplicate }, 'duplicate-clip');
+    setActiveClipId(duplicate.id);
+  }, [clips, dispatchDocument]);
 
   const handleReorder = useCallback((newClips) => {
-    setDoc((prev) => {
-      const oldIds = prev.clips.map((c) => c.id);
-      const newIds = newClips.map((c) => c.id);
-      if (oldIds.length !== newIds.length) {
-        return { ...prev, clips: newClips };
-      }
-      const newTransitions = [];
-      for (let i = 0; i < newIds.length - 1; i++) {
-        const oldIdx = oldIds.indexOf(newIds[i]);
-        const nextOldIdx = oldIds.indexOf(newIds[i + 1]);
-        if (oldIdx >= 0 && nextOldIdx >= 0 && oldIdx === nextOldIdx - 1 && oldIdx < prev.transitions.length) {
-          newTransitions.push(prev.transitions[oldIdx] || { ...DEFAULT_TRANSITION });
-        } else {
-          newTransitions.push({ ...DEFAULT_TRANSITION });
-        }
-      }
-      return { ...prev, clips: newClips, transitions: newTransitions };
-    }, 'reorder');
-  }, [setDoc]);
+    dispatchDocument({ type: 'clips/reordered', clips: newClips }, 'reorder');
+  }, [dispatchDocument]);
 
   const handleTrimChange = useCallback(({ sourceStart, sourceEnd }) => {
-    setClips((prev) =>
-      prev.map((c) => {
-        if (c.id !== activeClipId) return c;
-        const f = fileById[c.fileId];
-        const maxDur = f?.duration ? f.duration - 0.01 : sourceEnd;
-        const safeStart = Math.max(0, Math.min(sourceStart, maxDur - 0.1));
-        const safeEnd = Math.max(safeStart + 0.05, Math.min(sourceEnd, maxDur));
-        return { ...c, sourceStart: safeStart, sourceEnd: safeEnd };
-      })
-    , 'trim');
-  }, [activeClipId, fileById, setClips]);
+    if (!activeClipId) return;
+    const clip = clips.find((candidate) => candidate.id === activeClipId);
+    const file = clip ? fileById[clip.fileId] : null;
+    dispatchDocument({
+      type: 'clip/trimmed',
+      clipId: activeClipId,
+      sourceStart,
+      sourceEnd,
+      maxDuration: file?.duration ? file.duration - 0.01 : sourceEnd,
+    }, 'trim');
+  }, [activeClipId, clips, fileById, dispatchDocument]);
 
   const handleTransformChange = useCallback((transform) => {
-    setClips((prev) =>
-      prev.map((c) => (c.id === activeClipId ? { ...c, transform } : c))
-    , 'transform');
-  }, [activeClipId, setClips]);
+    dispatchDocument({ type: 'clip/updated', clipId: activeClipId, patch: { transform } }, 'transform');
+  }, [activeClipId, dispatchDocument]);
 
   const handleSpeedChange = useCallback((speed) => {
-    setClips((prev) =>
-      prev.map((c) => (c.id === activeClipId ? { ...c, speed } : c))
-    , 'speed');
-  }, [activeClipId, setClips]);
+    dispatchDocument({ type: 'clip/updated', clipId: activeClipId, patch: { speed } }, 'speed');
+  }, [activeClipId, dispatchDocument]);
 
   const handleAudioChange = useCallback((audio) => {
-    setClips((prev) =>
-      prev.map((c) => (c.id === activeClipId ? { ...c, audio } : c))
-    , 'audio');
-  }, [activeClipId, setClips]);
+    dispatchDocument({ type: 'clip/updated', clipId: activeClipId, patch: { audio } }, 'audio');
+  }, [activeClipId, dispatchDocument]);
 
   const handlePipChange = useCallback((pip) => {
-    setClips((prev) =>
-      prev.map((c) => (c.id === activeClipId ? { ...c, pip } : c))
-    , 'pip');
-  }, [activeClipId, setClips]);
+    dispatchDocument({ type: 'clip/updated', clipId: activeClipId, patch: { pip } }, 'pip');
+  }, [activeClipId, dispatchDocument]);
 
   const handleCollaborativeRatingChange = useCallback((partial) => {
-    setClips((prev) => prev.map((clip) => (
-      clip.id === activeClipId
-        ? {
-            ...clip,
-            collaborativeRating: {
-              enabled: true,
-              average: '0.0',
-              scores: {},
-              ...(clip.collaborativeRating || {}),
-              ...partial,
-            },
-          }
-        : clip
-    )), 'collaborative-rating');
-  }, [activeClipId, setClips]);
+    dispatchDocument({
+      type: 'clip/rating-updated',
+      clipId: activeClipId,
+      patch: partial,
+    }, 'collaborative-rating');
+  }, [activeClipId, dispatchDocument]);
 
   const handleAddText = useCallback(() => {
     if (!activeClipId) return;
@@ -337,81 +260,64 @@ export default function useProjectState() {
       animation: null,
       ...DEFAULT_TEXT_STYLE,
     };
-    setClips((prev) =>
-      prev.map((c) =>
-        c.id === activeClipId
-          ? { ...c, texts: [...(c.texts || []), t] }
-          : c
-      )
-    , 'add-text');
+    dispatchDocument({ type: 'text/added', clipId: activeClipId, text: t }, 'add-text');
     setSelectedTextId(id);
-  }, [activeClipId, activeClipDuration, setClips]);
+  }, [activeClipId, activeClipDuration, dispatchDocument]);
 
   const handleUpdateText = useCallback((id, partial) => {
-    setClips((prev) =>
-      prev.map((c) =>
-        c.id === activeClipId
-          ? { ...c, texts: (c.texts || []).map((t) => (t.id === id ? { ...t, ...partial } : t)) }
-          : c
-      )
-    , 'text-update');
-  }, [activeClipId, setClips]);
+    dispatchDocument({
+      type: 'text/updated',
+      clipId: activeClipId,
+      textId: id,
+      patch: partial,
+    }, 'text-update');
+  }, [activeClipId, dispatchDocument]);
 
   const handleDeleteText = useCallback((id) => {
-    setClips((prev) =>
-      prev.map((c) =>
-        c.id === activeClipId
-          ? { ...c, texts: (c.texts || []).filter((t) => t.id !== id) }
-          : c
-      )
-    , 'delete-text');
+    dispatchDocument({ type: 'text/deleted', clipId: activeClipId, textId: id }, 'delete-text');
     setSelectedTextId((sel) => (sel === id ? null : sel));
-  }, [activeClipId, setClips]);
+  }, [activeClipId, dispatchDocument]);
 
   const handleSplit = useCallback(() => {
     if (!activeClip) return;
     const clipDur = activeClip.sourceEnd - activeClip.sourceStart;
     if (currentOffset <= 0.05 || currentOffset >= clipDur - 0.05) return;
     const cut = activeClip.sourceStart + Math.min(currentOffset, clipDur - 0.1);
-    setDoc((prev) => {
-      const idx = prev.clips.findIndex((c) => c.id === activeClip.id);
-      if (idx < 0) return prev;
-      const source = prev.clips[idx];
-      const splitOffset = cut - source.sourceStart;
-      const clipA = { ...source, sourceEnd: cut, texts: sliceClipTexts(source.texts, 0, splitOffset) };
-      const clipB = {
-        id: nextId('clip'),
-        fileId: source.fileId,
-        sourceStart: cut,
-        sourceEnd: source.sourceEnd,
-        introEnd: source.introEnd,
-        videoLayout: source.videoLayout,
-        speed: source.speed || 1,
-        transform: { ...(source.transform || DEFAULT_TRANSFORM) },
-        audio: { ...(source.audio || DEFAULT_AUDIO) },
-        pip: { ...(source.pip || DEFAULT_PIP) },
-        collaborativeRating: source.collaborativeRating
-          ? { ...source.collaborativeRating, scores: { ...(source.collaborativeRating.scores || {}) } }
-          : null,
-        texts: sliceClipTexts(source.texts, splitOffset, source.sourceEnd - source.sourceStart),
-      };
-      const nextClips = [...prev.clips];
-      nextClips.splice(idx, 1, clipA, clipB);
-      const nextTransitions = [...prev.transitions];
-      nextTransitions.splice(idx, 0, { ...DEFAULT_TRANSITION });
-      setActiveClipId(clipB.id);
-      setCurrentOffset(0);
-      return { ...prev, clips: nextClips, transitions: nextTransitions };
+    const splitOffset = cut - activeClip.sourceStart;
+    const leftClip = {
+      ...activeClip,
+      sourceEnd: cut,
+      texts: sliceClipTexts(activeClip.texts, 0, splitOffset),
+    };
+    const rightClip = {
+      id: nextId('clip'),
+      fileId: activeClip.fileId,
+      sourceStart: cut,
+      sourceEnd: activeClip.sourceEnd,
+      introEnd: activeClip.introEnd,
+      videoLayout: activeClip.videoLayout,
+      speed: activeClip.speed || 1,
+      transform: { ...(activeClip.transform || DEFAULT_TRANSFORM) },
+      audio: { ...(activeClip.audio || DEFAULT_AUDIO) },
+      pip: { ...(activeClip.pip || DEFAULT_PIP) },
+      collaborativeRating: activeClip.collaborativeRating
+        ? { ...activeClip.collaborativeRating, scores: { ...(activeClip.collaborativeRating.scores || {}) } }
+        : null,
+      texts: sliceClipTexts(activeClip.texts, splitOffset, activeClip.sourceEnd - activeClip.sourceStart),
+    };
+    dispatchDocument({
+      type: 'clip/split',
+      clipId: activeClip.id,
+      leftClip,
+      rightClip,
     }, 'split');
-  }, [activeClip, currentOffset, setDoc]);
+    setActiveClipId(rightClip.id);
+    setCurrentOffset(0);
+  }, [activeClip, currentOffset, dispatchDocument]);
 
   const handleTransitionChange = useCallback((index, value) => {
-    setTransitions((prev) => {
-      const t = [...prev];
-      t[index] = sanitizeTransition(value);
-      return t;
-    }, 'transition');
-  }, [setTransitions]);
+    dispatchDocument({ type: 'transition/updated', index, transition: value }, 'transition');
+  }, [dispatchDocument]);
 
   const handleSelectClip = useCallback((clipId, sourceOffset = 0) => {
     setActiveClipId(clipId);
@@ -421,35 +327,31 @@ export default function useProjectState() {
 
   const handleApplyTemplate = useCallback((template) => {
     if (!template) return;
-    setDoc((prev) => {
-      if (prev.clips.length === 0) return prev;
-      const currentParticipants = prev.meta?.collaborativeRanking?.participants || [];
-      const participants = template.collaborativeRanking
-        ? (currentParticipants.length >= 2 ? currentParticipants : makeDefaultParticipants())
-        : currentParticipants;
-      const collaborativeRanking = template.collaborativeRanking
-        ? { enabled: true, participants }
-        : prev.meta?.collaborativeRanking
-          ? { ...prev.meta.collaborativeRanking, enabled: false }
-          : undefined;
-      return {
-        ...prev,
-        clips: prev.clips.map((c, index) => applyClipTemplate(c, template, index, participants)),
-        meta: {
-          ...prev.meta,
-          blur: template.blur,
-          blurEnabled: template.blurEnabled,
-          ...(collaborativeRanking ? { collaborativeRanking } : {}),
-        },
-      };
-    }, 'apply-template');
+    if (clips.length === 0) return;
+    const currentParticipants = meta?.collaborativeRanking?.participants || [];
+    const participants = template.collaborativeRanking
+      ? (currentParticipants.length >= 2 ? currentParticipants : makeDefaultParticipants())
+      : currentParticipants;
+    const collaborativeRanking = template.collaborativeRanking
+      ? { enabled: true, participants }
+      : meta?.collaborativeRanking
+        ? { ...meta.collaborativeRanking, enabled: false }
+        : undefined;
+    const nextClips = clips.map((clip, index) => applyClipTemplate(clip, template, index, participants));
+    const nextMeta = {
+      ...meta,
+      blur: template.blur,
+      blurEnabled: template.blurEnabled,
+      ...(collaborativeRanking ? { collaborativeRanking } : {}),
+    };
+    dispatchDocument({ type: 'template/applied', clips: nextClips, meta: nextMeta }, 'apply-template');
     setSelectedTextId(null);
-  }, [setDoc]);
+  }, [clips, meta, dispatchDocument]);
 
   const handleReset = useCallback(() => {
     files.forEach((f) => { if (f.url) URL.revokeObjectURL(f.url); });
     setFiles([]);
-    undo.reset({ ...emptyDocument, meta: { ...DEFAULT_META } });
+    undo.reset(createEmptyDocument());
     setActiveClipId(null);
     setCurrentOffset(0);
     setSelectedTextId(null);

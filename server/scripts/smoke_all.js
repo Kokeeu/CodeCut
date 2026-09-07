@@ -68,6 +68,7 @@ async function ensureFixtures() {
 async function testCase(label, clips, transitions, extraFields = {}, inputFiles = null) {
   const { v1, v2 } = await ensureFixtures();
   const dest = path.join(OUT, `out-${label.replace(/\W+/g, '_')}.mp4`);
+  const progressUpdates = [];
   try {
     await exportProject({
       files: inputFiles || [{ path: v1 }, { path: v2 }],
@@ -77,7 +78,12 @@ async function testCase(label, clips, transitions, extraFields = {}, inputFiles 
         ...extraFields,
       },
       destPath: dest,
+      onUpdate: (update) => progressUpdates.push(update),
     });
+    const hasIntermediateProgress = progressUpdates.some((update) => (
+      update.status === 'processing' && update.progress > 0 && update.progress < 1
+    ));
+    if (!hasIntermediateProgress) throw new Error('SSE did not report intermediate FFmpeg progress');
     const stat = fs.statSync(dest);
     if (stat.size < 1000) throw new Error(`Output too small (${stat.size} bytes)`);
     await runFfmpeg(['-i', dest, '-f', 'null', '-']);

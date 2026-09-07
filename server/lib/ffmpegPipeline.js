@@ -1,15 +1,10 @@
 const { getAtempoChain } = require('./speed.js');
 const { getAnimation, getTypewriterSegments, getKaraokeSegments } = require('./textAnimations.js');
 const { getEncodingSettings } = require('./exportConfig.js');
+const { runFfmpeg } = require('./ffmpegRunner.js');
 
-const ffmpeg = require('fluent-ffmpeg');
-const ffmpegStatic = require('ffmpeg-static');
 const path = require('path');
 const fs = require('fs');
-
-if (ffmpegStatic) {
-  ffmpeg.setFfmpegPath(ffmpegStatic);
-}
 
 const OUTPUT_W = 1080;
 const OUTPUT_H = 1920;
@@ -547,30 +542,6 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig, pip
   return filters.join(';');
 }
 
-function validateClips(clips) {
-  if (!Array.isArray(clips) || clips.length === 0) {
-    return 'At least one clip is required.';
-  }
-  for (let i = 0; i < clips.length; i++) {
-    const c = clips[i];
-    if (typeof c.sourceStart !== 'number' || typeof c.sourceEnd !== 'number') {
-      return `Clip ${i}: sourceStart and sourceEnd must be numbers.`;
-    }
-    if (c.sourceStart < 0) return `Clip ${i}: sourceStart must be >= 0.`;
-    if (c.sourceEnd <= c.sourceStart) return `Clip ${i}: sourceEnd must be greater than sourceStart.`;
-  }
-  return null;
-}
-
-function parseTimeToSeconds(timeStr) {
-  const parts = timeStr.split(':');
-  if (parts.length !== 3) return 0;
-  const hours = parseFloat(parts[0]) || 0;
-  const minutes = parseFloat(parts[1]) || 0;
-  const seconds = parseFloat(parts[2]) || 0;
-  return hours * 3600 + minutes * 60 + seconds;
-}
-
 function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog, onProgress, exportConfig, pipInputIndexByClip, ratingOverlayInputIndexByClip }) {
   const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const textFiles = writeTextFiles(clips, runId);
@@ -590,128 +561,24 @@ function runPipeline({ inputPaths, clips, transitions, meta, outputPath, onLog, 
   }, 0);
   const totalFrames = Math.max(1, Math.round(totalDuration * encoding.fps));
 
-  const STALL_TIMEOUT_MS = 5 * 60 * 1000;
-
-  let command = null;
-  const promise = new Promise((resolve, reject) => {
-    command = ffmpeg();
-    let timeoutHandle = null;
-    let settled = false;
-    let cleanedUp = false;
-    let lastProgress = 0;
-
-    const reportProgress = (value) => {
-      if (!onProgress || !Number.isFinite(value)) return;
-      lastProgress = Math.max(lastProgress, Math.min(1, value));
-      onProgress(lastProgress);
-    };
-
-    const cleanup = () => {
-      if (cleanedUp) return;
-      cleanedUp = true;
-      if (timeoutHandle) clearTimeout(timeoutHandle);
-      cleanupTextFiles(textFiles);
-    };
-
-    const fail = (err, kill = false) => {
-      if (settled) return;
-      settled = true;
-      if (kill) {
-        try {
-          command.kill('SIGKILL');
-        } catch (killErr) {
-          console.warn('[pipeline] ffmpeg kill failed:', killErr.message);
-        }
-      }
-      cleanup();
-      reject(err);
-    };
-
-    const resetStallTimeout = () => {
-      if (timeoutHandle) clearTimeout(timeoutHandle);
-      timeoutHandle = setTimeout(() => {
-        const err = new Error('FFmpeg stopped responding for 5 minutes');
-        console.error('[pipeline] ffmpeg stalled:', err.message);
-        fail(err, true);
-      }, STALL_TIMEOUT_MS);
-    };
-
-    inputPaths.forEach((p) => command.input(p));
-
-    command
-      .complexFilter(filterGraph, ['vout', 'aout'])
-      .outputOptions([
-        '-c:v libx264',
-        `-preset ${encoding.preset}`,
-        `-crf ${encoding.crf}`,
-        `-maxrate ${encoding.maxRateKbps}k`,
-        `-bufsize ${encoding.bufferSizeKbps}k`,
-        `-r ${encoding.fps}`,
-        `-g ${encoding.fps * 2}`,
-        `-keyint_min ${encoding.fps}`,
-        '-profile:v high',
-        '-tag:v avc1',
-        '-c:a aac',
-        `-b:a ${encoding.audioBitrateKbps}k`,
-        `-ar ${AUDIO_RATE}`,
-        '-ac 2',
-        '-movflags +faststart',
-        '-pix_fmt yuv420p',
-        '-shortest',
-      ])
-      .on('start', (cmd) => {
-        if (onLog) onLog('start', cmd);
-        console.log('[pipeline] ffmpeg start:', cmd);
-        reportProgress(0.005);
-        resetStallTimeout();
-      })
-      .on('stderr', (line) => {
-        if (onLog) onLog('stderr', line);
-
-        const timeMatch = line.match(/time=(\d+:\d+:\d+\.\d+)/);
-        const frameMatch = line.match(/frame=\s*(\d+)/);
-        if (timeMatch || frameMatch) {
-          resetStallTimeout();
-          const timeProgress = timeMatch && totalDuration > 0
-            ? parseTimeToSeconds(timeMatch[1]) / totalDuration
-            : 0;
-          const frameProgress = frameMatch ? Number(frameMatch[1]) / totalFrames : 0;
-          reportProgress(Math.max(timeProgress, frameProgress));
-        }
-      })
-      .on('error', (err) => {
-        if (settled) return;
-        settled = true;
-        if (onLog) onLog('error', err.message);
-        console.error('[pipeline] ffmpeg error:', err.message);
-        console.error('[pipeline] filter graph:', filterGraph);
-        cleanup();
-        reject(err);
-      })
-      .on('end', () => {
-        if (settled) return;
-        settled = true;
-        if (onLog) onLog('end', null);
-        reportProgress(1);
-        console.log('[pipeline] done ->', outputPath);
-        cleanup();
-        resolve();
-      })
-      .save(outputPath);
-
-    command._kill = () => {
-      fail(new Error('Export cancelled'), true);
-    };
+  const runner = runFfmpeg({
+    inputPaths,
+    filterGraph,
+    outputPath,
+    encoding,
+    audioRate: AUDIO_RATE,
+    totalDuration,
+    totalFrames,
+    onLog,
+    onProgress,
   });
-  promise._kill = () => {
-    if (command && command._kill) command._kill();
-  };
+  const promise = runner.finally(() => cleanupTextFiles(textFiles));
+  promise._kill = runner._kill;
   return promise;
 }
 
 module.exports = {
   buildFilterGraph,
-  validateClips,
   runPipeline,
   safeUnlink,
   collectPipInputs,

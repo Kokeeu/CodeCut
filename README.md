@@ -9,8 +9,10 @@ Frontend: React + Vite + Tailwind. Backend: Node.js + Express + FFmpeg (`ffmpeg-
 ```
 video-editor/
 ├── client/   # React + Vite + Tailwind + @dnd-kit
-└── server/   # Node.js + Express + FFmpeg (fluent-ffmpeg + ffmpeg-static)
+└── server/   # Node.js + Express + FFmpeg/FFprobe ejecutados sin shell
 ```
+
+El estado editable del cliente se modifica mediante un reducer de dominio con un único historial de undo. La exportación separa la creación del contrato HTTP, el estado del job y la interfaz. En el servidor, la ruta multipart delega la validación y orquestación a un servicio; el pipeline solo construye filtros y un runner aislado ejecuta FFmpeg.
 
 ## Requisitos
 
@@ -85,6 +87,8 @@ Flujo asíncrono con progreso SSE:
 
 Jobs se persisten en `server/temp/jobs/` y caducan 15 minutos después de terminar. Al reiniciar el server, jobs a medias quedan marcados como error.
 
+Por defecto el servidor escucha en `127.0.0.1`. `HOST` permite cambiar la interfaz y `CORS_ORIGINS` define una lista separada por comas de orígenes permitidos. Los límites de carga se pueden ajustar con `MAX_UPLOAD_FILE_MB`, `MAX_UPLOAD_TOTAL_MB` y `MAX_OVERLAY_FILE_MB`.
+
 ## YouTube Import API
 
 1. `GET /api/youtube/health` — disponibilidad y versión de `yt-dlp`
@@ -105,10 +109,10 @@ npm run build
 cd server
 npm run test:unit
 npm start          # en otra terminal
-node scripts/smoke_all.js
+npm test
 ```
 
-`smoke_all.js` cubre clip único, multi-clip, transiciones, karaoke, PIP y el overlay de calificaciones colaborativas, usando el flujo 202 → SSE → download.
+`smoke_all.js` cubre clip único, multi-clip, transiciones, textos, karaoke, PIP, medios sin audio y el overlay de calificaciones colaborativas. Cada caso verifica el flujo 202 → progreso SSE intermedio → download y decodifica el MP4 resultante.
 
 ## Versión
 
