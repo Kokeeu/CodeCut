@@ -7,7 +7,6 @@ const SAMPLE_PARTICIPANTS = [
 
 const SAMPLE_RATING = {
   enabled: true,
-  average: '8.8',
   scores: { 'sample-1': '8.5', 'sample-2': '9.0' },
 };
 

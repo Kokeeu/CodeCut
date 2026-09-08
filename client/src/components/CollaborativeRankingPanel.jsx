@@ -1,5 +1,12 @@
 import { useState } from 'react';
-import { MAX_COLLABORATIVE_PARTICIPANTS, clampRating, formatRating, resizeParticipantImage } from '../lib/collaborativeRanking.js';
+import {
+  MAX_COLLABORATIVE_PARTICIPANTS,
+  clampCollaborativeTotal,
+  clampRating,
+  formatCollaborativeTotal,
+  formatRating,
+  resizeParticipantImage,
+} from '../lib/collaborativeRanking.js';
 import { PARTICIPANT_ACCENTS, nextId } from '../lib/projectDefaults.js';
 
 function ParticipantAvatar({ participant, onImageChange }) {
@@ -37,6 +44,11 @@ export default function CollaborativeRankingPanel({ meta, activeClip, onMetaChan
   const ranking = meta?.collaborativeRanking;
   const participants = ranking?.participants || [];
   const rating = activeClip?.collaborativeRating;
+  const automaticTotal = formatCollaborativeTotal(participants, rating?.scores);
+  const hasManualTotal = rating?.total !== undefined && rating?.total !== null && rating?.total !== '';
+  const displayedTotal = rating?.total === undefined || rating?.total === null
+    ? automaticTotal
+    : rating.total;
 
   if (!ranking?.enabled) {
     return (
@@ -184,18 +196,42 @@ export default function CollaborativeRankingPanel({ meta, activeClip, onMetaChan
 
       <div className="p-2.5 rounded-xl bg-glass-panel border border-glass-border">
         <label className="flex items-center gap-2 text-[11px] text-neutral-300">
-          Promedio de este clip
+          Puntuación total de este clip
           <input
             type="number"
             min="0"
-            max="10"
+            max={participants.length * 10}
             step="0.1"
-            value={rating?.average ?? ''}
-            onChange={(event) => onRatingChange?.({ average: event.target.value === '' ? '' : String(clampRating(event.target.value)) })}
-            onBlur={() => onRatingChange?.({ average: formatRating(rating?.average) })}
+            value={displayedTotal}
+            onChange={(event) => onRatingChange?.({
+              total: event.target.value === ''
+                ? ''
+                : String(clampCollaborativeTotal(event.target.value, participants.length)),
+            })}
+            onBlur={() => {
+              if (rating?.total === '') {
+                onRatingChange?.({ total: null });
+              } else if (hasManualTotal) {
+                onRatingChange?.({
+                  total: formatCollaborativeTotal(participants, rating?.scores, rating.total),
+                });
+              }
+            }}
             className="ml-auto w-20 px-2 py-1.5 rounded-md text-right font-mono text-[11px]"
           />
         </label>
+        <div className="mt-1 flex items-center justify-end gap-2 text-[9px] text-neutral-500">
+          <span>Suma automática: {automaticTotal}</span>
+          {hasManualTotal && (
+            <button
+              type="button"
+              onClick={() => onRatingChange?.({ total: null })}
+              className="text-signal hover:text-signal/80 transition-colors"
+            >
+              Usar suma
+            </button>
+          )}
+        </div>
         <label className="flex items-center gap-2 mt-2 text-[10px] text-neutral-400 cursor-pointer">
           <input
             type="checkbox"

@@ -102,7 +102,7 @@ export const TEMPLATES = [
   {
     id: 'tpl-top-musical-colaborativo',
     name: 'Top Colaborativo',
-    description: 'Fotos, nombres, notas manuales y promedio por canción',
+    description: 'Fotos, nombres, notas manuales y total automático por canción',
     font: 'bebasneue',
     color: '#ffffff',
     blur: 30,

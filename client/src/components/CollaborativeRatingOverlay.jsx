@@ -1,4 +1,9 @@
-import { formatRating, getCollaborativeCardRect, getCollaborativeLayout } from '../lib/collaborativeRanking.js';
+import {
+  formatCollaborativeTotal,
+  formatRating,
+  getCollaborativeCardRect,
+  getCollaborativeLayout,
+} from '../lib/collaborativeRanking.js';
 
 export default function CollaborativeRatingOverlay({ participants = [], rating, scale = 1 }) {
   const visibleParticipants = participants.slice(0, 6);
@@ -92,7 +97,7 @@ export default function CollaborativeRatingOverlay({ participants = [], rating, 
         className="absolute text-white font-extrabold flex items-center justify-center"
         style={{
           left: 270 * scale,
-          top: Math.min(layout.averageY, 1761) * scale,
+          top: Math.min(layout.totalY, 1761) * scale,
           width: 540 * scale,
           height: 104 * scale,
           borderRadius: 52 * scale,
@@ -103,7 +108,7 @@ export default function CollaborativeRatingOverlay({ participants = [], rating, 
           lineHeight: 1,
         }}
       >
-        PROMEDIO {formatRating(rating.average)}
+        TOTAL {formatCollaborativeTotal(visibleParticipants, rating.scores, rating.total)}
       </div>
     </div>
   );

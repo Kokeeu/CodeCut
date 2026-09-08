@@ -46,7 +46,7 @@ Vite hace proxy de `/api/*` a `http://localhost:4000`.
 2. Desde el media pool, añade más clips con **Timeline**.
 3. Edita en el timeline: click para activar, arrastra para reordenar, `S` para split, transiciones en las costuras.
 4. Ajusta trim, textos (arrastrar/redimensionar), velocidad, audio, PIP y plantillas.
-5. En **Top Colaborativo**, abre **Ranking** para cargar fotos circulares, editar nombres y registrar notas de 0 a 10 y el promedio de cada clip.
+5. En **Top Colaborativo**, abre **Ranking** para cargar fotos circulares, editar nombres y registrar notas de 0 a 10; la puntuación total de cada clip se suma automáticamente.
 6. **Export** envía la composición a FFmpeg y descarga el MP4 cuando termina.
 
 El proyecto se auto-guarda en el navegador (JSON + videos de hasta 200 MB en IndexedDB). Restore rehidrata clips y media. Un `.json` de proyecto no incluye los videos: si no están en caché, hay que volver a subirlos o importarlos. Para evitar picos de memoria, los archivos mayores de 200 MB no generan waveform, aunque conservan preview, filmstrip y exportación.

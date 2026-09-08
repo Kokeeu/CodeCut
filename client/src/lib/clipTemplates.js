@@ -12,7 +12,6 @@ export function applyClipTemplate(clip, template, clipIndex = 0, participants = 
     collaborativeRating: template.collaborativeRanking
       ? {
           enabled: true,
-          average: '8.8',
           scores: Object.fromEntries(participants.map((participant, index) => [
             participant.id,
             index === 0 ? '8.5' : index === 1 ? '9.0' : '0.0',

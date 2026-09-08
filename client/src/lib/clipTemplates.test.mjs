@@ -80,7 +80,7 @@ test('splitting retains the text of that clip without introducing another phase'
   }
 });
 
-test('the collaborative template assigns manual scores to every participant', () => {
+test('the collaborative template assigns scores used by the automatic total', () => {
   const participants = [
     { id: 'ana', name: 'Ana' },
     { id: 'mateo', name: 'Mateo' },
@@ -88,7 +88,6 @@ test('the collaborative template assigns manual scores to every participant', ()
   ];
   const clip = applyClipTemplate(makeClip('song', 12), collaborative, 0, participants);
   assert.equal(clip.collaborativeRating.enabled, true);
-  assert.equal(clip.collaborativeRating.average, '8.8');
   assert.deepEqual(clip.collaborativeRating.scores, { ana: '8.5', mateo: '9.0', leo: '0.0' });
   assert.equal(clip.texts.length, 4);
 });

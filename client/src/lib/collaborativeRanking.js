@@ -13,6 +13,26 @@ export function formatRating(value) {
   return clampRating(value).toFixed(1);
 }
 
+export function getCollaborativeTotal(participants = [], scores = {}) {
+  return participants
+    .slice(0, MAX_COLLABORATIVE_PARTICIPANTS)
+    .reduce((total, participant) => total + clampRating(scores?.[participant.id]), 0);
+}
+
+export function clampCollaborativeTotal(value, participantCount) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0;
+  const maximum = Math.max(0, Math.min(MAX_COLLABORATIVE_PARTICIPANTS, participantCount || 0)) * 10;
+  return Math.min(maximum, Math.max(0, number));
+}
+
+export function formatCollaborativeTotal(participants, scores, manualTotal) {
+  const total = manualTotal === undefined || manualTotal === null || manualTotal === ''
+    ? getCollaborativeTotal(participants, scores)
+    : clampCollaborativeTotal(manualTotal, participants.length);
+  return total.toFixed(1);
+}
+
 export function getCollaborativeLayout(count) {
   const safeCount = Math.max(1, Math.min(MAX_COLLABORATIVE_PARTICIPANTS, count || 1));
   const compact = safeCount > 4;
@@ -25,7 +45,7 @@ export function getCollaborativeLayout(count) {
   const cardHeight = compact ? 184 : safeCount === 4 ? 318 : 342;
   const top = compact ? 1250 : 1270;
   const rowGap = compact ? 18 : 0;
-  const averageY = top + rows * cardHeight + (rows - 1) * rowGap + 28;
+  const totalY = top + rows * cardHeight + (rows - 1) * rowGap + 28;
   const avatarSize = compact ? 82 : safeCount === 4 ? 112 : safeCount === 3 ? 132 : 152;
   const nameSize = compact ? 27 : safeCount === 4 ? 30 : 34;
   const scoreSize = compact ? 48 : safeCount === 4 ? 62 : 78;
@@ -38,7 +58,7 @@ export function getCollaborativeLayout(count) {
     cardHeight,
     top,
     rowGap,
-    averageY,
+    totalY,
     avatarSize,
     nameSize,
     scoreSize,
@@ -187,27 +207,27 @@ export async function renderCollaborativeOverlay(meta, clip) {
     ctx.restore();
   });
 
-  const averageText = `PROMEDIO ${formatRating(rating.average)}`;
-  const averageWidth = Math.max(390, Math.min(610, 210 + averageText.length * 25));
-  const averageX = (EXPORT_W - averageWidth) / 2;
-  const averageHeight = 104;
-  const averageY = Math.min(layout.averageY, EXPORT_H - averageHeight - 55);
+  const totalText = `TOTAL ${formatCollaborativeTotal(participants, rating.scores, rating.total)}`;
+  const totalWidth = Math.max(390, Math.min(610, 210 + totalText.length * 25));
+  const totalX = (EXPORT_W - totalWidth) / 2;
+  const totalHeight = 104;
+  const totalY = Math.min(layout.totalY, EXPORT_H - totalHeight - 55);
   ctx.save();
   ctx.shadowColor = 'rgba(22, 136, 255, 0.52)';
   ctx.shadowBlur = 28;
   ctx.fillStyle = 'rgba(10, 8, 30, 0.96)';
-  roundedRect(ctx, averageX, averageY, averageWidth, averageHeight, 52);
+  roundedRect(ctx, totalX, totalY, totalWidth, totalHeight, 52);
   ctx.fill();
   ctx.shadowColor = 'transparent';
   ctx.strokeStyle = '#22d3ee';
   ctx.lineWidth = 5;
-  roundedRect(ctx, averageX + 2.5, averageY + 2.5, averageWidth - 5, averageHeight - 5, 49);
+  roundedRect(ctx, totalX + 2.5, totalY + 2.5, totalWidth - 5, totalHeight - 5, 49);
   ctx.stroke();
   ctx.fillStyle = '#ffffff';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.font = '800 49px Inter, Arial, sans-serif';
-  ctx.fillText(averageText, EXPORT_W / 2, averageY + averageHeight / 2 + 2);
+  ctx.fillText(totalText, EXPORT_W / 2, totalY + totalHeight / 2 + 2);
   ctx.restore();
 
   return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));

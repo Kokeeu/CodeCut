@@ -108,7 +108,6 @@ export function reduceProjectDocument(document, action) {
                 ...clip,
                 collaborativeRating: {
                   enabled: true,
-                  average: '0.0',
                   scores: {},
                   ...(clip.collaborativeRating || {}),
                   ...action.patch,
