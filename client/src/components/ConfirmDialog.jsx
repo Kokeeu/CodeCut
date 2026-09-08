@@ -18,7 +18,7 @@ function InfoIcon() {
   );
 }
 
-export default function ConfirmDialog({ open, title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', onConfirm, onCancel, variant = 'danger' }) {
+export default function ConfirmDialog({ open, title, message, confirmLabel = 'Confirmar', cancelLabel = 'Cancelar', onConfirm, onCancel, variant = 'danger' }) {
   const dialogRef = useRef(null);
 
   useEffect(() => {

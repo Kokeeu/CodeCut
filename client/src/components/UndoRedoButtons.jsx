@@ -22,7 +22,7 @@ const UndoRedoButtons = memo(function UndoRedoButtons({ canUndo, canRedo, onUndo
       <button
         onClick={onUndo}
         disabled={!canUndo}
-        title="Undo (Ctrl+Z)"
+        title="Deshacer (Ctrl+Z)"
         className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-neutral-400 hover:text-neutral-100 hover:bg-white/5 transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-neutral-400"
       >
         <UndoIcon />
@@ -30,7 +30,7 @@ const UndoRedoButtons = memo(function UndoRedoButtons({ canUndo, canRedo, onUndo
       <button
         onClick={onRedo}
         disabled={!canRedo}
-        title="Redo (Ctrl+Y)"
+        title="Rehacer (Ctrl+Y)"
         className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-neutral-400 hover:text-neutral-100 hover:bg-white/5 transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-neutral-400"
       >
         <RedoIcon />

@@ -253,3 +253,35 @@ cd server && node scripts/smoke_all.js
 - v0.10: Precision trim (frame-by-frame, numeric input, waveform, zoom, Set In/Out, thin handles)
 - v0.11: Editor chrome (sidebars, transport, autosave, shuttle, export presets)
 - v0.12: Unified undo, PIP + karaoke in FFmpeg export, persisted jobs, media restore, SSE smoke tests
+- v0.13: Professional editorial redesign, contextual inspector, resizable workspace, Spanish UI
+
+## Editor UI Architecture (v0.13)
+
+The editor shell is split into composable layout primitives so visual structure stays separate from editing behavior:
+
+- `EditorShell.jsx` owns the responsive workspace regions and desktop panel resizing boundaries.
+- `ToolRail.jsx` owns primary navigation between media, text, and templates.
+- `CanvasWorkspace.jsx` owns canvas chrome, guide controls, and active-clip context.
+- `TimelineDock.jsx` composes transport, ruler, and clip track into one resizable dock.
+- `PropertiesPanel.jsx` is a contextual inspector: it shows text controls when a text is selected and clip controls otherwise.
+- `ResizeHandle.jsx` is the accessible pointer/keyboard separator shared by the side panels and timeline.
+- `useWorkspaceLayout.js` coordinates persisted layout state; `workspaceLayout.js` contains pure defaults, validation, and storage helpers.
+
+### Workspace rules
+
+- Desktop (`xl` and above): permanent tool rail, independently collapsible and resizable side panels, resizable timeline.
+- Tablet (`md` to `xl`): permanent tool rail with modal side overlays.
+- Mobile (below `md`): top-bar entry points open the existing drawer and bottom sheet.
+- Side panel and timeline dimensions are clamped and persisted in `localStorage` under `codecut-workspace-layout-v1`.
+- Overlay panels are mutually exclusive on tablet and mobile.
+
+### Design-system rules
+
+- Use semantic Tailwind tokens from `tailwind.config.js` and CSS variables from `index.css`; do not introduce literal purple as a primary UI color.
+- Primary interaction color: blue (`accent`); information/focus signal: cyan (`signal`); rare editorial emphasis or destructive contrast: pink (`flare`).
+- Use `Space Grotesk` only for display/brand moments and `Inter` for the interface.
+- Keep editor copy in Spanish. Stable media, project, and FFmpeg data keys remain unchanged.
+- Motion must use opacity/transform where possible and respect `prefers-reduced-motion`.
+- New layout persistence behavior belongs in pure helpers with Node tests before being wired into React.
+
+See `DESIGN.md` for the complete visual specification and component rationale.

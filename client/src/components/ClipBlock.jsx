@@ -76,13 +76,13 @@ const ClipBlock = memo(function ClipBlock({ clip, index, width, file, isActive, 
       {overlapLeft > 2 && (
         <div
           className="absolute top-0 bottom-0 left-0 pointer-events-none z-[5]"
-          style={{ width: overlapLeft, background: 'linear-gradient(90deg, rgba(168,85,247,0.4), transparent)' }}
+          style={{ width: overlapLeft, background: 'linear-gradient(90deg, rgba(22,136,255,0.45), transparent)' }}
         />
       )}
       {overlapRight > 2 && (
         <div
           className="absolute top-0 bottom-0 right-0 pointer-events-none z-[5]"
-          style={{ width: overlapRight, background: 'linear-gradient(90deg, transparent, rgba(168,85,247,0.4))' }}
+          style={{ width: overlapRight, background: 'linear-gradient(90deg, transparent, rgba(22,136,255,0.45))' }}
         />
       )}
       {filmstripStyle ? (
@@ -105,7 +105,7 @@ const ClipBlock = memo(function ClipBlock({ clip, index, width, file, isActive, 
               style={{
                 height: `${Math.max(8, peak * 100)}%`,
                 background: isActive
-                  ? 'linear-gradient(to top, rgba(168,85,247,0.7), rgba(192,132,252,0.9))'
+                  ? 'linear-gradient(to top, rgba(22,136,255,0.72), rgba(34,211,238,0.92))'
                   : 'linear-gradient(to top, rgba(148,163,184,0.5), rgba(203,213,225,0.7))',
               }}
             />
@@ -144,7 +144,7 @@ const ClipBlock = memo(function ClipBlock({ clip, index, width, file, isActive, 
                 onClick={(e) => { e.stopPropagation(); onDelete(); }}
                 onPointerDown={(e) => e.stopPropagation()}
                 className="pointer-events-auto w-7 h-7 rounded-lg bg-red-500/90 hover:bg-red-500 backdrop-blur-md text-white flex items-center justify-center transition-colors border border-red-400/30 shadow-panel"
-                title="Delete clip"
+                title="Eliminar clip"
               >
                 <TrashIcon />
               </button>
@@ -154,7 +154,7 @@ const ClipBlock = memo(function ClipBlock({ clip, index, width, file, isActive, 
                 onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
                 onPointerDown={(e) => e.stopPropagation()}
                 className="pointer-events-auto w-7 h-7 rounded-lg bg-accent/90 hover:bg-accent backdrop-blur-md text-white flex items-center justify-center transition-colors border border-accent/30 shadow-panel"
-                title="Duplicate clip"
+                title="Duplicar clip"
               >
                 <DuplicateIcon />
               </button>

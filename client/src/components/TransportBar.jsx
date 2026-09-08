@@ -1,98 +1,59 @@
+import { useEffect, useRef, useState } from 'react';
+import { MAX_ZOOM, MIN_ZOOM, ZOOM_STEP } from '../lib/timelineScale.js';
+
 function formatTime(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) return '00:00.0';
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  const ms = Math.floor((seconds % 1) * 10);
-  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${ms}`;
+  const minutes = Math.floor(seconds / 60);
+  const wholeSeconds = Math.floor(seconds % 60);
+  const tenths = Math.floor((seconds % 1) * 10);
+  return `${minutes.toString().padStart(2, '0')}:${wholeSeconds.toString().padStart(2, '0')}.${tenths}`;
 }
 
-function PlayIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
-      <path d="M3.5 2.5l8 4.5-8 4.5v-9z" />
-    </svg>
-  );
-}
-
-function PauseIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
-      <rect x="3" y="2.5" width="2.5" height="9" rx="0.5" />
-      <rect x="8.5" y="2.5" width="2.5" height="9" rx="0.5" />
-    </svg>
+function PlayIcon({ paused }) {
+  return paused ? (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="currentColor"><path d="M4 2.6l8.2 4.9L4 12.4V2.6z" /></svg>
+  ) : (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="currentColor"><rect x="3.5" y="2.5" width="2.7" height="10" rx="0.6" /><rect x="8.8" y="2.5" width="2.7" height="10" rx="0.6" /></svg>
   );
 }
 
 function SplitIcon() {
   return (
-    <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
-      <circle cx="3" cy="5" r="1.5" stroke="currentColor" strokeWidth="1.2" />
-      <circle cx="3" cy="9" r="1.5" stroke="currentColor" strokeWidth="1.2" />
-      <circle cx="11" cy="7" r="1.5" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M4.5 5L9.5 7M4.5 9L9.5 7" stroke="currentColor" strokeWidth="1.2" />
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <circle cx="3" cy="4.5" r="1.5" stroke="currentColor" strokeWidth="1.2" /><circle cx="3" cy="9.5" r="1.5" stroke="currentColor" strokeWidth="1.2" /><path d="M4.5 4.8L11 7M4.5 9.2L11 7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
     </svg>
   );
 }
 
 function TrashIcon() {
   return (
-    <svg width="13" height="13" viewBox="0 0 12 12" fill="none">
-      <path d="M2 3h8M4.5 3V2a1 1 0 011-1h1a1 1 0 011 1v1M3 3l.5 7a1 1 0 001 1h3a1 1 0 001-1L9 3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+      <path d="M2 3.5h9M5 3.5V2.2h3v1.3M3.2 3.5l.5 7h5.6l.5-7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
 
-function ResetIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
-      <path d="M2 5.5A5 5 0 1111.5 7M2 5.5V2.5M2 5.5h3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function GuidesIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
-      <rect x="2" y="2" width="10" height="10" rx="1" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M5 2v10M9 2v10M2 5h10M2 9h10" stroke="currentColor" strokeWidth="1" opacity="0.5" />
-    </svg>
-  );
-}
-
-function MediaIcon() {
+function PanelIcon({ side }) {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-      <rect x="1.5" y="3" width="11" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
-      <path d="M1.5 9l3-2 2 1.5 2-1.5 4 2" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+      <rect x="1.5" y="2" width="11" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+      <path d={side === 'left' ? 'M5 2v10' : 'M9 2v10'} stroke="currentColor" strokeWidth="1.2" />
     </svg>
   );
 }
 
-function PropertiesIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-      <path d="M3 1.5h5M3 4.5h8M3 7.5h6M3 10.5h4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-      <circle cx="11" cy="10.5" r="2" stroke="currentColor" strokeWidth="1.3" />
-    </svg>
-  );
-}
-
-function TransportButton({ onClick, disabled, title, active, children, primary }) {
+function ToolButton({ onClick, disabled, title, children, danger = false }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       disabled={disabled}
       title={title}
+      aria-label={title}
       className={[
-        'inline-flex items-center justify-center shrink-0',
-        'min-w-[40px] min-h-[40px] w-10 h-10 rounded-xl',
-        'transition-all duration-150 focus-ring',
-        primary
-          ? 'bg-gradient-to-br from-accent to-accent-dim text-white shadow-glow-accent-sm hover:shadow-glow-accent hover:scale-105'
-          : active
-            ? 'bg-accent/15 text-accent border border-accent/30'
-            : 'text-neutral-400 hover:text-neutral-100 hover:bg-white/5 border border-transparent',
-        'disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:bg-transparent disabled:hover:text-neutral-400',
+        'w-8 h-8 rounded-lg inline-flex items-center justify-center border border-transparent transition-colors focus-ring',
+        danger ? 'text-neutral-500 hover:text-red-300 hover:bg-red-500/10 hover:border-red-500/15' : 'text-neutral-500 hover:text-neutral-100 hover:bg-white/5 hover:border-glass-border',
+        'disabled:opacity-30 disabled:pointer-events-none',
       ].join(' ')}
     >
       {children}
@@ -101,81 +62,92 @@ function TransportButton({ onClick, disabled, title, active, children, primary }
 }
 
 export default function TransportBar({
-  isPlaying, onPlayPause, onSplit, onDelete, onReset,
-  currentOffset, totalDuration, clipsCount, canDelete,
-  showGuides, onToggleGuides,
-  onOpenProperties, onOpenMedia,
+  isPlaying,
+  onPlayPause,
+  onSplit,
+  onDelete,
+  onReset,
+  currentOffset,
+  totalDuration,
+  clipsCount,
+  canDelete,
+  onOpenProperties,
+  onOpenMedia,
+  timelineZoom,
+  onTimelineZoomChange,
 }) {
+  const [showMore, setShowMore] = useState(false);
+  const moreRef = useRef(null);
+
+  useEffect(() => {
+    if (!showMore) return undefined;
+    const close = (event) => {
+      if (!moreRef.current?.contains(event.target)) setShowMore(false);
+    };
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
+  }, [showMore]);
+
   return (
-    <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 bg-editor-panel/80 backdrop-blur-md border-t border-glass-border shrink-0 overflow-x-auto scrollbar-thin">
-      <div className="flex items-center gap-0.5 p-0.5 rounded-xl bg-glass-panel border border-glass-border shrink-0">
-        <button
-          onClick={onOpenMedia}
-          className="md:hidden inline-flex items-center justify-center min-w-[40px] min-h-[40px] w-10 h-10 rounded-lg text-neutral-300 hover:text-neutral-100 hover:bg-white/5 transition-colors"
-          title="Media"
-        >
-          <MediaIcon />
-        </button>
-        <TransportButton onClick={onPlayPause} title={isPlaying ? 'Pause (Space)' : 'Play (Space)'} primary>
-          {isPlaying ? <PauseIcon /> : <PlayIcon />}
-        </TransportButton>
-        <TransportButton onClick={onSplit} title="Split (S)">
-          <SplitIcon />
-        </TransportButton>
-        <TransportButton onClick={onDelete} disabled={!canDelete} title="Delete clip">
-          <TrashIcon />
-        </TransportButton>
-        <TransportButton onClick={onReset} title="Reset project">
-          <ResetIcon />
-        </TransportButton>
-        <TransportButton onClick={onToggleGuides} title="Toggle guides" active={showGuides}>
-          <GuidesIcon />
-        </TransportButton>
+    <div className="h-12 px-2.5 flex items-center gap-2 border-b border-glass-border bg-editor-panel/80 shrink-0">
+      <div className="flex items-center gap-1 min-w-0">
+        <ToolButton onClick={onOpenMedia} title="Abrir medios"><PanelIcon side="left" /></ToolButton>
+        <div className="hidden sm:block min-w-16 mr-1">
+          <div className="text-[9px] font-bold uppercase tracking-[0.15em] text-neutral-500">Línea de tiempo</div>
+          <div className="text-[9px] font-mono text-neutral-600">{clipsCount} {clipsCount === 1 ? 'clip' : 'clips'}</div>
+        </div>
+        <span className="hidden sm:block vdivider" />
+        <ToolButton onClick={onSplit} title="Dividir clip (S)"><SplitIcon /></ToolButton>
+        <ToolButton onClick={onDelete} disabled={!canDelete} title="Eliminar clip" danger><TrashIcon /></ToolButton>
       </div>
 
-      <div className="hidden sm:block flex-1 min-w-0" />
-
-      <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-glass-panel border border-glass-border shrink-0">
-        <div className="text-[10px] font-semibold text-neutral-500 uppercase tracking-wider">Time</div>
-        <div className="font-mono text-[12px] tabular-nums">
-          <span className="text-accent font-semibold">{formatTime(currentOffset)}</span>
-          <span className="text-neutral-600 mx-1">/</span>
-          <span className="text-neutral-500">{formatTime(totalDuration)}</span>
+      <div className="flex-1 flex items-center justify-center gap-2 min-w-0">
+        <button
+          type="button"
+          onClick={onPlayPause}
+          title={isPlaying ? 'Pausar (Espacio)' : 'Reproducir (Espacio)'}
+          className="w-10 h-10 rounded-xl inline-flex items-center justify-center bg-gradient-to-br from-signal via-accent to-accent-dim text-white shadow-glow-accent-sm hover:shadow-glow-accent hover:scale-105 transition-all focus-ring"
+        >
+          <PlayIcon paused={!isPlaying} />
+        </button>
+        <div className="hidden sm:flex items-baseline gap-1.5 font-mono tabular-nums whitespace-nowrap">
+          <span className="text-[12px] font-semibold text-signal">{formatTime(currentOffset)}</span>
+          <span className="text-[9px] text-neutral-700">/</span>
+          <span className="text-[10px] text-neutral-500">{formatTime(totalDuration)}</span>
         </div>
       </div>
 
-      <div className="hidden lg:flex items-center gap-2 text-[10px] text-neutral-500 shrink-0">
-        <span className="inline-flex items-center gap-1">
-          <kbd className="kbd">Space</kbd>
-          <span>play</span>
-        </span>
-        <span className="text-neutral-700">·</span>
-        <span className="inline-flex items-center gap-1">
-          <kbd className="kbd">S</kbd>
-          <span>split</span>
-        </span>
-        <span className="text-neutral-700">·</span>
-        <span className="inline-flex items-center gap-1">
-          <kbd className="kbd">J</kbd>
-          <kbd className="kbd">K</kbd>
-          <kbd className="kbd">L</kbd>
-          <span>shuttle</span>
-        </span>
-        <span className="text-neutral-700">·</span>
-        <span className="inline-flex items-center gap-1">
-          <kbd className="kbd">←</kbd>
-          <kbd className="kbd">→</kbd>
-          <span>frame</span>
-        </span>
+      <div className="flex items-center justify-end gap-1 min-w-0">
+        <div className="hidden md:flex items-center gap-1.5 w-32 lg:w-40">
+          <span className="text-[9px] font-mono text-neutral-600">−</span>
+          <input
+            type="range"
+            min={MIN_ZOOM}
+            max={MAX_ZOOM}
+            step={ZOOM_STEP}
+            value={timelineZoom}
+            onChange={(event) => onTimelineZoomChange?.(Number(event.target.value))}
+            className="flex-1"
+            aria-label="Zoom de la línea de tiempo"
+          />
+          <span className="text-[9px] font-mono text-neutral-500 w-7 text-right">{timelineZoom.toFixed(1)}×</span>
+        </div>
+        <ToolButton onClick={onOpenProperties} title="Abrir inspector"><PanelIcon side="right" /></ToolButton>
+        <div ref={moreRef} className="relative">
+          <ToolButton onClick={() => setShowMore((open) => !open)} title="Más acciones">•••</ToolButton>
+          {showMore && (
+            <div className="absolute right-0 bottom-full mb-2 w-44 p-1.5 glass-floating rounded-xl z-50 animate-slide-up">
+              <button
+                type="button"
+                onClick={() => { setShowMore(false); onReset(); }}
+                className="w-full px-2.5 py-2 rounded-lg text-left text-[11px] text-red-300 hover:bg-red-500/10 transition-colors"
+              >
+                Reiniciar proyecto
+              </button>
+            </div>
+          )}
+        </div>
       </div>
-
-      <button
-        onClick={onOpenProperties}
-        className="lg:hidden inline-flex items-center justify-center min-w-[40px] min-h-[40px] w-10 h-10 rounded-xl text-neutral-300 hover:text-neutral-100 hover:bg-white/5 border border-glass-border transition-colors shrink-0"
-        title="Properties"
-      >
-        <PropertiesIcon />
-      </button>
     </div>
   );
 }

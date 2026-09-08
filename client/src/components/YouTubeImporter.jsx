@@ -271,13 +271,13 @@ export default function YouTubeImporter({ onFilesAdded, currentFileCount = 0, co
 
   const triggerClass = compact
     ? 'inline-flex items-center justify-center gap-1.5 w-full px-3 py-2 rounded-xl border border-red-500/20 bg-red-500/5 hover:bg-red-500/10 hover:border-red-500/40 text-xs text-red-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all focus-ring'
-    : 'inline-flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl border border-red-500/25 bg-red-500/[0.07] hover:bg-red-500/10 hover:border-red-500/45 text-sm font-semibold text-red-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all focus-ring';
+    : 'inline-flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl border border-red-500/25 bg-red-500/[0.07] hover:bg-red-500/10 hover:border-red-500/[0.45] text-sm font-semibold text-red-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all focus-ring';
 
   return (
     <>
       <button onClick={openDialog} disabled={remainingSlots <= 0} className={triggerClass}>
         <YouTubeIcon size={compact ? 14 : 18} />
-        {remainingSlots <= 0 ? 'Media pool lleno' : 'Importar desde YouTube'}
+        {remainingSlots <= 0 ? 'Biblioteca llena' : 'Importar desde YouTube'}
       </button>
 
       {open && (

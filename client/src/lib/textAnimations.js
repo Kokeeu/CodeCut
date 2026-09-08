@@ -1,6 +1,6 @@
 const ANIMATIONS = {
   'fade-in': {
-    label: 'Fade In',
+    label: 'Fundido de entrada',
     getPreviewStyle(progress) {
       return { opacity: Math.min(1, progress) };
     },
@@ -9,7 +9,7 @@ const ANIMATIONS = {
     },
   },
   'slide-up': {
-    label: 'Slide Up',
+    label: 'Deslizar hacia arriba',
     getPreviewStyle(progress) {
       const offset = 80 * (1 - Math.min(1, progress));
       return { transform: `translateY(${offset}px)` };
@@ -19,7 +19,7 @@ const ANIMATIONS = {
     },
   },
   'slide-left': {
-    label: 'Slide Left',
+    label: 'Deslizar desde la derecha',
     getPreviewStyle(progress) {
       const offset = 120 * (1 - Math.min(1, progress));
       return { transform: `translateX(${offset}px)` };
@@ -29,7 +29,7 @@ const ANIMATIONS = {
     },
   },
   'typewriter': {
-    label: 'Typewriter',
+    label: 'Máquina de escribir',
     getPreviewStyle(progress, tx, ty, text) {
       const len = (text || '').length;
       const visibleChars = Math.floor(Math.min(1, progress) * len);
@@ -38,7 +38,7 @@ const ANIMATIONS = {
     isTypewriter: true,
   },
   'bounce': {
-    label: 'Bounce',
+    label: 'Rebote',
     getPreviewStyle(progress) {
       const p = Math.min(1, progress);
       let scale;
@@ -56,7 +56,7 @@ const ANIMATIONS = {
     },
   },
   'scale-in': {
-    label: 'Scale In',
+    label: 'Escala de entrada',
     getPreviewStyle(progress) {
       return { transform: `scale(${Math.min(1, progress)})` };
     },

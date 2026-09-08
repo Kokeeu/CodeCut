@@ -9,15 +9,15 @@ export const PLATFORM_PRESETS = {
   tiktok: { label: 'TikTok', resolution: '1080', fps: 30, quality: 'high', icon: '📱' },
   reels: { label: 'Reels', resolution: '1080', fps: 30, quality: 'high', icon: '📸' },
   shorts: { label: 'Shorts', resolution: '1080', fps: 60, quality: 'high', icon: '▶️' },
-  custom: { label: 'Custom', icon: '⚙️' },
+  custom: { label: 'Personalizado', icon: '⚙️' },
 };
 
 export const RESOLUTIONS = [
   { value: '720', width: 720, height: 1280, label: '720p (720x1280)' },
-  { value: '1080', width: 1080, height: 1920, label: '1080p (1080x1920) · recommended' },
+  { value: '1080', width: 1080, height: 1920, label: '1080p (1080x1920) · recomendado' },
   { value: '1440', width: 1440, height: 2560, label: '1440p (1440x2560)' },
-  { value: '2160', width: 2160, height: 3840, label: '4K UHD (2160x3840) · slow' },
-  { value: '2304', width: 2304, height: 4096, label: 'TikTok API max (2304x4096) · slow' },
+  { value: '2160', width: 2160, height: 3840, label: '4K UHD (2160x3840) · lento' },
+  { value: '2304', width: 2304, height: 4096, label: 'Máximo API TikTok (2304x4096) · lento' },
 ];
 
 export const FPS_OPTIONS = [
@@ -27,9 +27,9 @@ export const FPS_OPTIONS = [
 ];
 
 export const QUALITY_OPTIONS = [
-  { value: 'medium', label: 'Efficient', description: 'Smaller file' },
-  { value: 'high', label: 'High', description: 'Recommended' },
-  { value: 'ultra', label: 'Master', description: 'Maximum quality' },
+  { value: 'medium', label: 'Eficiente', description: 'Archivo más pequeño' },
+  { value: 'high', label: 'Alta', description: 'Recomendada' },
+  { value: 'ultra', label: 'Máster', description: 'Calidad máxima' },
 ];
 
 const QUALITY_DETAILS = {

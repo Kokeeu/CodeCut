@@ -449,7 +449,7 @@ const VideoPreview = forwardRef(function VideoPreview(
           height: `${cardH}px`,
           cursor: clip ? 'grab' : 'default',
           touchAction: 'none',
-          boxShadow: '0 32px 80px -16px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.04), 0 0 60px -20px rgba(168, 85, 247, 0.15)',
+          boxShadow: '0 32px 80px -16px rgba(0, 5, 18, 0.9), 0 0 0 1px rgba(141, 185, 232, 0.12), 0 0 60px -20px rgba(22, 136, 255, 0.22)',
         }}
       >
         {clip && fileUrl ? (
@@ -517,7 +517,7 @@ const VideoPreview = forwardRef(function VideoPreview(
           })()
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-slate-600 text-sm pointer-events-none">
-            No clip selected
+            Ningún clip seleccionado
           </div>
         )}
 
@@ -532,7 +532,7 @@ const VideoPreview = forwardRef(function VideoPreview(
               top: `${handles[corner].y - 5}px`,
               width: '10px',
               height: '10px',
-                background: '#a855f7',
+                background: '#1688ff',
               border: '1.5px solid #fff',
               borderRadius: '2px',
               cursor: CORNER_CURSOR[corner],

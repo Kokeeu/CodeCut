@@ -27,10 +27,10 @@ export default function ClipTransformControls({ transform, onTransformChange }) 
 
   return (
     <div className="p-2 rounded-lg bg-editor-surface border border-editor-border">
-      <label className="block text-[10px] text-neutral-400 mb-1.5">Transform</label>
+      <label className="block text-[10px] text-neutral-400 mb-1.5">Transformación</label>
       
       <div className="flex items-center gap-2 mb-2">
-        <span className="text-[9px] text-neutral-500 shrink-0">Scale:</span>
+        <span className="text-[9px] text-neutral-500 shrink-0">Escala:</span>
         <input
           type="range"
           min="0.1"
@@ -49,37 +49,37 @@ export default function ClipTransformControls({ transform, onTransformChange }) 
         <button
           onClick={handleCenter}
           className="flex-1 px-2 py-1 rounded bg-editor-border hover:bg-editor-hover text-neutral-300 text-[10px] font-medium transition-colors"
-          title="Center (reset X/Y)"
+          title="Centrar (restablece X/Y)"
         >
-          Center
+          Centrar
         </button>
         <button
           onClick={handleFitW}
           className="flex-1 px-2 py-1 rounded bg-editor-border hover:bg-editor-hover text-neutral-300 text-[10px] font-medium transition-colors"
-          title="Fit Width (scale=1)"
+          title="Ajustar al ancho (escala=1)"
         >
-          Fit W
+          Ajustar
         </button>
         <button
           onClick={handleFill}
           className="flex-1 px-2 py-1 rounded bg-editor-border hover:bg-editor-hover text-neutral-300 text-[10px] font-medium transition-colors"
-          title="Fill Screen (scale=1.78)"
+          title="Llenar pantalla (escala=1.78)"
         >
-          Fill
+          Llenar
         </button>
         <button
           onClick={handleReset}
           className="flex-1 px-2 py-1 rounded bg-accent hover:bg-accent-hover text-white text-[10px] font-medium transition-colors"
-          title="Reset all (X/Y/Scale)"
+          title="Restablecer X, Y y escala"
         >
-          Reset
+          Restablecer
         </button>
       </div>
 
       <div className="flex items-center gap-3 text-[9px] font-mono text-neutral-500">
         <span>X: {Math.round(t.x)}</span>
         <span>Y: {Math.round(t.y)}</span>
-        <span>Scale: {t.scale.toFixed(2)}x</span>
+        <span>Escala: {t.scale.toFixed(2)}x</span>
       </div>
     </div>
   );

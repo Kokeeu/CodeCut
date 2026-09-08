@@ -5,9 +5,10 @@ import VideoPreview from './components/VideoPreview.jsx';
 import TopBar from './components/TopBar.jsx';
 import LeftSidebar from './components/LeftSidebar.jsx';
 import PropertiesPanel from './components/PropertiesPanel.jsx';
-import TransportBar from './components/TransportBar.jsx';
-import TimelineRuler from './components/TimelineRuler.jsx';
-import ClipTrack from './components/ClipTrack.jsx';
+import ToolRail from './components/ToolRail.jsx';
+import CanvasWorkspace from './components/CanvasWorkspace.jsx';
+import EditorShell from './components/EditorShell.jsx';
+import TimelineDock from './components/TimelineDock.jsx';
 import RestoreBanner from './components/RestoreBanner.jsx';
 import ConfirmDialog from './components/ConfirmDialog.jsx';
 import ToastContainer from './components/ToastContainer.jsx';
@@ -19,6 +20,7 @@ import useEditor from './hooks/useEditor.js';
 import useProjectAutosave from './hooks/useProjectAutosave.js';
 import useExitConfirmation from './hooks/useExitConfirmation.js';
 import useProjectState from './hooks/useProjectState.js';
+import useWorkspaceLayout from './hooks/useWorkspaceLayout.js';
 import { getTrackWidth, clampZoom } from './lib/timelineScale.js';
 import { TEMPLATES } from './lib/projectDefaults.js';
 import { resolvePlayback, clipSelectSourceOffset, clipAdvanceSourceOffset } from './lib/transitions.js';
@@ -30,7 +32,7 @@ export default function App() {
   const {
     files, clips, transitions, meta, setMeta,
     activeClipId, currentOffset, setCurrentOffset, selectedTextId, setSelectedTextId,
-    fileById, activeClip, activeFile, activeClipDuration, pendingFiles, undo,
+    fileById, activeClip, activeFile, pendingFiles, undo,
     handleFilesAdded, handleAddClip, handleDeleteClip, handleDuplicateClip, handleReorder,
     handleTrimChange, handleTransformChange, handleSpeedChange, handleAudioChange, handlePipChange,
     handleCollaborativeRatingChange,
@@ -47,9 +49,9 @@ export default function App() {
   const [exportConfig, setExportConfig] = useState(DEFAULT_EXPORT_CONFIG);
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
-  const [leftCollapsed, setLeftCollapsed] = useState(false);
-  const [rightCollapsed, setRightCollapsed] = useState(false);
+  const [activeTool, setActiveTool] = useState('media');
   const [timelineContainer, setTimelineContainer] = useState(null);
+  const workspaceLayout = useWorkspaceLayout();
   const previewRef = useRef(null);
   const shuttleRef = useRef({ direction: 0, level: 0 });
   const advancingRef = useRef(false);
@@ -81,6 +83,11 @@ export default function App() {
         sourceOffset: playback.incoming.sourceOffset,
       }
     : null;
+
+  const activeClipIndex = useMemo(
+    () => clips.findIndex((clip) => clip.id === activeClipId),
+    [clips, activeClipId]
+  );
 
   const handleTimelineZoomChange = useCallback((zoom) => {
     setTimelineZoom(clampZoom(zoom));
@@ -241,8 +248,91 @@ export default function App() {
     await handleRestore(data);
   }, [autosaveState, handleRestore]);
 
+  const isDesktopWorkspace = useCallback(() => {
+    return typeof window !== 'undefined' && window.matchMedia('(min-width: 1280px)').matches;
+  }, []);
+
+  const handleToolSelect = useCallback((tool) => {
+    if (isDesktopWorkspace()) {
+      if (tool === activeTool && workspaceLayout.leftOpen) {
+        workspaceLayout.setLeftOpen(false);
+        return;
+      }
+      setActiveTool(tool);
+      workspaceLayout.setLeftOpen(true);
+      return;
+    }
+    setActiveTool(tool);
+    setMobileRightOpen(false);
+    setMobileLeftOpen(true);
+  }, [activeTool, isDesktopWorkspace, workspaceLayout]);
+
+  const handleOpenMedia = useCallback(() => {
+    if (isDesktopWorkspace()) {
+      workspaceLayout.setLeftOpen(true);
+    } else {
+      setMobileRightOpen(false);
+      setMobileLeftOpen(true);
+    }
+  }, [isDesktopWorkspace, workspaceLayout]);
+
+  const handleOpenProperties = useCallback(() => {
+    if (isDesktopWorkspace()) {
+      workspaceLayout.setRightOpen(true);
+    } else {
+      setMobileLeftOpen(false);
+      setMobileRightOpen(true);
+    }
+  }, [isDesktopWorkspace, workspaceLayout]);
+
+  const handleCloseMedia = useCallback(() => {
+    if (isDesktopWorkspace()) {
+      workspaceLayout.setLeftOpen(false);
+    } else {
+      setMobileLeftOpen(false);
+    }
+  }, [isDesktopWorkspace, workspaceLayout]);
+
+  const handleCloseProperties = useCallback(() => {
+    if (isDesktopWorkspace()) {
+      workspaceLayout.setRightOpen(false);
+    } else {
+      setMobileRightOpen(false);
+    }
+  }, [isDesktopWorkspace, workspaceLayout]);
+
+  const handlePlayPause = useCallback(() => {
+    shuttleRef.current = { direction: 0, level: 0 };
+    previewRef.current?.stopRewind();
+    setIsPlaying((playing) => !playing);
+  }, []);
+
+  const requestDeleteClip = useCallback(() => {
+    if (!activeClip || clips.length <= 1) return;
+    setConfirmAction({
+      title: 'Eliminar clip',
+      message: `¿Quieres eliminar el clip ${activeClipIndex + 1}?`,
+      onConfirm: () => {
+        handleDeleteClip(activeClip.id);
+        setConfirmAction(null);
+      },
+    });
+  }, [activeClip, activeClipIndex, clips.length, handleDeleteClip]);
+
+  const requestResetProject = useCallback(() => {
+    setConfirmAction({
+      title: 'Reiniciar proyecto',
+      message: 'Se eliminarán todos los clips y archivos del proyecto. ¿Quieres continuar?',
+      onConfirm: () => {
+        handleReset();
+        setConfirmAction(null);
+        setIsPlaying(false);
+      },
+    });
+  }, [handleReset]);
+
   return (
-    <div className="h-full flex flex-col bg-editor-bg">
+    <div className="h-full flex flex-col bg-editor-bg studio-shell">
       <RestoreBanner onRestore={onRestore} onDismiss={autosaveState.dismiss} hasData={autosaveState.hasSavedData} />
       <PendingFilesBanner files={pendingFiles} />
       <TopBar
@@ -259,47 +349,72 @@ export default function App() {
         canRedo={undo.canRedo}
         onUndo={undo.undo}
         onRedo={undo.redo}
-        onToggleLeftSidebar={() => setMobileLeftOpen(true)}
-        onToggleRightSidebar={() => setMobileRightOpen(true)}
-        onToggleLeftCollapse={() => setLeftCollapsed((v) => !v)}
-        onToggleRightCollapse={() => setRightCollapsed((v) => !v)}
-        leftCollapsed={leftCollapsed}
-        rightCollapsed={rightCollapsed}
+        onToggleLeftSidebar={handleOpenMedia}
+        onToggleRightSidebar={handleOpenProperties}
+        onToggleLeftCollapse={workspaceLayout.toggleLeft}
+        onToggleRightCollapse={workspaceLayout.toggleRight}
+        leftCollapsed={!workspaceLayout.leftOpen}
+        rightCollapsed={!workspaceLayout.rightOpen}
         hasFiles={hasFiles}
+        autosaveStatus={autosaveState.status}
       />
 
       {!hasFiles ? (
-        <div className="flex-1 flex items-center justify-center p-4 sm:p-8 overflow-y-auto">
-          <div className="w-full max-w-lg flex flex-col gap-6 animate-fade-in">
-            <VideoUploader onFilesAdded={handleFilesAdded} remainingSlots={MAX_MEDIA_FILES - files.length} compact={false} />
+        <div className="flex-1 flex items-center justify-center p-4 sm:p-8 overflow-y-auto relative">
+          <div className="absolute inset-0 bg-grid-pattern bg-grid-md opacity-40 pointer-events-none [mask-image:radial-gradient(circle_at_center,black,transparent_76%)]" />
+          <div className="w-full max-w-2xl flex flex-col gap-5 animate-fade-in relative z-10">
+            <div className="text-center max-w-xl mx-auto">
+              <span className="section-kicker">Espacio de video vertical</span>
+              <h1 className="display-font mt-3 text-2xl sm:text-[32px] leading-tight font-extrabold tracking-[-0.04em] text-neutral-50 text-balance">
+                Tu estudio vertical, listo para cortar.
+              </h1>
+              <p className="mt-2 text-xs sm:text-sm text-neutral-500 leading-relaxed">
+                Un flujo preciso para montar, diseñar y exportar contenido 9:16.
+              </p>
+            </div>
+            <div className="landing-panel rounded-2xl p-2 sm:p-3">
+              <VideoUploader onFilesAdded={handleFilesAdded} remainingSlots={MAX_MEDIA_FILES - files.length} compact={false} />
+            </div>
             <div className="flex items-center gap-3">
               <div className="h-px bg-glass-border flex-1" />
-              <span className="text-[10px] uppercase tracking-wider text-neutral-600">o</span>
+              <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-neutral-600">o importa desde</span>
               <div className="h-px bg-glass-border flex-1" />
             </div>
             <YouTubeImporter onFilesAdded={handleFilesAdded} currentFileCount={files.length} />
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm text-neutral-400">
-              <div className="p-3 rounded-xl bg-glass-panel border border-glass-border">
-                <div className="text-xl mb-1 text-gradient-accent font-bold">1</div>
-                <div className="font-semibold text-neutral-200 text-xs">Upload</div>
-                <p className="text-[11px] mt-1">Sube archivos o importa enlaces de YouTube (hasta 10, 1 GB c/u).</p>
+              <div className="p-4 rounded-xl bg-glass-panel border border-glass-border card-hover">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-xs text-signal font-mono font-bold">01</div>
+                  <span className="w-1.5 h-1.5 rounded-full bg-signal/70" />
+                </div>
+                <div className="font-semibold text-neutral-100 text-xs">Importa</div>
+                <p className="text-[11px] leading-relaxed mt-1 text-neutral-500">Sube archivos o trae enlaces de YouTube.</p>
               </div>
-              <div className="p-3 rounded-xl bg-glass-panel border border-glass-border">
-                <div className="text-xl mb-1 text-gradient-accent font-bold">2</div>
-                <div className="font-semibold text-neutral-200 text-xs">Edit</div>
-                <p className="text-[11px] mt-1">Corta con <span className="font-mono text-neutral-200">S</span>, reordena, ajusta trim y transiciones.</p>
+              <div className="p-4 rounded-xl bg-glass-panel border border-glass-border card-hover">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-xs text-accent font-mono font-bold">02</div>
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent/70" />
+                </div>
+                <div className="font-semibold text-neutral-100 text-xs">Edita</div>
+                <p className="text-[11px] leading-relaxed mt-1 text-neutral-500">Corta, reordena y afina cada transición.</p>
               </div>
-              <div className="p-3 rounded-xl bg-glass-panel border border-glass-border">
-                <div className="text-xl mb-1 text-gradient-accent font-bold">3</div>
-                <div className="font-semibold text-neutral-200 text-xs">Export</div>
-                <p className="text-[11px] mt-1">FFmpeg compone todo a un MP4 vertical 1080x1920.</p>
+              <div className="p-4 rounded-xl bg-glass-panel border border-glass-border card-hover">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-xs text-flare font-mono font-bold">03</div>
+                  <span className="w-1.5 h-1.5 rounded-full bg-flare/70" />
+                </div>
+                <div className="font-semibold text-neutral-100 text-xs">Exporta</div>
+                <p className="text-[11px] leading-relaxed mt-1 text-neutral-500">Entrega en 1080×1920, listo para publicar.</p>
               </div>
             </div>
           </div>
         </div>
       ) : (
-        <div className="flex-1 flex overflow-hidden relative">
-          <div className={['hidden md:flex shrink-0', leftCollapsed ? 'md:w-14' : 'md:w-[280px]'].join(' ')}>
+        <EditorShell
+          toolRail={(
+            <ToolRail activeTool={activeTool} panelOpen={workspaceLayout.leftOpen} onSelect={handleToolSelect} />
+          )}
+          assetPanel={(
             <LeftSidebar
               files={files}
               onAddClip={handleAddClip}
@@ -309,14 +424,20 @@ export default function App() {
               hasClips={clips.length > 0}
               onAddText={handleAddText}
               activeClip={activeClip}
-              collapsed={leftCollapsed}
-              onToggleCollapse={() => setLeftCollapsed((v) => !v)}
+              activeTab={activeTool}
+              onTabChange={setActiveTool}
+              showTabs={false}
+              onToggleCollapse={handleCloseMedia}
             />
-          </div>
-
-          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-            <div className="flex-1 flex items-center justify-center bg-editor-bg overflow-hidden relative">
-              <div className="absolute inset-0 bg-gradient-radial from-accent/[0.04] via-transparent to-transparent pointer-events-none" />
+          )}
+          canvas={(
+            <CanvasWorkspace
+              activeFileName={previewFile?.name || activeFile?.name}
+              activeClipIndex={playback.index >= 0 ? playback.index : activeClipIndex}
+              clipsCount={clips.length}
+              showGuides={showGuides}
+              onToggleGuides={() => setShowGuides((guides) => !guides)}
+            >
               <VideoPreview
                 ref={previewRef}
                 clip={previewClip}
@@ -335,83 +456,66 @@ export default function App() {
                 showGuides={showGuides}
                 incoming={incoming}
               />
-            </div>
-
-            <TransportBar
-              isPlaying={isPlaying}
-              onPlayPause={() => {
-                shuttleRef.current = { direction: 0, level: 0 };
-                previewRef.current?.stopRewind();
-                setIsPlaying((p) => !p);
+            </CanvasWorkspace>
+          )}
+          timeline={(
+            <TimelineDock
+              height={workspaceLayout.timelineHeight}
+              onHeightChange={workspaceLayout.setTimelineHeight}
+              onHeightReset={workspaceLayout.resetTimelineHeight}
+              transport={{
+                isPlaying,
+                onPlayPause: handlePlayPause,
+                onSplit: handleSplit,
+                onDelete: requestDeleteClip,
+                onReset: requestResetProject,
+                onOpenProperties: handleOpenProperties,
+                onOpenMedia: handleOpenMedia,
+                currentOffset: currentGlobalTime,
+                totalDuration,
+                clipsCount: clips.length,
+                canDelete: clips.length > 1,
+                timelineZoom,
+                onTimelineZoomChange: handleTimelineZoomChange,
               }}
-              onSplit={handleSplit}
-              onDelete={() => {
-                if (activeClip && clips.length > 1) {
-                  setConfirmAction({
-                    title: 'Delete clip',
-                    message: `Are you sure you want to delete clip #${clips.findIndex((c) => c.id === activeClip.id) + 1}?`,
-                    onConfirm: () => { handleDeleteClip(activeClip.id); setConfirmAction(null); },
-                  });
-                }
+              ruler={{
+                totalDuration,
+                onSeek: handleGlobalSeek,
+                currentGlobalTime,
+                timelineZoom,
+                trackWidth,
+                scrollContainer: timelineContainer,
+                snapPoints,
+                clips,
+                transitions,
               }}
-              onReset={() => {
-                setConfirmAction({
-                  title: 'Reset project',
-                  message: 'This will remove all clips and files. Are you sure?',
-                  onConfirm: () => { handleReset(); setConfirmAction(null); setIsPlaying(false); },
-                });
+              track={{
+                ref: setTimelineContainer,
+                clips,
+                activeClipId,
+                incomingClipId: incoming?.clip?.id,
+                transitions,
+                fileById,
+                onSelect: handleTimelineSelect,
+                onDelete: handleDeleteClip,
+                onDuplicate: handleDuplicateClip,
+                onReorder: handleReorder,
+                onTransitionChange: handleTransitionChange,
+                timelineZoom,
+                trackWidth,
+                onTimelineZoomChange: handleTimelineZoomChange,
+                currentGlobalTime,
+                isPlaying,
               }}
-              onOpenProperties={() => setMobileRightOpen(true)}
-              onOpenMedia={() => setMobileLeftOpen(true)}
-              currentOffset={currentOffset}
-              totalDuration={activeClipDuration}
-              clipsCount={clips.length}
-              canDelete={clips.length > 1}
-              showGuides={showGuides}
-              onToggleGuides={() => setShowGuides((g) => !g)}
             />
-
-            <div className="h-48 md:h-52 flex flex-col bg-editor-panel/60 border-t border-glass-border shrink-0 backdrop-blur-md">
-              <TimelineRuler
-                totalDuration={totalDuration}
-                onSeek={handleGlobalSeek}
-                currentGlobalTime={currentGlobalTime}
-                timelineZoom={timelineZoom}
-                trackWidth={trackWidth}
-                scrollContainer={timelineContainer}
-                snapPoints={snapPoints}
-                clips={clips}
-                transitions={transitions}
-              />
-              <div className="flex-1 overflow-y-hidden px-2 py-2">
-                <ClipTrack
-                  ref={setTimelineContainer}
-                  clips={clips}
-                  activeClipId={activeClipId}
-                  incomingClipId={incoming?.clip?.id}
-                  transitions={transitions}
-                  fileById={fileById}
-                  onSelect={handleTimelineSelect}
-                  onDelete={handleDeleteClip}
-                  onDuplicate={handleDuplicateClip}
-                  onReorder={handleReorder}
-                  onTransitionChange={handleTransitionChange}
-                  timelineZoom={timelineZoom}
-                  trackWidth={trackWidth}
-                  onTimelineZoomChange={handleTimelineZoomChange}
-                  currentGlobalTime={currentGlobalTime}
-                  isPlaying={isPlaying}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className={['hidden lg:flex shrink-0', rightCollapsed ? 'lg:w-14' : 'lg:w-[320px]'].join(' ')}>
+          )}
+          inspector={(
             <PropertiesPanel
               meta={meta}
               onMetaChange={setMeta}
               activeClip={activeClip}
               activeFile={activeFile}
+              activeClipIndex={activeClipIndex}
               selectedTextId={selectedTextId}
               onSelectText={setSelectedTextId}
               onAddText={handleAddText}
@@ -426,11 +530,22 @@ export default function App() {
               onSeek={handleSeek}
               files={files}
               currentOffset={currentOffset}
-              collapsed={rightCollapsed}
-              onToggleCollapse={() => setRightCollapsed((v) => !v)}
+              onClose={handleCloseProperties}
             />
-          </div>
-        </div>
+          )}
+          leftOpen={workspaceLayout.leftOpen}
+          rightOpen={workspaceLayout.rightOpen}
+          leftWidth={workspaceLayout.leftWidth}
+          rightWidth={workspaceLayout.rightWidth}
+          onLeftWidthChange={workspaceLayout.setLeftWidth}
+          onRightWidthChange={workspaceLayout.setRightWidth}
+          onLeftWidthReset={workspaceLayout.resetLeftWidth}
+          onRightWidthReset={workspaceLayout.resetRightWidth}
+          leftOverlayOpen={mobileLeftOpen}
+          rightOverlayOpen={mobileRightOpen}
+          onCloseLeftOverlay={() => setMobileLeftOpen(false)}
+          onCloseRightOverlay={() => setMobileRightOpen(false)}
+        />
       )}
 
       {hasFiles && (
@@ -439,7 +554,7 @@ export default function App() {
             open={mobileLeftOpen}
             onClose={() => setMobileLeftOpen(false)}
             side="left"
-            title="Media & Tools"
+            title="Medios y herramientas"
           >
             <LeftSidebar
               files={files}
@@ -450,6 +565,8 @@ export default function App() {
               hasClips={clips.length > 0}
               onAddText={handleAddText}
               activeClip={activeClip}
+              activeTab={activeTool}
+              onTabChange={setActiveTool}
               embedded
             />
           </MobileDrawer>
@@ -457,13 +574,14 @@ export default function App() {
           <BottomSheet
             open={mobileRightOpen}
             onClose={() => setMobileRightOpen(false)}
-            title="Properties"
+            title="Inspector"
           >
             <PropertiesPanel
               meta={meta}
               onMetaChange={setMeta}
               activeClip={activeClip}
               activeFile={activeFile}
+              activeClipIndex={activeClipIndex}
               selectedTextId={selectedTextId}
               onSelectText={setSelectedTextId}
               onAddText={handleAddText}
@@ -493,10 +611,10 @@ export default function App() {
       />
       <ConfirmDialog
         open={showConfirm}
-        title="Leave editor?"
-        message="You have unsaved work in the editor. If you leave, your changes will be lost."
-        confirmLabel="Leave"
-        cancelLabel="Stay"
+        title="¿Salir del editor?"
+        message="Hay cambios en el editor. Si sales, podrías perderlos."
+        confirmLabel="Salir"
+        cancelLabel="Continuar editando"
         onConfirm={confirmExit}
         onCancel={cancelExit}
         variant="danger"

@@ -127,7 +127,7 @@ export async function renderCollaborativeOverlay(meta, clip) {
 
   participants.forEach((participant, index) => {
     const rect = getCollaborativeCardRect(index, layout);
-    const accent = participant.accent || '#a855f7';
+    const accent = participant.accent || '#1688ff';
     ctx.save();
     ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
     ctx.shadowBlur = 24;
@@ -193,13 +193,13 @@ export async function renderCollaborativeOverlay(meta, clip) {
   const averageHeight = 104;
   const averageY = Math.min(layout.averageY, EXPORT_H - averageHeight - 55);
   ctx.save();
-  ctx.shadowColor = 'rgba(168, 85, 247, 0.55)';
+  ctx.shadowColor = 'rgba(22, 136, 255, 0.52)';
   ctx.shadowBlur = 28;
   ctx.fillStyle = 'rgba(10, 8, 30, 0.96)';
   roundedRect(ctx, averageX, averageY, averageWidth, averageHeight, 52);
   ctx.fill();
   ctx.shadowColor = 'transparent';
-  ctx.strokeStyle = '#c084fc';
+  ctx.strokeStyle = '#22d3ee';
   ctx.lineWidth = 5;
   roundedRect(ctx, averageX + 2.5, averageY + 2.5, averageWidth - 5, averageHeight - 5, 49);
   ctx.stroke();

@@ -110,9 +110,9 @@ export const TEMPLATES = [
     collaborativeRanking: true,
     texts: [
       { id: 'tpl-collab-text-1', text: 'TOP DE CANCIONES', x: 540, y: 105, size: 78, align: 'center' },
-      { id: 'tpl-collab-text-2', text: '#01', x: 540, y: 205, size: 118, align: 'center', color: '#c084fc' },
+      { id: 'tpl-collab-text-2', text: '#01', x: 540, y: 205, size: 118, align: 'center', color: '#22d3ee' },
       { id: 'tpl-collab-text-3', text: 'TÍTULO DE LA CANCIÓN', x: 540, y: 1010, size: 62, align: 'center' },
-      { id: 'tpl-collab-text-4', text: 'ARTISTA', x: 540, y: 1100, size: 44, align: 'center', color: '#c4b5fd' },
+      { id: 'tpl-collab-text-4', text: 'ARTISTA', x: 540, y: 1100, size: 44, align: 'center', color: '#a8c7ea' },
     ],
   },
   {

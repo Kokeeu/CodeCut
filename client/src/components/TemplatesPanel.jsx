@@ -77,7 +77,7 @@ export default function TemplatesPanel({ templates, onApply, hasClips, vertical 
   return (
     <div className="p-3 rounded-xl bg-glass-panel border border-glass-border">
       <div className="flex items-center justify-between mb-2.5">
-        <h2 className="text-xs font-semibold text-neutral-200">Templates</h2>
+        <h2 className="text-xs font-semibold text-neutral-200">Plantillas</h2>
         <span className="text-[10px] text-neutral-500">
           {hasClips ? 'Apply to all clips' : 'Upload videos first'}
         </span>

@@ -145,7 +145,7 @@ export default function ClipMedia({
           cursor: interactive ? 'move' : 'default',
           userSelect: 'none',
           whiteSpace: 'pre',
-          outline: selected ? '1.5px dashed #a855f7' : 'none',
+          outline: selected ? '1.5px dashed #1688ff' : 'none',
           outlineOffset: '4px',
           zIndex: selected ? 30 : 20,
           opacity: !isVisible && selected ? 0.3 : 1,

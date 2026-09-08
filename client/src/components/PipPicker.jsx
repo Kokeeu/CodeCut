@@ -1,8 +1,8 @@
 export const PIP_POSITIONS = [
-  { value: 'top-left', label: 'Top Left' },
-  { value: 'top-right', label: 'Top Right' },
-  { value: 'bottom-left', label: 'Bottom Left' },
-  { value: 'bottom-right', label: 'Bottom Right' },
+  { value: 'top-left', label: 'Superior izquierda' },
+  { value: 'top-right', label: 'Superior derecha' },
+  { value: 'bottom-left', label: 'Inferior izquierda' },
+  { value: 'bottom-right', label: 'Inferior derecha' },
 ];
 
 export default function PipPicker({ pip, files, onChange }) {
@@ -29,20 +29,20 @@ export default function PipPicker({ pip, files, onChange }) {
           enabled ? 'bg-accent text-white' : 'bg-editor-surface text-neutral-400 hover:bg-editor-hover border border-editor-border',
         ].join(' ')}
         >
-          {enabled ? 'PIP ON' : 'PIP OFF'}
+          {enabled ? 'PIP ACTIVO' : 'PIP INACTIVO'}
         </button>
       </div>
 
       {enabled && (
         <>
           <div className="flex flex-col gap-1">
-            <label className="text-[9px] text-neutral-500">Video source</label>
+            <label className="text-[9px] text-neutral-500">Video de origen</label>
             <select
               value={fileId || ''}
               onChange={(e) => set('fileId', e.target.value || null)}
               className="px-2 py-1 rounded text-[10px]"
             >
-              <option value="">Select video...</option>
+              <option value="">Selecciona un video…</option>
               {availableFiles.map((f) => (
                 <option key={f.id} value={f.id}>{f.name}</option>
               ))}
@@ -50,7 +50,7 @@ export default function PipPicker({ pip, files, onChange }) {
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-[9px] text-neutral-500">Position</label>
+            <label className="text-[9px] text-neutral-500">Posición</label>
             <div className="grid grid-cols-2 gap-1">
               {PIP_POSITIONS.map((pos) => (
                 <button
@@ -70,7 +70,7 @@ export default function PipPicker({ pip, files, onChange }) {
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-[9px] text-neutral-500 shrink-0">Size</span>
+            <span className="text-[9px] text-neutral-500 shrink-0">Tamaño</span>
             <input
               type="range"
               min="10"
@@ -84,7 +84,7 @@ export default function PipPicker({ pip, files, onChange }) {
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-[9px] text-neutral-500 shrink-0">Opacity</span>
+            <span className="text-[9px] text-neutral-500 shrink-0">Opacidad</span>
             <input
               type="range"
               min="0.1"
@@ -104,11 +104,11 @@ export default function PipPicker({ pip, files, onChange }) {
                 checked={border}
                 onChange={(e) => set('border', e.target.checked)}
               />
-              <span className="text-[9px] text-neutral-400">Border</span>
+              <span className="text-[9px] text-neutral-400">Borde</span>
             </label>
             {border && (
               <>
-                <span className="text-[9px] text-neutral-500">Width</span>
+                <span className="text-[9px] text-neutral-500">Grosor</span>
                 <input
                   type="range"
                   min="1"
@@ -124,7 +124,7 @@ export default function PipPicker({ pip, files, onChange }) {
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-[9px] text-neutral-500 shrink-0">Radius</span>
+            <span className="text-[9px] text-neutral-500 shrink-0">Radio</span>
             <input
               type="range"
               min="0"

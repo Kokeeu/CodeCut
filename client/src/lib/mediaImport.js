@@ -6,11 +6,11 @@ export const MAX_MEDIA_FILE_BYTES = MAX_MEDIA_FILE_MB * 1024 * 1024;
 export const PERSISTENT_MEDIA_MAX_BYTES = 200 * 1024 * 1024;
 
 export function validateMediaFile(file) {
-  if (!file) return 'No file was selected.';
-  if (!file.type?.startsWith('video/')) return `"${file.name}" is not a video.`;
+  if (!file) return 'No se seleccionó ningún archivo.';
+  if (!file.type?.startsWith('video/')) return `"${file.name}" no es un video.`;
   if (file.size > MAX_MEDIA_FILE_BYTES) {
     const sizeMb = file.size / (1024 * 1024);
-    return `"${file.name}" is too large (${sizeMb.toFixed(0)} MB). Max ${MAX_MEDIA_FILE_MB} MB.`;
+    return `"${file.name}" es demasiado grande (${sizeMb.toFixed(0)} MB). Máximo: ${MAX_MEDIA_FILE_MB} MB.`;
   }
   return null;
 }

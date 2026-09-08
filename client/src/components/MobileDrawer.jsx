@@ -38,7 +38,7 @@ export default function MobileDrawer({ open, onClose, side = 'left', children, t
             <button
               onClick={onClose}
               className="w-8 h-8 rounded-lg flex items-center justify-center text-neutral-400 hover:text-neutral-100 hover:bg-white/5 transition-colors focus-ring"
-              aria-label="Close"
+              aria-label="Cerrar"
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                 <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />

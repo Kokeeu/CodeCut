@@ -16,11 +16,11 @@ export default function VideoUploader({ onFilesAdded, compact, remainingSlots = 
   const handleFiles = useCallback(async (fileList) => {
     const incoming = Array.from(fileList || []);
     if (remainingSlots <= 0) {
-      setError(`The media pool already contains ${MAX_MEDIA_FILES} files.`);
+      setError(`La biblioteca ya contiene el máximo de ${MAX_MEDIA_FILES} archivos.`);
       return;
     }
     if (incoming.length > remainingSlots) {
-      setError(`Only ${remainingSlots} more video${remainingSlots === 1 ? '' : 's'} can be added.`);
+      setError(`Solo puedes añadir ${remainingSlots} video${remainingSlots === 1 ? '' : 's'} más.`);
       return;
     }
     const list = incoming.slice(0, remainingSlots);
@@ -38,7 +38,7 @@ export default function VideoUploader({ onFilesAdded, compact, remainingSlots = 
       const metas = (await Promise.all(list.map(extractMediaMetadata))).filter(Boolean);
       if (metas.length > 0) {
         const result = onFilesAdded(metas);
-        if (result?.rejected > 0) setError(`${result.rejected} video${result.rejected === 1 ? '' : 's'} could not be added because the media pool is full.`);
+        if (result?.rejected > 0) setError(`No se ${result.rejected === 1 ? 'pudo añadir' : 'pudieron añadir'} ${result.rejected} video${result.rejected === 1 ? '' : 's'} porque la biblioteca está llena.`);
       }
     } finally {
       setBusy(false);
@@ -67,13 +67,13 @@ export default function VideoUploader({ onFilesAdded, compact, remainingSlots = 
           <svg width="11" height="11" viewBox="0 0 12 12" fill="none" className="text-accent/70 group-hover:text-accent transition-colors">
             <path d="M6 2v8M2 6h8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
           </svg>
-          {busy ? 'Loading…' : remainingSlots <= 0 ? 'Media pool full' : 'Add videos'}
+          {busy ? 'Cargando…' : remainingSlots <= 0 ? 'Biblioteca llena' : 'Añadir videos'}
         </button>
         <input ref={inputRef} type="file" accept="video/*" multiple onChange={onChange} className="hidden" />
         {error && (
           <p className="mt-1.5 text-[11px] text-red-400 px-1 leading-snug">{error}</p>
         )}
-        {busy && <FullscreenLoader message="Processing videos…" />}
+        {busy && <FullscreenLoader message="Procesando videos…" />}
       </div>
     );
   }
@@ -102,10 +102,10 @@ export default function VideoUploader({ onFilesAdded, compact, remainingSlots = 
             </svg>
           </div>
           <p className="text-base sm:text-lg font-semibold text-neutral-100">
-            {busy ? 'Reading videos…' : 'Drop your videos here'}
+            {busy ? 'Leyendo videos…' : 'Arrastra tus videos aquí'}
           </p>
           <p className="text-sm text-neutral-400 mt-1.5">
-            or click to select · multiple files allowed
+            o haz clic para seleccionar · puedes elegir varios archivos
           </p>
           <div className="flex items-center justify-center gap-1.5 mt-4 text-[10px] text-neutral-500">
             <span className="px-1.5 py-0.5 rounded bg-glass-panel border border-glass-border font-mono">MP4</span>
@@ -113,13 +113,13 @@ export default function VideoUploader({ onFilesAdded, compact, remainingSlots = 
             <span className="px-1.5 py-0.5 rounded bg-glass-panel border border-glass-border font-mono">WebM</span>
             <span className="px-1.5 py-0.5 rounded bg-glass-panel border border-glass-border font-mono">MKV</span>
             <span className="mx-1 text-neutral-700">·</span>
-            <span>up to {MAX_MEDIA_FILES} files · {MAX_MEDIA_FILE_MB} MB each</span>
+            <span>hasta {MAX_MEDIA_FILES} archivos · {MAX_MEDIA_FILE_MB} MB por archivo</span>
           </div>
         </div>
         <input ref={inputRef} type="file" accept="video/*" multiple onChange={onChange} className="hidden" />
       </div>
       {error && <p className="mt-3 text-sm text-red-400 text-center">{error}</p>}
-      {busy && <FullscreenLoader message="Processing videos…" />}
+      {busy && <FullscreenLoader message="Procesando videos…" />}
     </div>
   );
 }

@@ -1,23 +1,23 @@
 import { memo, useEffect } from 'react';
 
 const SHORTCUTS = [
-  { category: 'Playback', shortcuts: [
-    { keys: ['Space'], action: 'Play / Pause' },
-    { keys: ['J'], action: 'Rewind faster' },
-    { keys: ['K'], action: 'Stop rewind' },
-    { keys: ['L'], action: 'Play faster' },
-    { keys: ['←'], action: 'Step back 1 frame' },
-    { keys: ['→'], action: 'Step forward 1 frame' },
+  { category: 'Reproducción', shortcuts: [
+    { keys: ['Espacio'], action: 'Reproducir / Pausar' },
+    { keys: ['J'], action: 'Retroceder más rápido' },
+    { keys: ['K'], action: 'Detener retroceso' },
+    { keys: ['L'], action: 'Reproducir más rápido' },
+    { keys: ['←'], action: 'Retroceder 1 fotograma' },
+    { keys: ['→'], action: 'Avanzar 1 fotograma' },
   ]},
-  { category: 'Editing', shortcuts: [
-    { keys: ['S'], action: 'Split clip at playhead' },
-    { keys: ['Ctrl', 'Z'], action: 'Undo' },
-    { keys: ['Ctrl', 'Y'], action: 'Redo' },
-    { keys: ['Ctrl', 'Shift', 'Z'], action: 'Redo' },
+  { category: 'Edición', shortcuts: [
+    { keys: ['S'], action: 'Dividir en el cabezal' },
+    { keys: ['Ctrl', 'Z'], action: 'Deshacer' },
+    { keys: ['Ctrl', 'Y'], action: 'Rehacer' },
+    { keys: ['Ctrl', 'Shift', 'Z'], action: 'Rehacer' },
   ]},
-  { category: 'Other', shortcuts: [
-    { keys: ['?'], action: 'Show this help' },
-    { keys: ['Esc'], action: 'Close dialogs' },
+  { category: 'Otros', shortcuts: [
+    { keys: ['?'], action: 'Mostrar esta ayuda' },
+    { keys: ['Esc'], action: 'Cerrar diálogos' },
   ]},
 ];
 
@@ -61,13 +61,13 @@ const ShortcutOverlay = memo(function ShortcutOverlay({ isOpen, onClose }) {
       >
         <div className="flex items-center justify-between mb-5">
           <div>
-            <h2 className="text-base font-bold text-neutral-100">Keyboard shortcuts</h2>
-            <p className="text-[11px] text-neutral-500 mt-0.5">Press <kbd className="kbd">?</kbd> anytime to toggle this</p>
+            <h2 className="text-base font-bold text-neutral-100">Atajos de teclado</h2>
+            <p className="text-[11px] text-neutral-500 mt-0.5">Pulsa <kbd className="kbd">?</kbd> en cualquier momento para verlos</p>
           </div>
           <button
             onClick={onClose}
             className="w-9 h-9 rounded-lg text-neutral-400 hover:text-neutral-100 hover:bg-white/5 transition-all duration-150 focus-ring inline-flex items-center justify-center"
-            aria-label="Close"
+            aria-label="Cerrar"
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
               <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />

@@ -86,7 +86,7 @@ export default function ToastContainer() {
             <button
               onClick={() => removeToast(toast.id)}
               className="shrink-0 w-6 h-6 rounded-md text-neutral-500 hover:text-neutral-200 hover:bg-white/5 transition-colors inline-flex items-center justify-center"
-              aria-label="Dismiss"
+              aria-label="Descartar"
             >
               <CloseIcon />
             </button>

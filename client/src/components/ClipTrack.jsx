@@ -7,30 +7,9 @@ import {
   getEffectivePxPerSec,
   getPlayheadLeft,
   MIN_CLIP_WIDTH,
-  MIN_ZOOM,
-  MAX_ZOOM,
-  ZOOM_STEP,
   WHEEL_ZOOM_STEP,
 } from '../lib/timelineScale.js';
 import { clipOutputDuration, transitionDuration } from '../lib/transitions.js';
-
-function ZoomInIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-      <circle cx="5" cy="5" r="3.5" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M7.5 7.5L10 10M5 3.5v3M3.5 5h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function ZoomOutIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-      <circle cx="5" cy="5" r="3.5" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M7.5 7.5L10 10M3.5 5h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  );
-}
 
 const ClipTrack = forwardRef(function ClipTrack(
   {
@@ -229,8 +208,8 @@ const ClipTrack = forwardRef(function ClipTrack(
       <div className="h-full flex items-center justify-center">
         <div className="text-center">
           <div className="text-2xl mb-1.5 opacity-30">📽</div>
-          <p className="text-xs text-neutral-500">Timeline is empty</p>
-          <p className="text-[10px] text-neutral-600 mt-0.5">Add a clip from the media pool</p>
+          <p className="text-xs text-neutral-500">La línea de tiempo está vacía</p>
+          <p className="text-[10px] text-neutral-600 mt-0.5">Añade un clip desde la biblioteca</p>
         </div>
       </div>
     );
@@ -317,22 +296,6 @@ const ClipTrack = forwardRef(function ClipTrack(
         </SortableContext>
       </DndContext>
 
-      <div className="flex items-center gap-2 mt-1 px-1.5 py-1.5">
-        <ZoomOutIcon />
-        <input
-          type="range"
-          min={MIN_ZOOM}
-          max={MAX_ZOOM}
-          step={ZOOM_STEP}
-          value={timelineZoom}
-          onChange={(e) => onTimelineZoomChange?.(Number(e.target.value))}
-          className="flex-1"
-        />
-        <ZoomInIcon />
-        <span className="text-[10px] font-mono text-neutral-300 w-9 text-right tabular-nums">
-          {timelineZoom.toFixed(1)}x
-        </span>
-      </div>
     </div>
   );
 });

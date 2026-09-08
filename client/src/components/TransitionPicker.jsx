@@ -2,16 +2,16 @@ import { useEffect, useRef, useState, useLayoutEffect, useCallback, memo } from 
 import { createPortal } from 'react-dom';
 
 export const TRANSITION_TYPES = [
-  { value: 'none', label: 'Cut (none)' },
-  { value: 'fade', label: 'Fade' },
-  { value: 'fadeblack', label: 'Fade to black' },
-  { value: 'fadewhite', label: 'Fade to white' },
-  { value: 'wipeleft', label: 'Wipe left' },
-  { value: 'wiperight', label: 'Wipe right' },
-  { value: 'slideleft', label: 'Slide left' },
-  { value: 'slideright', label: 'Slide right' },
-  { value: 'circleopen', label: 'Circle open' },
-  { value: 'circleclose', label: 'Circle close' },
+  { value: 'none', label: 'Corte (ninguna)' },
+  { value: 'fade', label: 'Fundido' },
+  { value: 'fadeblack', label: 'Fundido a negro' },
+  { value: 'fadewhite', label: 'Fundido a blanco' },
+  { value: 'wipeleft', label: 'Barrido a la izquierda' },
+  { value: 'wiperight', label: 'Barrido a la derecha' },
+  { value: 'slideleft', label: 'Deslizamiento a la izquierda' },
+  { value: 'slideright', label: 'Deslizamiento a la derecha' },
+  { value: 'circleopen', label: 'Círculo abierto' },
+  { value: 'circleclose', label: 'Círculo cerrado' },
 ];
 
 function TransitionPreview({ type, isHover }) {
@@ -21,7 +21,7 @@ function TransitionPreview({ type, isHover }) {
 
   return (
     <div className={['relative w-12 h-8 rounded-md overflow-hidden bg-glass-strong ring-1 ring-glass-border', isPlaying ? 'shadow-glow-accent-sm' : ''].join(' ')}>
-      <div className={['absolute left-0 top-0 bottom-0 w-1/2 bg-gradient-to-br from-violet-500/80 to-purple-700/80', baseStyle].join(' ')} />
+      <div className={['absolute left-0 top-0 bottom-0 w-1/2 bg-gradient-to-br from-signal/80 to-accent-dim/80', baseStyle].join(' ')} />
       <div className={['absolute right-0 top-0 bottom-0 w-1/2 bg-gradient-to-br from-cyan-500/80 to-blue-700/80', baseStyle].join(' ')} />
 
       {type === 'fade' && (
@@ -69,7 +69,7 @@ function TransitionPreview({ type, isHover }) {
             style={{ animation: isPlaying ? `tpSlideLeftOut ${speed} ease-in-out infinite` : 'none' }}
           />
           <div
-            className="absolute inset-y-0 left-0 w-1/2 bg-gradient-to-br from-violet-500/80 to-purple-700/80"
+            className="absolute inset-y-0 left-0 w-1/2 bg-gradient-to-br from-signal/80 to-accent-dim/80"
             style={{ animation: isPlaying ? `tpSlideLeftIn ${speed} ease-in-out infinite` : 'none' }}
           />
         </>
@@ -77,7 +77,7 @@ function TransitionPreview({ type, isHover }) {
       {type === 'slideright' && (
         <>
           <div
-            className="absolute inset-y-0 left-0 w-1/2 bg-gradient-to-br from-violet-500/80 to-purple-700/80"
+            className="absolute inset-y-0 left-0 w-1/2 bg-gradient-to-br from-signal/80 to-accent-dim/80"
             style={{ animation: isPlaying ? `tpSlideRightOut ${speed} ease-in-out infinite` : 'none' }}
           />
           <div
@@ -90,7 +90,7 @@ function TransitionPreview({ type, isHover }) {
         <div
           className="absolute inset-0"
           style={{
-            background: 'radial-gradient(circle at center, transparent 0%, transparent 30%, rgba(168,85,247,0.6) 31%, rgba(168,85,247,0.6) 100%)',
+            background: 'radial-gradient(circle at center, transparent 0%, transparent 30%, rgba(22,136,255,0.65) 31%, rgba(22,136,255,0.65) 100%)',
             animation: isPlaying ? `tpCircleOpen ${speed} ease-in-out infinite` : 'none',
           }}
         />
@@ -99,7 +99,7 @@ function TransitionPreview({ type, isHover }) {
         <div
           className="absolute inset-0"
           style={{
-            background: 'radial-gradient(circle at center, rgba(168,85,247,0.6) 0%, rgba(168,85,247,0.6) 100%, transparent 100%)',
+            background: 'radial-gradient(circle at center, rgba(22,136,255,0.65) 0%, rgba(22,136,255,0.65) 100%, transparent 100%)',
             animation: isPlaying ? `tpCircleClose ${speed} ease-in-out infinite` : 'none',
           }}
         />
@@ -109,16 +109,16 @@ function TransitionPreview({ type, isHover }) {
 }
 
 const SHORT_LABELS = {
-  none: 'None',
-  fade: 'Fade',
-  fadeblack: 'Fade B',
-  fadewhite: 'Fade W',
-  wipeleft: 'Wipe L',
-  wiperight: 'Wipe R',
-  slideleft: 'Slide L',
-  slideright: 'Slide R',
-  circleopen: 'Circle ⊕',
-  circleclose: 'Circle ⊖',
+  none: 'Ninguna',
+  fade: 'Fundido',
+  fadeblack: 'A negro',
+  fadewhite: 'A blanco',
+  wipeleft: 'Barrido ←',
+  wiperight: 'Barrido →',
+  slideleft: 'Deslizar ←',
+  slideright: 'Deslizar →',
+  circleopen: 'Círculo ⊕',
+  circleclose: 'Círculo ⊖',
 };
 
 const POPOVER_WIDTH = 288;
@@ -250,7 +250,7 @@ const TransitionPicker = memo(function TransitionPicker({ value, maxDuration, on
       />
 
       <div className="flex items-center justify-between mb-2.5">
-        <div className="text-[11px] font-semibold text-neutral-200">Transition</div>
+        <div className="text-[11px] font-semibold text-neutral-200">Transición</div>
         <div className="text-[10px] font-mono text-neutral-500 tracking-tight">{SHORT_LABELS[currentType]}</div>
       </div>
 
@@ -283,7 +283,7 @@ const TransitionPicker = memo(function TransitionPicker({ value, maxDuration, on
       {!isNone && (
         <div className="pt-2.5 border-t border-glass-border space-y-1.5">
           <div className="flex items-center justify-between">
-            <label className="text-[10px] font-medium text-neutral-400">Duration</label>
+            <label className="text-[10px] font-medium text-neutral-400">Duración</label>
             <span className="text-[10px] font-mono text-accent font-semibold">{dur.toFixed(1)}s</span>
           </div>
           <input
@@ -297,13 +297,13 @@ const TransitionPicker = memo(function TransitionPicker({ value, maxDuration, on
           />
           <div className="flex justify-between text-[9px] font-mono text-neutral-500">
             <span>0.05s</span>
-            <span>max {maxDuration.toFixed(1)}s</span>
+            <span>máx. {maxDuration.toFixed(1)}s</span>
           </div>
           <button
             onClick={() => setType('none')}
             className="w-full mt-1 px-2 py-1 rounded-md text-[10px] font-medium text-neutral-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
           >
-            Remove transition
+            Quitar transición
           </button>
         </div>
       )}
@@ -322,7 +322,7 @@ const TransitionPicker = memo(function TransitionPicker({ value, maxDuration, on
             ? 'bg-glass-panel border-dashed border-glass-border text-neutral-500 hover:border-accent/50 hover:text-accent hover:bg-accent/5'
             : 'bg-gradient-to-b from-accent-dim/80 to-accent/80 border-accent text-white shadow-glow-accent-sm',
         ].join(' ')}
-        title={isNone ? 'Add transition' : `${value.type} · ${dur.toFixed(1)}s`}
+        title={isNone ? 'Añadir transición' : `${SHORT_LABELS[value.type] || value.type} · ${dur.toFixed(1)}s`}
       >
         {isNone ? (
           <svg width="11" height="11" viewBox="0 0 12 12" fill="none">

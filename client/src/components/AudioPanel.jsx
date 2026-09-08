@@ -16,10 +16,10 @@ export default function AudioPanel({ audio, onChange }) {
           mute ? 'bg-red-600 text-white' : 'bg-editor-surface text-neutral-400 hover:bg-editor-hover border border-editor-border',
         ].join(' ')}
         >
-          {mute ? 'MUTED' : 'AUDIO'}
+          {mute ? 'SILENCIADO' : 'AUDIO'}
         </button>
         <div className="flex items-center gap-1 flex-1">
-          <span className="text-[9px] text-neutral-500 shrink-0">vol</span>
+          <span className="text-[9px] text-neutral-500 shrink-0">vol.</span>
           <input
             type="range"
             min="0"
@@ -37,7 +37,7 @@ export default function AudioPanel({ audio, onChange }) {
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div className="flex items-center gap-1">
-          <span className="text-[9px] text-neutral-500 shrink-0">in</span>
+          <span className="text-[9px] text-neutral-500 shrink-0">entrada</span>
           <input
             type="range"
             min="0"
@@ -52,7 +52,7 @@ export default function AudioPanel({ audio, onChange }) {
           </span>
         </div>
         <div className="flex items-center gap-1">
-          <span className="text-[9px] text-neutral-500 shrink-0">out</span>
+          <span className="text-[9px] text-neutral-500 shrink-0">salida</span>
           <input
             type="range"
             min="0"

@@ -65,7 +65,7 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
 
     const missingFiles = files.filter((f) => !f.file);
     if (missingFiles.length > 0) {
-      fail(new Error('Some video files are missing. Please re-upload them after loading a project.'));
+      fail(new Error('Faltan algunos archivos de video. Vuelve a cargarlos después de abrir el proyecto.'));
       return;
     }
 
@@ -85,11 +85,11 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
   };
 
   const labels = {
-    idle: `Export ${config.resolution}p ${config.fps}fps`,
-    uploading: 'Uploading...',
-    processing: `Processing... ${progressLabel}`,
-    downloading: 'Preparing download...',
-    done: 'Done ✓',
+    idle: `Exportar ${config.resolution}p ${config.fps}fps`,
+    uploading: 'Subiendo…',
+    processing: `Procesando… ${progressLabel}`,
+    downloading: 'Preparando descarga…',
+    done: 'Listo ✓',
   };
 
   const renderProgressBar = (showLabel = true) => (
@@ -102,7 +102,7 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
       </div>
       {showLabel && (
         <div className="flex justify-between mt-1 text-xs text-neutral-400">
-          <span>{status === 'uploading' ? 'Uploading' : 'Processing'}</span>
+          <span>{status === 'uploading' ? 'Subiendo' : 'Procesando'}</span>
           <span>{progressLabel}</span>
         </div>
       )}
@@ -117,7 +117,7 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
           disabled={disabled || status !== 'idle'}
           className={[
             'px-4 py-1.5 rounded-lg text-xs font-semibold transition-all',
-            'bg-accent hover:bg-accent-hover text-white',
+            'bg-gradient-to-r from-accent-dim via-accent to-signal text-white shadow-glow-accent-sm hover:shadow-glow-accent',
             'disabled:bg-editor-surface disabled:text-neutral-500 disabled:cursor-not-allowed',
           ].join(' ')}
         >
@@ -126,10 +126,10 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
 
         {showSettings && status === 'idle' && (
           <div className="absolute right-0 top-full mt-2 w-72 p-3 rounded-xl bg-editor-panel border border-editor-border shadow-2xl z-50">
-            <div className="text-[11px] font-semibold text-neutral-200 mb-2">Export settings</div>
+            <div className="text-[11px] font-semibold text-neutral-200 mb-2">Ajustes de exportación</div>
 
             <div className="mb-2">
-              <div className="text-[9px] text-neutral-500 mb-1">Platform</div>
+              <div className="text-[9px] text-neutral-500 mb-1">Plataforma</div>
               <div className="grid grid-cols-4 gap-1">
                 {Object.entries(PLATFORM_PRESETS).map(([key, preset]) => (
                   <button
@@ -149,14 +149,14 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
               </div>
               {config.platform === 'tiktok' && (
                 <div className="mt-1.5 text-[9px] leading-relaxed text-neutral-500">
-                  Recommended preset: 1080x1920. TikTok API limit: 2304x4096 at 9:16 and 60 fps.
+                  Ajuste recomendado: 1080x1920. Límite de la API de TikTok: 2304x4096 en 9:16 y 60 fps.
                 </div>
               )}
             </div>
 
             <div className="grid grid-cols-2 gap-2 mb-2">
               <div>
-                <div className="text-[9px] text-neutral-500 mb-0.5">Resolution</div>
+                <div className="text-[9px] text-neutral-500 mb-0.5">Resolución</div>
                 <select
                   value={config.resolution}
                   onChange={(e) => { updateConfig({ resolution: e.target.value, platform: 'custom' }); }}
@@ -168,7 +168,7 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
                 </select>
               </div>
               <div>
-                <div className="text-[9px] text-neutral-500 mb-0.5">Frame rate</div>
+                <div className="text-[9px] text-neutral-500 mb-0.5">Fotogramas</div>
                 <select
                   value={config.fps}
                   onChange={(e) => { updateConfig({ fps: Number(e.target.value), platform: 'custom' }); }}
@@ -182,7 +182,7 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
             </div>
 
             <div className="mb-3">
-              <div className="text-[9px] text-neutral-500 mb-0.5">Quality</div>
+              <div className="text-[9px] text-neutral-500 mb-0.5">Calidad</div>
               <select
                 value={config.quality}
                 onChange={(e) => updateConfig({ quality: e.target.value })}
@@ -193,11 +193,11 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
                 ))}
               </select>
               <div className="mt-1 text-[9px] leading-relaxed text-neutral-500">
-                H.264 VBR · CRF {encodingSummary.crf} · up to {encodingSummary.maxVideoBitrateMbps} Mbps · AAC {encodingSummary.audioBitrateKbps} kbps
+                H.264 VBR · CRF {encodingSummary.crf} · hasta {encodingSummary.maxVideoBitrateMbps} Mbps · AAC {encodingSummary.audioBitrateKbps} kbps
               </div>
               {encodingSummary.width >= 2160 && (
                 <div className="mt-1 text-[9px] leading-relaxed text-amber-400/80">
-                  4K CPU export is intensive. Use 1080p High for a much faster TikTok-ready file.
+                  Exportar 4K exige más CPU. Usa 1080p en calidad alta para obtener antes un archivo listo para TikTok.
                 </div>
               )}
             </div>
@@ -207,7 +207,7 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
               disabled={disabled}
               className="w-full py-2 rounded-lg bg-accent hover:bg-accent-hover text-xs font-semibold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              Export
+              Exportar
             </button>
           </div>
         )}
@@ -216,7 +216,7 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
           <div className="absolute right-0 top-full mt-2 w-72 p-3 rounded-xl bg-editor-panel border border-editor-border shadow-2xl z-50">
             <div className="flex items-center justify-between mb-1.5">
               <div className="text-[11px] font-semibold text-neutral-200">
-                {status === 'uploading' ? 'Uploading' : 'Processing'}
+                {status === 'uploading' ? 'Subiendo' : 'Procesando'}
               </div>
               <div className="text-[11px] font-mono text-accent">
                 {progressLabel}
@@ -233,7 +233,7 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
               className="mt-2.5 w-full py-1.5 rounded-lg bg-red-600/90 hover:bg-red-600 text-[11px] font-semibold text-white transition-colors flex items-center justify-center gap-1.5"
             >
               <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-              Cancel Export
+              Cancelar exportación
             </button>
           </div>
         )}
@@ -254,7 +254,7 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
         disabled={disabled || status !== 'idle'}
         className={[
           'px-6 py-3 rounded-xl font-semibold transition-all',
-          'bg-accent hover:bg-accent-hover text-white shadow-lg shadow-accent/20',
+          'bg-gradient-to-r from-accent-dim via-accent to-signal text-white shadow-lg shadow-accent/20',
           'disabled:bg-editor-surface disabled:text-neutral-500 disabled:cursor-not-allowed disabled:shadow-none',
         ].join(' ')}
       >
@@ -263,10 +263,10 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
 
       {showSettings && status === 'idle' && (
         <div className="w-full max-w-md p-4 rounded-xl bg-editor-panel border border-editor-border">
-          <div className="text-xs font-semibold text-neutral-200 mb-3">Export settings</div>
+          <div className="text-xs font-semibold text-neutral-200 mb-3">Ajustes de exportación</div>
 
           <div className="mb-3">
-            <div className="text-[10px] text-neutral-500 mb-1.5">Platform preset</div>
+            <div className="text-[10px] text-neutral-500 mb-1.5">Ajuste de plataforma</div>
             <div className="grid grid-cols-4 gap-2">
               {Object.entries(PLATFORM_PRESETS).map(([key, preset]) => (
                 <button
@@ -286,14 +286,14 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
             </div>
             {config.platform === 'tiktok' && (
               <div className="mt-2 text-[10px] leading-relaxed text-neutral-500">
-                Recommended preset: 1080x1920. TikTok accepts up to 2304x4096 at 9:16 and 60 fps through its API.
+                Ajuste recomendado: 1080x1920. La API de TikTok admite hasta 2304x4096 en 9:16 y 60 fps.
               </div>
             )}
           </div>
 
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div>
-              <div className="text-[10px] text-neutral-500 mb-1">Resolution</div>
+              <div className="text-[10px] text-neutral-500 mb-1">Resolución</div>
               <select
                 value={config.resolution}
                 onChange={(e) => { updateConfig({ resolution: e.target.value, platform: 'custom' }); }}
@@ -305,7 +305,7 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
               </select>
             </div>
             <div>
-              <div className="text-[10px] text-neutral-500 mb-1">Frame rate</div>
+              <div className="text-[10px] text-neutral-500 mb-1">Fotogramas</div>
               <select
                 value={config.fps}
                 onChange={(e) => { updateConfig({ fps: Number(e.target.value), platform: 'custom' }); }}
@@ -319,7 +319,7 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
           </div>
 
           <div className="mb-4">
-            <div className="text-[10px] text-neutral-500 mb-1">Quality</div>
+            <div className="text-[10px] text-neutral-500 mb-1">Calidad</div>
             <select
               value={config.quality}
               onChange={(e) => updateConfig({ quality: e.target.value })}
@@ -336,7 +336,7 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
             </div>
             {encodingSummary.width >= 2160 && (
               <div className="mt-1.5 text-[10px] leading-relaxed text-amber-400/80">
-                4K CPU export is intensive and can take several minutes. 1080p High is recommended for TikTok.
+                Exportar 4K exige más CPU y puede tardar varios minutos. Para TikTok se recomienda 1080p en calidad alta.
               </div>
             )}
           </div>
@@ -346,7 +346,7 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
             disabled={disabled}
             className="w-full py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-sm font-semibold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Start Export
+            Iniciar exportación
           </button>
         </div>
       )}
@@ -358,7 +358,7 @@ export default function ExportButton({ files, clips, transitions, meta, exportCo
             onClick={cancelExport}
             className="mt-2 w-full px-3 py-1.5 rounded-lg bg-red-600/80 hover:bg-red-600 text-xs text-white font-medium transition-colors"
           >
-            Cancel Export
+            Cancelar exportación
           </button>
         </div>
       )}

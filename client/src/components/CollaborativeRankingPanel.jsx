@@ -7,7 +7,7 @@ function ParticipantAvatar({ participant, onImageChange }) {
     <label className="relative w-14 h-14 rounded-full shrink-0 cursor-pointer group">
       <span
         className="absolute inset-0 rounded-full overflow-hidden flex items-center justify-center bg-editor-surface text-lg font-bold text-white"
-        style={{ border: `2px solid ${participant.accent || '#a855f7'}` }}
+        style={{ border: `2px solid ${participant.accent || '#1688ff'}` }}
       >
         {participant.image ? (
           <img src={participant.image} alt="" className="w-full h-full object-cover" />

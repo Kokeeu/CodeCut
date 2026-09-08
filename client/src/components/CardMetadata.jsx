@@ -47,7 +47,7 @@ function DualRangeSlider({ min, max, step, valueStart, valueEnd, onChange }) {
       <div className="relative h-6 flex items-center">
         <div className="absolute left-0 right-0 h-1 rounded bg-slate-700" />
         <div
-          className="absolute h-1 rounded bg-indigo-500"
+          className="absolute h-1 rounded bg-accent"
           style={{ left: `${startPct}%`, width: `${Math.max(0, endPct - startPct)}%` }}
         />
         <input
@@ -58,7 +58,7 @@ function DualRangeSlider({ min, max, step, valueStart, valueEnd, onChange }) {
           value={valueStart}
           onChange={(e) => onStartChange(e.target.value)}
           className="absolute w-full h-6 appearance-none bg-transparent pointer-events-none z-20
-                     [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-indigo-400 [&::-webkit-slider-thumb]:shadow [&::-webkit-slider-thumb]:cursor-pointer"
+                     [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-accent [&::-webkit-slider-thumb]:shadow [&::-webkit-slider-thumb]:cursor-pointer"
         />
         <input
           type="range"
@@ -68,7 +68,7 @@ function DualRangeSlider({ min, max, step, valueStart, valueEnd, onChange }) {
           value={valueEnd}
           onChange={(e) => onEndChange(e.target.value)}
           className="absolute w-full h-6 appearance-none bg-transparent pointer-events-none z-30
-                     [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-indigo-400 [&::-webkit-slider-thumb]:shadow [&::-webkit-slider-thumb]:cursor-pointer"
+                     [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-accent [&::-webkit-slider-thumb]:shadow [&::-webkit-slider-thumb]:cursor-pointer"
         />
       </div>
       <div className="flex justify-between text-[9px] font-mono text-slate-500">
@@ -108,7 +108,7 @@ export default function CardMetadata({
             type="checkbox"
             checked={meta.blurEnabled !== false}
             onChange={(e) => setBlur('blurEnabled', e.target.checked)}
-            className="accent-indigo-500"
+            className="accent-accent"
           />
           Blur background
         </label>
@@ -122,7 +122,7 @@ export default function CardMetadata({
               step="5"
               value={meta.blur ?? 30}
               onChange={(e) => setBlur('blur', Number(e.target.value))}
-              className="flex-1 accent-indigo-500"
+              className="flex-1 accent-accent"
             />
             <span className="text-[10px] font-mono text-slate-400 w-6 text-right">{meta.blur ?? 30}</span>
           </div>
@@ -168,7 +168,7 @@ export default function CardMetadata({
         <>
           <button
             onClick={onAddText}
-            className="w-full px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium mb-3"
+            className="w-full px-3 py-2 rounded-lg bg-accent hover:bg-accent-hover text-sm font-medium mb-3"
           >
             + Add text
           </button>
@@ -191,7 +191,7 @@ export default function CardMetadata({
                   className={[
                     'p-2 rounded-lg border cursor-pointer transition-colors',
                     selected
-                      ? 'border-indigo-400 bg-indigo-500/10'
+                      ? 'border-accent bg-accent/10'
                       : 'border-slate-700 bg-slate-800/50 hover:border-slate-500',
                   ].join(' ')}
                 >
@@ -211,14 +211,14 @@ export default function CardMetadata({
                     onClick={(e) => e.stopPropagation()}
                     placeholder="Text content"
                     maxLength={100}
-                    className="w-full px-2 py-1 rounded-md bg-slate-900 border border-slate-700 text-xs text-slate-200 focus:border-indigo-400 focus:outline-none mb-1.5"
+                    className="w-full px-2 py-1 rounded-md bg-slate-900 border border-slate-700 text-xs text-slate-200 focus:border-accent focus:outline-none mb-1.5"
                   />
                   <div className="grid grid-cols-2 gap-1.5 mb-1.5">
                     <select
                       value={t.font || 'inter'}
                       onChange={(e) => onUpdateText(t.id, { font: e.target.value })}
                       onClick={(e) => e.stopPropagation()}
-                      className="px-1.5 py-1 rounded-md bg-slate-900 border border-slate-700 text-[11px] text-slate-200 focus:border-indigo-400 focus:outline-none"
+                      className="px-1.5 py-1 rounded-md bg-slate-900 border border-slate-700 text-[11px] text-slate-200 focus:border-accent focus:outline-none"
                     >
                       {FONT_OPTIONS.map((f) => (
                         <option key={f.value} value={f.value}>{f.label}</option>
@@ -244,7 +244,7 @@ export default function CardMetadata({
                       step="1"
                       value={t.size || 60}
                       onChange={(e) => onUpdateText(t.id, { size: Number(e.target.value) })}
-                      className="flex-1 accent-indigo-500 h-1"
+                      className="flex-1 accent-accent h-1"
                     />
                     <span className="text-[9px] font-mono text-slate-400 w-7 text-right">{Math.round(t.size || 60)}</span>
                   </div>
@@ -267,7 +267,7 @@ export default function CardMetadata({
                         onChange={(e) => onUpdateText(t.id, {
                           animation: e.target.value ? { type: e.target.value, duration: t.animation?.duration || 0.5 } : null,
                         })}
-                        className="flex-1 px-1.5 py-1 rounded-md bg-slate-900 border border-slate-700 text-[10px] text-slate-200 focus:border-indigo-400 focus:outline-none"
+                        className="flex-1 px-1.5 py-1 rounded-md bg-slate-900 border border-slate-700 text-[10px] text-slate-200 focus:border-accent focus:outline-none"
                       >
                         <option value="">None</option>
                         {animationTypes.map((a) => (
@@ -285,7 +285,7 @@ export default function CardMetadata({
                             onChange={(e) => onUpdateText(t.id, {
                               animation: { ...t.animation, duration: Number(e.target.value) },
                             })}
-                            className="w-16 accent-indigo-500 h-1"
+                            className="w-16 accent-accent h-1"
                           />
                           <span className="text-[9px] font-mono text-slate-400 w-7">
                             {(t.animation.duration || 0.5).toFixed(1)}s

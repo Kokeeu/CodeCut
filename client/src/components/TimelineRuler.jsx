@@ -125,14 +125,14 @@ export default function TimelineRuler({
         className="absolute top-0 bottom-0 w-px bg-accent pointer-events-none z-10"
         style={{
           left: playheadLeft,
-          boxShadow: '0 0 8px rgba(168, 85, 247, 0.8)',
+          boxShadow: '0 0 8px rgba(22, 136, 255, 0.85)',
         }}
       />
       <div
         className="absolute -top-1 w-2.5 h-2.5 bg-accent rounded-full pointer-events-none z-10 -ml-1"
         style={{
           left: playheadLeft,
-          boxShadow: '0 0 12px rgba(168, 85, 247, 0.9), 0 0 4px rgba(192, 132, 252, 1)',
+          boxShadow: '0 0 12px rgba(22, 136, 255, 0.9), 0 0 4px rgba(34, 211, 238, 1)',
         }}
       />
     </div>

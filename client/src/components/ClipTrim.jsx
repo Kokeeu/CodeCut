@@ -159,11 +159,11 @@ export default function ClipTrim({ clip, file, currentOffset, onChange, onSeek }
             <button
               onClick={() => adjustFrame('start', -1)}
               className="w-6 h-6 rounded bg-editor-surface hover:bg-editor-hover text-neutral-300 text-xs border border-editor-border"
-              title="Retroceder 1 frame"
+              title="Retroceder 1 fotograma"
             >
               ◀
             </button>
-            <label className="text-xs text-neutral-400 w-8">In:</label>
+            <label className="text-xs text-neutral-400 w-11">Inicio:</label>
             <input
               type="text"
               value={formatTimeInput(clip.sourceStart)}
@@ -173,7 +173,7 @@ export default function ClipTrim({ clip, file, currentOffset, onChange, onSeek }
             <button
               onClick={() => adjustFrame('start', 1)}
               className="w-6 h-6 rounded bg-editor-surface hover:bg-editor-hover text-neutral-300 text-xs border border-editor-border"
-              title="Avanzar 1 frame"
+              title="Avanzar 1 fotograma"
             >
               ▶
             </button>
@@ -183,7 +183,7 @@ export default function ClipTrim({ clip, file, currentOffset, onChange, onSeek }
             className="px-3 py-1 rounded bg-accent hover:bg-accent-hover text-xs text-white font-medium transition-colors"
             title="Marcar punto actual como inicio"
           >
-            Set In
+            Marcar inicio
           </button>
         </div>
 
@@ -192,11 +192,11 @@ export default function ClipTrim({ clip, file, currentOffset, onChange, onSeek }
             <button
               onClick={() => adjustFrame('end', -1)}
               className="w-6 h-6 rounded bg-editor-surface hover:bg-editor-hover text-neutral-300 text-xs border border-editor-border"
-              title="Retroceder 1 frame"
+              title="Retroceder 1 fotograma"
             >
               ◀
             </button>
-            <label className="text-xs text-neutral-400 w-8">Out:</label>
+            <label className="text-xs text-neutral-400 w-11">Fin:</label>
             <input
               type="text"
               value={formatTimeInput(clip.sourceEnd)}
@@ -206,7 +206,7 @@ export default function ClipTrim({ clip, file, currentOffset, onChange, onSeek }
             <button
               onClick={() => adjustFrame('end', 1)}
               className="w-6 h-6 rounded bg-editor-surface hover:bg-editor-hover text-neutral-300 text-xs border border-editor-border"
-              title="Avanzar 1 frame"
+              title="Avanzar 1 fotograma"
             >
               ▶
             </button>
@@ -216,12 +216,12 @@ export default function ClipTrim({ clip, file, currentOffset, onChange, onSeek }
             className="px-3 py-1 rounded bg-accent hover:bg-accent-hover text-xs text-white font-medium transition-colors"
             title="Marcar punto actual como fin"
           >
-            Set Out
+            Marcar fin
           </button>
         </div>
 
         <div className="text-xs text-neutral-400 font-mono text-center">
-          Duration: {formatTime(Math.max(0, clip.sourceEnd - clip.sourceStart))}
+          Duración: {formatTime(Math.max(0, clip.sourceEnd - clip.sourceStart))}
         </div>
       </div>
 
@@ -258,14 +258,14 @@ export default function ClipTrim({ clip, file, currentOffset, onChange, onSeek }
             onMouseDown={(e) => { e.stopPropagation(); setDragging('start'); }}
             className="absolute top-0 bottom-0 w-0.5 -ml-0.5 cursor-ew-resize bg-accent hover:bg-accent-hover hover:w-1 hover:-ml-1 z-10 transition-all"
             style={{ left: `${startPct}%` }}
-            title="Trim start"
+            title="Inicio del recorte"
           />
 
           <div
             onMouseDown={(e) => { e.stopPropagation(); setDragging('end'); }}
             className="absolute top-0 bottom-0 w-0.5 -ml-0.5 cursor-ew-resize bg-accent hover:bg-accent-hover hover:w-1 hover:-ml-1 z-10 transition-all"
             style={{ left: `${endPct}%` }}
-            title="Trim end"
+            title="Fin del recorte"
           />
         </div>
       </div>

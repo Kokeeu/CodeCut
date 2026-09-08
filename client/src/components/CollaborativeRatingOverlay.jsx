@@ -10,7 +10,7 @@ export default function CollaborativeRatingOverlay({ participants = [], rating, 
     <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 18 }}>
       {visibleParticipants.map((participant, index) => {
         const rect = getCollaborativeCardRect(index, layout);
-        const accent = participant.accent || '#a855f7';
+        const accent = participant.accent || '#1688ff';
         const avatarX = compact ? 24 : (rect.width - layout.avatarSize) / 2;
         const avatarY = compact ? (rect.height - layout.avatarSize) / 2 : 24;
         return (
@@ -96,9 +96,9 @@ export default function CollaborativeRatingOverlay({ participants = [], rating, 
           width: 540 * scale,
           height: 104 * scale,
           borderRadius: 52 * scale,
-          border: `${Math.max(1, 5 * scale)}px solid #c084fc`,
-          background: 'rgba(10, 8, 30, 0.96)',
-          boxShadow: `0 0 ${28 * scale}px rgba(168,85,247,0.55)`,
+          border: `${Math.max(1, 5 * scale)}px solid #22d3ee`,
+          background: 'rgba(6, 13, 27, 0.96)',
+          boxShadow: `0 0 ${28 * scale}px rgba(22,136,255,0.5)`,
           fontSize: 49 * scale,
           lineHeight: 1,
         }}

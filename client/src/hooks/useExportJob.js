@@ -74,7 +74,7 @@ export default function useExportJob(exportConfig) {
             jobIdRef.current = null;
             finishDownload(jobId);
           } else if (update.status === 'error' || update.status === 'cancelled') {
-            fail(new Error(update.error || `Export ${update.status}.`));
+            fail(new Error(update.error || `La exportación terminó con estado: ${update.status}.`));
           }
         },
         fail
@@ -97,7 +97,7 @@ export default function useExportJob(exportConfig) {
     try {
       await cancelExportJob(jobId);
     } catch (error) {
-      dispatch({ type: 'fail', error: error.message || 'Could not cancel the export.' });
+      dispatch({ type: 'fail', error: error.message || 'No se pudo cancelar la exportación.' });
     }
   }, [closeSubscription]);
 

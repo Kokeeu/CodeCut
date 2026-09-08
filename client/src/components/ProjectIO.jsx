@@ -51,11 +51,11 @@ export default function ProjectIO({ onSave, onLoad, compact }) {
       const text = await file.text();
       const data = JSON.parse(text);
       if (!data.version || !data.clips) {
-        throw new Error('Invalid project file');
+        throw new Error('Archivo de proyecto inválido');
       }
       onLoad(data);
     } catch (err) {
-      setError(err.message || 'Failed to load project');
+      setError(err.message || 'No se pudo cargar el proyecto');
     }
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -65,14 +65,14 @@ export default function ProjectIO({ onSave, onLoad, compact }) {
       <div className="flex items-center gap-0.5">
         <button
           onClick={handleSave}
-          title="Save project"
+          title="Guardar proyecto"
           className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-neutral-400 hover:text-neutral-100 hover:bg-white/5 transition-all duration-150"
         >
           <SaveIcon />
         </button>
         <button
           onClick={() => fileInputRef.current?.click()}
-          title="Load project"
+          title="Cargar proyecto"
           className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-neutral-400 hover:text-neutral-100 hover:bg-white/5 transition-all duration-150"
         >
           <LoadIcon />
@@ -95,14 +95,14 @@ export default function ProjectIO({ onSave, onLoad, compact }) {
           className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-glass-panel border border-glass-border hover:border-white/20 text-xs font-medium text-neutral-200 transition-all duration-150"
         >
           <SaveIcon />
-          Save Project
+          Guardar proyecto
         </button>
         <button
           onClick={() => fileInputRef.current?.click()}
           className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-glass-panel border border-glass-border hover:border-white/20 text-xs font-medium text-neutral-200 transition-all duration-150"
         >
           <LoadIcon />
-          Load Project
+          Cargar proyecto
         </button>
         <input
           ref={fileInputRef}

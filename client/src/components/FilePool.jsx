@@ -52,7 +52,7 @@ export default function FilePool({ files, onAddClip, onFilesAdded, vertical }) {
                   {f.name}
                 </p>
                 <p className="text-[10px] text-neutral-500 font-mono tracking-tight">
-                  {f._pending ? 'Needs re-upload' : formatTime(f.duration)}
+                  {f._pending ? 'Requiere volver a cargar' : formatTime(f.duration)}
                 </p>
                 <button
                   onClick={() => onAddClip(f.id)}
@@ -60,7 +60,7 @@ export default function FilePool({ files, onAddClip, onFilesAdded, vertical }) {
                   className="inline-flex items-center justify-center gap-1 w-full px-2 py-1 rounded-md bg-accent/15 border border-accent/20 text-accent text-[10px] font-semibold hover:bg-accent/25 hover:border-accent/40 transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <PlusIcon />
-                  {f._pending ? 'Re-upload' : 'Timeline'}
+                  {f._pending ? 'Volver a cargar' : 'Línea de tiempo'}
                 </button>
               </div>
             </div>
@@ -69,7 +69,7 @@ export default function FilePool({ files, onAddClip, onFilesAdded, vertical }) {
         {files.length === 0 && (
           <div className="p-4 rounded-xl bg-glass-panel border border-dashed border-glass-border text-center">
             <p className="text-[11px] text-neutral-500 leading-relaxed">
-              No media yet. Add videos to start your project.
+              Aún no hay medios. Añade videos para comenzar tu proyecto.
             </p>
           </div>
         )}
@@ -97,14 +97,14 @@ export default function FilePool({ files, onAddClip, onFilesAdded, vertical }) {
           )}
           <div className="p-2">
             <p className="text-[11px] text-neutral-200 truncate" title={f.name}>{f.name}</p>
-            <p className="text-[10px] text-neutral-500 font-mono">{f._pending ? 'Needs re-upload' : formatTime(f.duration)}</p>
+            <p className="text-[10px] text-neutral-500 font-mono">{f._pending ? 'Requiere volver a cargar' : formatTime(f.duration)}</p>
             <button
               onClick={() => onAddClip(f.id)}
               disabled={!!f._pending || !f.duration}
               className="mt-1.5 inline-flex items-center justify-center gap-1 w-full px-2 py-1 rounded-md bg-accent/15 border border-accent/20 text-accent text-[11px] font-semibold hover:bg-accent/25 hover:border-accent/40 transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <PlusIcon />
-              {f._pending ? 'Re-upload' : 'Add to timeline'}
+              {f._pending ? 'Volver a cargar' : 'Añadir a la línea de tiempo'}
             </button>
           </div>
         </div>

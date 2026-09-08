@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import FilePool from './FilePool.jsx';
 import TemplatesPanel from './TemplatesPanel.jsx';
 import VideoUploader from './VideoUploader.jsx';
@@ -6,9 +5,9 @@ import YouTubeImporter from './YouTubeImporter.jsx';
 import { MAX_MEDIA_FILES } from '../lib/mediaImport.js';
 
 const TABS = [
-  { id: 'media', label: 'Media' },
-  { id: 'text', label: 'Text' },
-  { id: 'templates', label: 'Templates' },
+  { id: 'media', label: 'Medios' },
+  { id: 'text', label: 'Texto' },
+  { id: 'templates', label: 'Plantillas' },
 ];
 
 function MediaIcon() {
@@ -59,24 +58,24 @@ function PlusIcon() {
 export default function LeftSidebar({
   files, onAddClip, onFilesAdded, templates, onApplyTemplate,
   hasClips, onAddText, activeClip, collapsed, onToggleCollapse, embedded,
+  activeTab = 'media', onTabChange, showTabs = true,
 }) {
-  const [activeTab, setActiveTab] = useState('media');
-
   const tabIcons = {
     media: MediaIcon,
     text: TextIcon,
     templates: TemplateIcon,
   };
+  const ActiveTabIcon = tabIcons[activeTab];
 
   if (collapsed) {
     return (
-      <div className="w-14 h-full flex flex-col items-center py-2 gap-1 bg-editor-panel/60 backdrop-blur-xl border-r border-glass-border shrink-0">
+      <div className="w-14 h-full flex flex-col items-center py-2 gap-1 studio-sidebar backdrop-blur-xl border-r border-glass-border shrink-0">
         {TABS.map((tab) => {
           const Icon = tabIcons[tab.id];
           return (
             <button
               key={tab.id}
-              onClick={() => { setActiveTab(tab.id); onToggleCollapse?.(); }}
+              onClick={() => { onTabChange?.(tab.id); onToggleCollapse?.(); }}
               className={[
                 'w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-150',
                 activeTab === tab.id
@@ -93,7 +92,7 @@ export default function LeftSidebar({
         <button
           onClick={onToggleCollapse}
           className="w-10 h-10 rounded-lg flex items-center justify-center text-neutral-500 hover:text-neutral-300 hover:bg-white/5 transition-all"
-          title="Expand panel"
+          title="Expandir panel"
         >
           <CollapseIcon collapsed />
         </button>
@@ -104,19 +103,19 @@ export default function LeftSidebar({
   return (
     <aside
       className={[
-        'flex flex-col bg-editor-panel/60 backdrop-blur-xl border-glass-border',
+        'flex flex-col studio-sidebar backdrop-blur-xl border-glass-border',
         embedded
           ? 'w-full h-full border-r-0'
-          : 'w-full md:w-72 h-full border-r',
+          : 'w-full h-full border-r',
       ].join(' ')}
     >
-      <div className="flex border-b border-glass-border shrink-0">
-        {TABS.map((tab) => {
+      <div className="flex border-b border-glass-border shrink-0 min-h-12">
+        {showTabs ? TABS.map((tab) => {
           const Icon = tabIcons[tab.id];
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => onTabChange?.(tab.id)}
               className={[
                 'flex-1 flex items-center justify-center gap-1.5 py-3 text-[12px] font-medium transition-all duration-150 relative',
                 activeTab === tab.id
@@ -127,16 +126,26 @@ export default function LeftSidebar({
               <Icon />
               <span className="hidden sm:inline">{tab.label}</span>
               {activeTab === tab.id && (
-                <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-gradient-to-r from-accent-dim to-accent rounded-full" />
+                <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-gradient-to-r from-accent-dim via-accent to-signal rounded-full" />
               )}
             </button>
           );
-        })}
+        }) : (
+          <div className="flex-1 min-w-0 flex items-center gap-2.5 px-3.5">
+            <span className="w-7 h-7 rounded-lg bg-accent/10 border border-accent/20 text-signal flex items-center justify-center">
+              {ActiveTabIcon ? <ActiveTabIcon /> : null}
+            </span>
+            <div className="min-w-0">
+              <div className="text-[9px] font-bold uppercase tracking-[0.16em] text-neutral-600">Biblioteca</div>
+              <div className="text-xs font-semibold text-neutral-200">{TABS.find((tab) => tab.id === activeTab)?.label}</div>
+            </div>
+          </div>
+        )}
         {!embedded && onToggleCollapse && (
           <button
             onClick={onToggleCollapse}
             className="hidden md:flex w-9 items-center justify-center text-neutral-500 hover:text-neutral-300 hover:bg-white/5 transition-colors"
-            title="Collapse panel"
+            title="Contraer panel"
           >
             <CollapseIcon />
           </button>
@@ -160,12 +169,12 @@ export default function LeftSidebar({
               className="group flex items-center justify-center gap-1.5 w-full px-3 py-2.5 rounded-xl bg-gradient-accent-soft border border-accent/20 text-xs font-semibold text-accent disabled:opacity-40 disabled:cursor-not-allowed hover:border-accent/40 hover:bg-accent/15 transition-all duration-150 focus-ring"
             >
               <PlusIcon />
-              Add text to clip
+              Añadir texto al clip
             </button>
             {!activeClip && (
               <div className="p-3 rounded-xl bg-glass-panel border border-glass-border">
                 <p className="text-[11px] text-neutral-500 text-center leading-relaxed">
-                  Select a clip in the timeline to add text overlays
+                  Selecciona un clip en la línea de tiempo para añadir textos.
                 </p>
               </div>
             )}
