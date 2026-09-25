@@ -384,8 +384,16 @@ function buildFilterGraph(clips, transitions, meta, textFiles, exportConfig, pip
       } else {
         const dur = t.duration.toFixed(3);
         const offset = Math.max(0, cumDuration + clipDurations[i] - t.duration).toFixed(3);
+        const xfA = `xf${i}a`;
+        const xfB = `xf${i}b`;
         filters.push(
-          `[${curV}][${nextV}]xfade=transition=${t.type}:duration=${dur}:offset=${offset}[${vLabel}]`
+          `[${curV}]settb=AVTB,fps=${outputFps},format=yuv420p,setsar=1[${xfA}]`
+        );
+        filters.push(
+          `[${nextV}]settb=AVTB,fps=${outputFps},format=yuv420p,setsar=1[${xfB}]`
+        );
+        filters.push(
+          `[${xfA}][${xfB}]xfade=transition=${t.type}:duration=${dur}:offset=${offset}[${vLabel}]`
         );
         filters.push(
           `[${curA}][${nextA}]acrossfade=d=${dur}:c1=tri:c2=tri[${aLabel}]`
