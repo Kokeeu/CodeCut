@@ -1,287 +1,147 @@
-# Codecut 9:16 - AI Agent Guide
+# Codecut 9:16 — Guía de agentes
 
-## Project Overview
+Editor vertical 9:16 (TikTok, Reels, Shorts). Dos proyectos npm independientes, sin workspace en la raíz:
 
-Codecut 9:16 is a vertical video editor (1080×1920) for creating TikTok/Reels-style content with blurred backgrounds, positioned text overlays, and multi-clip editing. Built with React + Vite + Tailwind (frontend) and Node.js + Express + FFmpeg (backend).
+- `client/` — React 18 + Vite + Tailwind. Agente: `client/AGENTS.md`.
+- `server/` — Node.js + Express 5 + FFmpeg (`ffmpeg-static`) + `yt-dlp`. Agente: `server/AGENTS.md`.
 
-## Architecture
+El producto visible está en español. Las claves de medios, proyecto, API y FFmpeg permanecen en inglés.
 
-```
-video-editor/
-├── client/          # React SPA (Vite)
-│   └── src/
-│       ├── App.jsx              # Layout + playback chrome
-│       ├── hooks/
-│       │   ├── useProjectState.js   # Clips/files/texts + unified undo
-│       │   └── useUndoableState.js  # History helper
-│       ├── lib/
-│       │   ├── projectDefaults.js   # Constants, templates, nextId
-│       │   ├── mediaStore.js        # IndexedDB video cache
-│       │   ├── speed.js             # Speed constants + atempo chain
-│       │   ├── textAnimations.js    # Animation definitions (preview)
-│       │   └── waveform.js          # Waveform extraction
-│       └── components/              # Editor UI
-├── server/
-│   ├── index.js                  # Express entry
-│   ├── routes/trim.js            # POST /api/trim (async jobs)
-│   ├── lib/
-│   │   ├── ffmpegPipeline.js     # FFmpeg filter graph builder
-│   │   ├── jobs.js               # In-memory + disk job store
-│   │   ├── speed.js              # Speed constants + atempo chain
-│   │   └── textAnimations.js     # Animation definitions (export)
-│   └── assets/fonts/             # Inter, Montserrat, Bebas Neue, ...
-└── README.md
-```
+## Antes de editar
 
-## Key Concepts
+1. Lee el agente del árbol que vas a tocar. Si el cambio cruza el contrato compartido, lee los dos.
+2. El código manda si esta guía y el código no coinciden. Corrige la guía en el mismo cambio.
+3. Trabaja en el proyecto dueño del comportamiento. No reescribas el otro lado para un cambio que cabe en uno.
+4. La lógica de documento, layout y contratos HTTP vive en funciones puras. Cámbiala ahí y después conéctala a React o a Express.
+5. No arranques procesos ni dejes archivos en `server/temp/` o `server/bin/`.
 
-### Card Layout (9:16)
+El desarrollador levanta el entorno. `./start.sh` abre el servidor en `:4000` (solo `127.0.0.1`) y el cliente en `:5173`. Vite proxifica `/api` a `http://localhost:4000`. El agente no ejecuta ese script.
 
-Every output is a 1080×1920 card with 4 layers:
-1. **Blur background** - Video scaled to cover + `gblur` + brightness/saturation
-2. **Main video** - 16:9, positioned via `transform: { x, y, scale }`
-3. **Texts** - Free-form array, each with `{ text, x, y, size, font, color, align }`
-4. **Overlays** - "9:16" badge, time indicators
+## Quién hace qué
 
-### State Model
-
-Document state (`clips`, `transitions`, `meta`) lives in `useProjectState` with a single undo stack. `App.jsx` keeps playback/layout UI state.
-
-```js
-// useProjectState.js
-{
-  files: [{ id, file, url, name, duration, thumbnail, waveform }],
-  clips: [{
-    id, fileId, sourceStart, sourceEnd,
-    speed,  // 0.25, 0.5, 0.75, 1, 1.5, 2, 3
-    transform: { x, y, scale },
-    audio: { volume, mute, fadeIn, fadeOut },
-    pip: { enabled, fileId, position, size, opacity, border, borderWidth, borderRadius },
-    texts: [{ id, text, x, y, size, font, color, align, startOffset, endOffset, animation: { type, duration } }]
-  }],
-  transitions: [{ type, durationSec }],  // between clips
-  meta: { blur, blurEnabled },
-  activeClipId, currentOffset, isPlaying, selectedTextId, timelineZoom
-}
-```
-
-### Templates
-
-4 hardcoded templates in `client/src/lib/projectDefaults.js`:
-- **Opening Anime** - Inter, white, header + 4 lines
-- **Neon Style** - Bebas Neue, yellow, minimal
-- **Dark Mode** - Montserrat, blur heavy, texts top
-- **Editorial** - Inter, no header, 2 lines
-
-Each template has `texts[]` with positions. Apply replaces `clip.texts` for all clips.
-
-## Backend Pipeline
-
-`ffmpegPipeline.js` builds a filter graph:
-
-1. **Per clip**: trim → split → [main scaled] + [bg scaled/cropped/blurred] → overlay
-2. **Transitions**: xfade (video) + acrossfade (audio) between clips
-3. **Texts**: drawtext with `textfile=` (avoids escape issues), `enable='between(t,start,end)'`
-4. **Output**: libx264 crf 20, aac 128k, faststart
-
-Key constants:
-- `OUTPUT_W = 1080, OUTPUT_H = 1920`
-- `MAIN_Y = 360` (video top position)
-- `BG_BLUR_SIGMA = 30` (default)
-
-### Export Flow with Progress
-
-The export uses a 3-step async flow with Server-Sent Events (SSE) for real-time progress:
-
-1. **POST /api/trim** - Upload files + config, returns `{ jobId }` (HTTP 202)
-2. **GET /api/trim/progress/:jobId** - SSE stream with `{ progress, status }` updates
-3. **GET /api/trim/download/:jobId** - Download the final MP4 when status is 'ready'
-
-Progress is parsed from FFmpeg stderr (`time=HH:MM:SS.ms`) and compared against total duration. Jobs auto-cleanup after 5 minutes.
-
-## Frontend Patterns
-
-### Video Preview
-
-- Single `<video>` element, seeks on clip change
-- Drag/resize texts via `useImperativeHandle` + pointer events
-- `ResizeObserver` for handle positions
-- Play/pause via `isPlaying` state
-
-### CardTemplate (Pure Component)
-
-Renders a card given props. No state. Used in:
-- TemplatesPanel (previews)
-- Could be used for gallery (removed in v0.12)
-
-Props: `videoUrl, texts, headerText, animeTitle, ...font, color, blur, transform, height, isActive`
-
-### Drag & Drop
-
-- **Clips**: `@dnd-kit/sortable` in ClipTrack
-- **Texts**: custom pointer events in VideoPreview
-- **Resize**: 4 corner handles, ResizeObserver
-
-### Trim Controls
-
-| Feature | Details |
+| Cambio | Agente |
 |---|---|
-| **Visual trim track** | Full source duration shown as a bar; active region highlighted in indigo with border markers |
-| **Draggable in/out handles** | Thin 2px handles (expand to 4px on hover) for precise trimming |
-| **Playhead scrubbing** | Click anywhere on the trim track to seek; green playhead line shows current position |
-| **Numeric time input** | Editable fields for In/Out in `HH:MM:SS.mmm` format |
-| **Frame-by-frame buttons** | ◀ ▶ buttons to adjust In/Out by 1 frame (1/30s) |
-| **Set In / Set Out buttons** | Mark current playhead position as In or Out point |
-| **Waveform visual** | Audio waveform rendered inside the trim track |
-| **Zoom** | 1x-10x zoom slider with horizontal scroll for precision |
-| **Seek integration** | Trim changes update the video preview in real time |
+| UI, estado del editor, preview, timeline, plantillas, autoguardado, layout | Cliente |
+| Export, filtro FFmpeg, jobs, cola, uploads | Servidor |
+| YouTube (URL, calidad, progreso, binario) | El lado que posee la regla; el otro si cambia el contrato |
+| Forma de clips, transiciones, velocidad, animaciones, fuentes, blur, resolución o bitrate | Los dos, en el mismo cambio |
 
-## Testing
+## Contrato compartido
 
-Backend smoke tests in `server/scripts/`:
-- `smoke_all.js` - 6 cases (single clip, multi-clip, transitions, edge cases)
-- `smoke_v04.js` - Card layout with text
+Estas parejas deben permanecer alineadas. Un valor nuevo en un solo lado rompe preview o export.
 
-Run: `node server/scripts/smoke_all.js` (requires server running on :4000)
+| Tema | Cliente | Servidor |
+|---|---|---|
+| Velocidades y cadena `atempo` | `client/src/lib/speed.js` | `server/lib/speed.js` |
+| Expresiones FFmpeg de animación | `client/src/lib/textAnimations.js` | `server/lib/textAnimations.js` |
+| Tipos `xfade` | `client/src/lib/transitions.js` | `server/lib/ffmpegPipeline.js` |
+| Resolución, fps, CRF, techos de bitrate | `client/src/lib/exportSettings.js` | `server/lib/exportConfig.js` |
+| Brillo y saturación del fondo | `BG_BRIGHTNESS`, `BG_SATURATION` en `projectDefaults.js` | Las mismas constantes en `ffmpegPipeline.js` |
+| Fuentes | `FONT_OPTIONS` y `FONT_CSS` en `CardMetadata.jsx`, import en `index.css` | TTF en `server/assets/fonts/` y `FONT_REGISTRY` |
+| Cupo de medios | 10 archivos, 1 GB c/u (`mediaImport.js`) | `uploadPolicy.js` (`MAX_UPLOAD_*`) |
+| Alturas de YouTube | `720`, `1080`, `1440`, `2160` | `youtubeDownloader.js` |
+| Posición base del video | `MAIN_Y` en `CardTemplate.jsx` y `MAIN_VIDEO_Y` en `preview/ClipMedia.jsx` (360 sobre 1080×1920) | `MAIN_Y` en `ffmpegPipeline.js`, escalado desde `OUTPUT_W` / `OUTPUT_H` |
 
-## Keyboard Shortcuts
+El editor guarda `fileId`. La exportación envía `fileIndex` dentro del multipart. Las transiciones del editor son un array (`transitions.length === clips.length - 1`). Las de la API son un objeto con clave `` `${clipA}|${clipB}` ``.
 
-- `Space` - Play/Pause
-- `S` - Split active clip at playhead
-- `Ctrl+Z` - Undo
-- `Ctrl+Y` or `Ctrl+Shift+Z` - Redo
-- `←` - Step back 1 frame (when paused)
-- `→` - Step forward 1 frame (when paused)
+Resoluciones de salida: `720`, `1080`, `1440`, `2160`, `2304`. FPS: `24`, `30`, `60`. Calidades: `medium`, `high`, `ultra`. El preset de TikTok es 1080×1920, 30 fps, calidad alta. `2304×4096` es el máximo 9:16 dentro del límite de 4096 px de la Content Posting API.
 
-## Common Tasks
+## Modelo que no se puede romper
 
-### Add a new template
+El documento con undo vive en `useProjectState` y solo cambia por `reduceProjectDocument`:
 
-In `client/src/lib/projectDefaults.js`, add to `TEMPLATES` array:
-```js
-{
-  id: 'tpl-new',
-  name: 'New Template',
-  font: 'inter',
-  color: '#ffffff',
-  blur: 30,
-  blurEnabled: true,
-  texts: [
-    { text: 'Header', x: 540, y: 120, size: 64, align: 'center' },
-    { text: 'Title', x: 70, y: 1080, size: 67, align: 'left' },
-    // ...
-  ],
-}
+`meta/replaced`, `clip/first-added`, `clip/added`, `clip/deleted`, `clip/duplicated`, `clips/reordered`, `clip/updated`, `clip/trimmed`, `clip/rating-updated`, `text/added`, `text/updated`, `text/deleted`, `clip/split`, `transition/updated`, `template/applied`, `document/replaced`.
+
+Fuera del undo: archivos e IndexedDB, reproducción, clip activo, texto seleccionado, zoom del timeline, `exportConfig` y layout del workspace.
+
+Invariantes:
+
+- Siempre hay al menos un clip para poder borrar.
+- Borrar, duplicar, reordenar o dividir mantiene una transición entre cada par de clips vecinos. Reordenar clips que no eran vecinos reinicia esa transición.
+- El reducer no crea ids ni archivos. Quien despacha la acción prepara el clip.
+- `PROJECT_VERSION` en `projectDefaults.js` es la versión del documento (`0.13`). La versión de producto del README (`v0.14`, importación YouTube) es otra cosa. No las subas juntas salvo que cambie el esquema guardado.
+- Un `.json` de proyecto no incluye los binarios. La restauración usa IndexedDB (`codecut-media`) para archivos de hasta 200 MB. Por encima de eso hay preview y export, sin waveform.
+- Autoguardado: `localStorage` `codecut-autosave`. Layout: `codecut-workspace-layout-v1`.
+
+## Mapa
+
+```
+client/src/
+  App.jsx                     playback, atajos, ensamblaje
+  hooks/useProjectState.js    archivos + documento + undo
+  hooks/useEditor.js          duración, snap, tiempo global
+  hooks/useWorkspaceLayout.js layout persistido
+  hooks/useExportJob.js       job de export en la UI
+  lib/projectDocument.js      reducer puro
+  lib/projectDefaults.js      defaults, plantillas, nextId
+  lib/clipTemplates.js        fases de plantilla por clip
+  lib/exportRequest.js        FormData de export
+  components/                 shell, lienzo, timeline, inspector
+server/
+  index.js                    CORS, helmet, /api/health, rutas
+  routes/trim.js              multipart de export
+  routes/youtube.js           importación YouTube
+  services/exportService.js   validación, cola, orquestación
+  lib/ffmpegPipeline.js       grafo de filtros
+  lib/ffmpegRunner.js         spawn de FFmpeg, sin shell
+  lib/jobs.js                 jobs en memoria y en disco
+  lib/queue.js                cola, máximo 2 concurrentes
 ```
 
-### Change default video position
+La especificación visual está en `DESIGN.md`. El shell separa regiones (`EditorShell`, `ToolRail`, `CanvasWorkspace`, `TimelineDock`, `PropertiesPanel`, `ResizeHandle`) de la edición. El inspector muestra texto si hay un texto seleccionado y clip en caso contrario.
 
-In `CardTemplate.jsx`, `VideoPreview.jsx`, and `ffmpegPipeline.js`:
-```js
-const MAIN_Y = 360;  // change this
-```
+Plantillas actuales en `TEMPLATES`: Opening Anime, Top Musical, Top Colaborativo, Descubre música. Aplicar una plantilla reemplaza los textos de los clips y puede activar ranking colaborativo o una secuencia intro/canción.
 
-### Add a new font
+Capas de cada salida: fondo con blur (`gblur` + brillo/saturación), video principal con `transform`, textos `drawtext` vía `textfile=`, PIP y, si aplica, overlay PNG del ranking colaborativo.
 
-1. Download TTF to `server/assets/fonts/`
-2. Add to `FONT_REGISTRY` in `ffmpegPipeline.js`
-3. Add to `FONT_OPTIONS` in `CardMetadata.jsx`
-4. Add to `FONT_CSS` in `CardMetadata.jsx`
-5. Import in `client/src/index.css` (Google Fonts)
+## API
 
-### Fix text escape issues
+Export:
 
-Use `textfile=` approach (already implemented). Write text to temp file, reference in drawtext.
+1. `POST /api/trim` — campos `videos`, `ratingOverlays`, `clips`, `transitions`, `meta`, `exportConfig` → `{ jobId }` (202).
+2. `GET /api/trim/progress/:jobId` — SSE. No comprimir esta ruta.
+3. `GET /api/trim/download/:jobId` — MP4 cuando `status` es `ready`.
+4. `DELETE /api/trim/:jobId` — cancela.
 
-### Add a new text animation
+YouTube, solo videos públicos individuales. Sin playlists, directos, cookies ni contenido protegido:
 
-1. Add animation definition to `client/src/lib/textAnimations.js`:
-   - `getPreviewStyle(progress, tx, ty, text)` - Returns CSS style object for preview
-   - `getFfmpegX/Y/FontSize/Enable()` - Returns FFmpeg expression strings
+1. `GET /api/youtube/health`
+2. `POST /api/youtube/imports` — `{ urls, maxHeight }` → `{ batchId, jobs }` (202).
+3. `GET /api/youtube/imports/:id/progress` — SSE.
+4. `GET /api/youtube/imports/:id/file`
+5. `DELETE /api/youtube/imports/:id`
 
-2. Add server-side version to `server/lib/textAnimations.js`:
-   - Only FFmpeg expression functions needed
+Jobs en `server/temp/jobs/`. Caducan 15 minutos después de terminar. Un job a medias tras reiniciar queda en error. Limpieza de temporales cada hora.
 
-3. Animation types: `fade-in`, `slide-up`, `slide-left`, `typewriter`, `bounce`, `scale-in`, `karaoke`
+## Reglas de trabajo
 
-## Conventions
+- JavaScript. El cliente es ESM; el servidor es CommonJS. Sin TypeScript y sin PropTypes.
+- Tailwind con tokens de `tailwind.config.js` y variables de `index.css`. Interfaz en Inter, marca en Space Grotesk, valores técnicos en JetBrains Mono.
+- Color de acción: `accent`. Estado y foco: `signal`. Énfasis editorial o destructivo: `flare`. El morado no es color primario.
+- Movimiento con opacidad y transform, respetando `prefers-reduced-motion`.
+- Componentes funcionales. `useCallback` en handlers que cruzan componentes. `useMemo` para estado derivado. `VideoPreview` sigue siendo `forwardRef` por `seekTo`.
+- Sin comentarios de narración. Un comentario solo fija un invariante que el código no muestra.
+- FFmpeg, ffprobe y yt-dlp se ejecutan con `spawn` o `execFile` y lista de argumentos. Nunca con un shell.
+- No subas `node_modules/`, `dist/`, `server/temp/`, `server/bin/` ni videos de prueba.
+- Copy nueva de la interfaz en español, con `aria-label` o `title` en controles de icono.
 
-- **No comments** in code unless necessary
-- **Tailwind** for styling (no CSS modules)
-- **Functional components** with hooks
-- **useCallback** for handlers passed to children
-- **useMemo** for derived state
-- **forwardRef** for VideoPreview (needs imperative seekTo)
-- **No PropTypes** (TypeScript not used)
+## Pruebas
 
-## Build & Run
+El desarrollador prueba. El agente no escribe tests, no los modifica y no los ejecuta: ni `npm test`, ni `npm run test:unit`, ni `node --test`, ni `scripts/smoke_all.js`, ni archivos `*.test.js` o `*.test.mjs`.
 
-```bash
-# Install
-cd client && npm install
-cd server && npm install
+Tampoco abre un navegador ni lanza automatización para comprobar el cambio. Eso incluye Playwright, Puppeteer, Cypress, Selenium y cualquier herramienta equivalente, además de `npm run dev`, `npm start`, `vite preview` y `./start.sh`. Esas instancias ocupan puertos y se quedan abiertas. Entrega el cambio y describe qué debe mirar el desarrollador.
 
-# Dev
-cd server && npm start          # :4000
-cd client && npm run dev        # :5173
+## Atajos del editor
 
-# Build
-cd client && npm run build
+`Espacio` play/pausa. `S` divide el clip activo. `Ctrl+Z` deshace y `Ctrl+Y` o `Ctrl+Shift+Z` rehace el documento completo. `←` `→` avanzan un frame en pausa. `J` `K` `L` hacen shuttle. `?` abre la ayuda.
 
-# Test
-cd server && node scripts/smoke_all.js
-```
+## Problemas conocidos
 
-## Known Issues
+- El blur del preview (CSS) no es idéntico al `gblur` del export. Brillo y saturación sí usan los mismos coeficientes.
+- El PIP exportado tiene esquinas rectas. El preview puede mostrar `borderRadius`.
+- El karaoke es por palabra, sin tiempos por sílaba.
+- Los archivos de más de 200 MB no se guardan en IndexedDB ni generan waveform.
 
-- Preview blur still differs slightly from export (CSS `blur()` vs FFmpeg `gblur`), though brightness/saturation now use the same coefficients
-- PIP export uses square corners (preview can show `borderRadius`)
-- Project `.json` files do not embed video binaries; restore uses IndexedDB when the same files were cached (max 200 MB each)
-- Karaoke highlight is word-based (no per-syllable timings)
+## Historial breve
 
-## Version History
-
-- v0.1: Single-clip trimmer
-- v0.2: Multi-clip + transitions
-- v0.3: Crossfade preview (removed), blur bg
-- v0.4: Text overlays (structured fields)
-- v0.5: Free-form texts (drag/resize)
-- v0.6: Per-clip texts + time ranges
-- v0.7: Full editor (undo/redo, speed, audio, animations, save/load, scrubber)
-- v0.8: Precision editing (frame-by-frame, timeline zoom, waveform, corner PIP)
-- v0.9: Export progress bar (SSE real-time progress from FFmpeg)
-- v0.10: Precision trim (frame-by-frame, numeric input, waveform, zoom, Set In/Out, thin handles)
-- v0.11: Editor chrome (sidebars, transport, autosave, shuttle, export presets)
-- v0.12: Unified undo, PIP + karaoke in FFmpeg export, persisted jobs, media restore, SSE smoke tests
-- v0.13: Professional editorial redesign, contextual inspector, resizable workspace, Spanish UI
-
-## Editor UI Architecture (v0.13)
-
-The editor shell is split into composable layout primitives so visual structure stays separate from editing behavior:
-
-- `EditorShell.jsx` owns the responsive workspace regions and desktop panel resizing boundaries.
-- `ToolRail.jsx` owns primary navigation between media, text, and templates.
-- `CanvasWorkspace.jsx` owns canvas chrome, guide controls, and active-clip context.
-- `TimelineDock.jsx` composes transport, ruler, and clip track into one resizable dock.
-- `PropertiesPanel.jsx` is a contextual inspector: it shows text controls when a text is selected and clip controls otherwise.
-- `ResizeHandle.jsx` is the accessible pointer/keyboard separator shared by the side panels and timeline.
-- `useWorkspaceLayout.js` coordinates persisted layout state; `workspaceLayout.js` contains pure defaults, validation, and storage helpers.
-
-### Workspace rules
-
-- Desktop (`xl` and above): permanent tool rail, independently collapsible and resizable side panels, resizable timeline.
-- Tablet (`md` to `xl`): permanent tool rail with modal side overlays.
-- Mobile (below `md`): top-bar entry points open the existing drawer and bottom sheet.
-- Side panel and timeline dimensions are clamped and persisted in `localStorage` under `codecut-workspace-layout-v1`.
-- Overlay panels are mutually exclusive on tablet and mobile.
-
-### Design-system rules
-
-- Use semantic Tailwind tokens from `tailwind.config.js` and CSS variables from `index.css`; do not introduce literal purple as a primary UI color.
-- Primary interaction color: blue (`accent`); information/focus signal: cyan (`signal`); rare editorial emphasis or destructive contrast: pink (`flare`).
-- Use `Space Grotesk` only for display/brand moments and `Inter` for the interface.
-- Keep editor copy in Spanish. Stable media, project, and FFmpeg data keys remain unchanged.
-- Motion must use opacity/transform where possible and respect `prefers-reduced-motion`.
-- New layout persistence behavior belongs in pure helpers with Node tests before being wired into React.
-
-See `DESIGN.md` for the complete visual specification and component rationale.
+De v0.1 (un clip) a v0.13 (shell editorial, inspector contextual, layout persistido, UI en español) y v0.14 (importación YouTube por lote, calidades hasta 4K, progreso y cancelación). El detalle de producto está en `README.md`. El detalle visual está en `DESIGN.md`.
