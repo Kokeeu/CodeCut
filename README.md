@@ -46,10 +46,22 @@ Vite hace proxy de `/api/*` a `http://localhost:4000`.
 2. Desde el media pool, añade más clips con **Timeline**.
 3. Edita en el timeline: click para activar, arrastra para reordenar, `S` para split, transiciones en las costuras.
 4. Ajusta trim, textos (arrastrar/redimensionar), velocidad, audio, PIP y plantillas.
-5. En **Top Colaborativo**, abre **Ranking** para cargar fotos circulares, editar nombres y registrar notas de 0 a 10; la puntuación total de cada clip se suma automáticamente.
+5. En **Top Colaborativo**, usa **Datos del Top** para completar todas las canciones en una tabla, configurar participantes y registrar notas de 0 a 10; la puntuación total de cada clip se suma automáticamente.
 6. **Export** envía la composición a FFmpeg y descarga el MP4 cuando termina.
 
 El proyecto se auto-guarda en el navegador (JSON + videos de hasta 200 MB en IndexedDB). Restore rehidrata clips y media. Un `.json` de proyecto no incluye los videos: si no están en caché, hay que volver a subirlos o importarlos. Para evitar picos de memoria, los archivos mayores de 200 MB no generan waveform, aunque conservan preview, filmstrip y exportación.
+
+### Datos del Top Colaborativo
+
+Al aplicar la plantilla se abre **Datos del Top**. Puedes volver a abrirlo desde el inspector, incluso con un texto seleccionado.
+
+- Configura una vez el título y los participantes (nombres, fotos y colores). El título se mantiene vinculado entre canciones, incluso si lo editas desde el lienzo.
+- Los archivos `Artista - Canción.mp4` precargan canción y artista. Puedes elegir `Canción - Artista` o solo canción. **Completar desde archivos** respeta los datos escritos; marca **Reemplazar** para reinterpretarlos con otro formato. No se consultan servicios externos.
+- Guarda un artista predeterminado para clips nuevos y completa los artistas pendientes con un botón.
+- Usa puestos descendentes, ascendentes o manuales. La numeración automática sigue el orden del timeline al añadir, borrar, duplicar, dividir o reordenar clips; no ordena por puntuación.
+- Edita canciones, artistas y notas en una sola tabla. También puedes pegar filas de Excel/Sheets: canción, artista y una columna de nota por participante, en el orden mostrado. Se admiten coma decimal y encabezados `Canción`/`Artista`; las celdas vacías conservan valores anteriores. Las notas nuevas empiezan vacías y los totales manuales existentes se identifican con **Manual · usar suma**.
+- **Aplicar diseño del clip activo a todos** copia posición, fuente, tamaño, colores y estilo visual de los cuatro textos vinculados, conservando contenidos y tiempos. Los clips nuevos heredan el diseño del primer clip del Top. Los clips antiguos sin plantilla pueden prepararse desde el mismo diálogo.
+- Las operaciones por lote admiten **Deshacer/Rehacer**. El JSON de proyecto y el autoguardado conservan los campos compartidos; la exportación usa los textos resueltos y las calificaciones visibles.
 
 ### yt-dlp
 

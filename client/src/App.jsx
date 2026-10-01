@@ -3,6 +3,7 @@ import VideoUploader from './components/VideoUploader.jsx';
 import YouTubeImporter from './components/YouTubeImporter.jsx';
 import VideoPreview from './components/VideoPreview.jsx';
 import MediaPreviewModal from './components/MediaPreviewModal.jsx';
+import CollaborativeTopDialog from './components/CollaborativeTopDialog.jsx';
 import TopBar from './components/TopBar.jsx';
 import LeftSidebar from './components/LeftSidebar.jsx';
 import PropertiesPanel from './components/PropertiesPanel.jsx';
@@ -37,6 +38,8 @@ export default function App() {
     handleFilesAdded, handleAddClip, handleDeleteClip, handleDuplicateClip, handleReorder,
     handleTrimChange, handleTransformChange, handleSpeedChange, handleAudioChange, handlePipChange,
     handleCollaborativeRatingChange,
+    handleUpdateCollaborativeTop,
+    handlePrepareCollaborativeClips,
     handleAddText, handleUpdateText, handleDeleteText, handleSplit, handleTransitionChange,
     handleSelectClip, handleApplyTemplate, handleReset, handleSaveProject, handleLoadProject,
     handleRestore,
@@ -49,6 +52,7 @@ export default function App() {
   const [showGuides, setShowGuides] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showTopData, setShowTopData] = useState(false);
   const [exportConfig, setExportConfig] = useState(DEFAULT_EXPORT_CONFIG);
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
@@ -71,6 +75,21 @@ export default function App() {
   const handleCloseMediaPreview = useCallback(() => {
     setMediaPreviewId(null);
   }, []);
+
+  const handleOpenTopData = useCallback(() => {
+    shuttleRef.current = { direction: 0, level: 0 };
+    previewRef.current?.stopRewind();
+    previewRef.current?.setPlaybackSpeed(1);
+    setIsPlaying(false);
+    setShowTopData(true);
+  }, []);
+
+  const handleCloseTopData = useCallback(() => setShowTopData(false), []);
+
+  const handleApplyEditorTemplate = useCallback((template) => {
+    handleApplyTemplate(template);
+    if (template?.collaborativeRanking && clips.length) handleOpenTopData();
+  }, [handleApplyTemplate, handleOpenTopData, clips.length]);
 
   const { totalDuration, snapPoints, currentGlobalTime: getGlobalTime } = useEditor(clips, transitions);
 
@@ -179,7 +198,7 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e) => {
-      if (mediaPreviewFile) return;
+      if (mediaPreviewFile || (showTopData && meta.collaborativeRanking?.enabled)) return;
       if (e.target && e.target.closest && e.target.closest('input,select,textarea,[contenteditable]')) return;
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
@@ -241,7 +260,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleSplit, undo, isPlaying, mediaPreviewFile]);
+  }, [handleSplit, undo, isPlaying, mediaPreviewFile, showTopData, meta.collaborativeRanking?.enabled]);
 
   const hasFiles = files.length > 0;
   const { showConfirm, confirmExit, cancelExit } = useExitConfirmation(hasFiles);
@@ -438,7 +457,7 @@ export default function App() {
               onFilesAdded={handleFilesAdded}
               onPreviewFile={handleOpenMediaPreview}
               templates={TEMPLATES}
-              onApplyTemplate={handleApplyTemplate}
+              onApplyTemplate={handleApplyEditorTemplate}
               hasClips={clips.length > 0}
               onAddText={handleAddText}
               activeClip={activeClip}
@@ -542,6 +561,7 @@ export default function App() {
               onAudioChange={handleAudioChange}
               onPipChange={handlePipChange}
               onCollaborativeRatingChange={handleCollaborativeRatingChange}
+              onOpenTopData={handleOpenTopData}
               onTrimChange={handleTrimChange}
               onTransformChange={handleTransformChange}
               onSeek={handleSeek}
@@ -579,7 +599,7 @@ export default function App() {
               onFilesAdded={handleFilesAdded}
               onPreviewFile={handleOpenMediaPreview}
               templates={TEMPLATES}
-              onApplyTemplate={handleApplyTemplate}
+              onApplyTemplate={handleApplyEditorTemplate}
               hasClips={clips.length > 0}
               onAddText={handleAddText}
               activeClip={activeClip}
@@ -609,6 +629,7 @@ export default function App() {
               onAudioChange={handleAudioChange}
               onPipChange={handlePipChange}
               onCollaborativeRatingChange={handleCollaborativeRatingChange}
+              onOpenTopData={handleOpenTopData}
               onTrimChange={handleTrimChange}
               onTransformChange={handleTransformChange}
               onSeek={handleSeek}
@@ -639,6 +660,9 @@ export default function App() {
       />
       {mediaPreviewFile && (
         <MediaPreviewModal key={`${mediaPreviewFile.id}:${mediaPreviewFile.url}`} file={mediaPreviewFile} onClose={handleCloseMediaPreview} />
+      )}
+      {showTopData && meta.collaborativeRanking?.enabled && (
+        <CollaborativeTopDialog clips={clips} fileById={fileById} meta={meta} activeClipId={activeClipId} onUpdate={handleUpdateCollaborativeTop} onMetaChange={setMeta} onPrepareMissing={handlePrepareCollaborativeClips} onClose={handleCloseTopData} undo={undo} />
       )}
       <ShortcutOverlay isOpen={showShortcuts} onClose={() => setShowShortcuts(false)} />
       <ToastContainer />

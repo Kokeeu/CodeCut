@@ -22,7 +22,7 @@ El cliente es ESM (`"type": "module"`). El desarrollador lo arranca en `:5173`. 
 | Plantillas | `src/lib/projectDefaults.js`, `src/lib/clipTemplates.js` |
 | Export desde la UI | `src/lib/exportRequest.js`, `src/lib/exportSettings.js`, `src/hooks/useExportJob.js` |
 | YouTube en el cliente | `src/lib/youtubeImport.js`, `src/components/YouTubeImporter.jsx` |
-| Ranking colaborativo | `src/lib/collaborativeRanking.js` |
+| Ranking colaborativo | `src/lib/collaborativeRanking.js`, `src/lib/collaborativeProject.js`, `src/components/CollaborativeTopDialog.jsx` |
 | Medios y restauración | `src/lib/mediaImport.js`, `src/lib/mediaStore.js`, `src/hooks/useProjectAutosave.js` |
 | Carpetas arrastradas o seleccionadas | `src/lib/mediaDrop.js`, `src/components/VideoUploader.jsx` |
 
@@ -42,8 +42,11 @@ Reglas:
 - Máximo 10 archivos, 1 GB cada uno. IndexedDB persiste hasta 200 MB por archivo. Por encima no hay waveform.
 - La portada acepta carpetas y subcarpetas: filtra videos, ordena por ruta y nombre y rechaza el lote si supera el cupo. La lectura del drag-and-drop vive en `mediaDrop.js`.
 - Al reordenar, conserva la transición solo entre clips que ya eran vecinos.
+- Si Top Colaborativo está activo, los clips añadidos heredan la plantilla, el diseño del primer clip del Top y los valores predeterminados. Los puestos automáticos siguen el orden del timeline. `ranking/updated` aplica cada operación por lote como una acción del documento.
 
-Clip de trabajo: `id`, `fileId`, `sourceStart`, `sourceEnd`, `speed`, `transform`, `audio`, `pip`, `texts`, y cuando aplica `introEnd`, `videoLayout`, `collaborativeRating`. Texto: `id`, `text`, `x`, `y`, `size`, `font`, `color`, `align`, `startOffset`, `endOffset`, `animation`, más estilo de `DEFAULT_TEXT_STYLE`.
+Clip de trabajo: `id`, `fileId`, `sourceStart`, `sourceEnd`, `speed`, `transform`, `audio`, `pip`, `texts`, y cuando aplica `introEnd`, `videoLayout`, `collaborativeRating`. Texto: `id`, `text`, `x`, `y`, `size`, `font`, `color`, `align`, `startOffset`, `endOffset`, `animation`, más estilo de `DEFAULT_TEXT_STYLE` y `collaborativeField` opcional para el Top.
+
+`meta.collaborativeRanking` guarda `participants`, `enabled` y las preferencias opcionales `title`, `rankOrder`, `filenameFormat`, `defaultArtist`. Los textos continúan siendo la fuente de canción/artista; no dupliques esos valores en otro estado. `syncCollaborativeDocument` resuelve título/puestos dentro del reducer para que preview, guardado y export coincidan. Los proyectos antiguos sin `rankOrder` mantienen puestos manuales. Reaplicar Top conserva contenidos y notas reconocibles, completa marcadores pendientes y restablece el diseño de la plantilla. Las notas nuevas empiezan vacías.
 
 Velocidades permitidas: `0.25`, `0.5`, `0.75`, `1`, `1.5`, `2`, `3`.
 
@@ -75,6 +78,8 @@ Cambio de posición base del video: `MAIN_Y` en `CardTemplate.jsx`, `MAIN_VIDEO_
 ## Export e importación
 
 `createExportFormData` traduce `fileId` → `fileIndex`, el array de transiciones → objeto `idA|idB`, y quita las imágenes de participantes del meta. Los PNG de ranking viajan en `ratingOverlays`. No cambies esos nombres de campo sin actualizar `server/lib/exportRequest.js`.
+
+El export quita `collaborativeField` de los textos y las preferencias del editor de Top del meta. El servidor recibe textos concretos y el mismo contrato de overlays. Guardado JSON (`PROJECT_VERSION` 0.14) y autoguardado sí conservan los campos vinculados.
 
 YouTube en el cliente solo normaliza enlaces HTTPS de un video (`watch`, `youtu.be`, `shorts`, `embed`). Rechaza playlists, cuentas, directos y URLs con usuario, contraseña o puerto distinto de 443. La descarga ocurre en el servidor.
 

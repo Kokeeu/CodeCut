@@ -50,7 +50,7 @@ Resoluciones de salida: `720`, `1080`, `1440`, `2160`, `2304`. FPS: `24`, `30`, 
 
 El documento con undo vive en `useProjectState` y solo cambia por `reduceProjectDocument`:
 
-`meta/replaced`, `clip/first-added`, `clip/added`, `clip/deleted`, `clip/duplicated`, `clips/reordered`, `clip/updated`, `clip/trimmed`, `clip/rating-updated`, `text/added`, `text/updated`, `text/deleted`, `clip/split`, `transition/updated`, `template/applied`, `document/replaced`.
+`meta/replaced`, `clip/first-added`, `clip/added`, `clip/deleted`, `clip/duplicated`, `clips/reordered`, `clip/updated`, `clip/trimmed`, `clip/rating-updated`, `ranking/updated`, `text/added`, `text/updated`, `text/deleted`, `clip/split`, `transition/updated`, `template/applied`, `document/replaced`.
 
 Fuera del undo: archivos e IndexedDB, reproducción, clip activo, texto seleccionado, zoom del timeline, `exportConfig` y layout del workspace.
 
@@ -59,7 +59,7 @@ Invariantes:
 - Siempre hay al menos un clip para poder borrar.
 - Borrar, duplicar, reordenar o dividir mantiene una transición entre cada par de clips vecinos. Reordenar clips que no eran vecinos reinicia esa transición.
 - El reducer no crea ids ni archivos. Quien despacha la acción prepara el clip.
-- `PROJECT_VERSION` en `projectDefaults.js` es la versión del documento (`0.13`). La versión de producto del README (`v0.14`, importación YouTube) es otra cosa. No las subas juntas salvo que cambie el esquema guardado.
+- `PROJECT_VERSION` en `projectDefaults.js` es la versión del documento (`0.14`: campos vinculados y configuración del Top). La versión de producto del README (`v0.14`, importación YouTube) es independiente. No las subas juntas salvo que cambie el esquema guardado.
 - Un `.json` de proyecto no incluye los binarios. La restauración usa IndexedDB (`codecut-media`) para archivos de hasta 200 MB. Por encima de eso hay preview y export, sin waveform.
 - Autoguardado: `localStorage` `codecut-autosave`. Layout: `codecut-workspace-layout-v1`.
 
@@ -91,6 +91,8 @@ server/
 La especificación visual está en `DESIGN.md`. El shell separa regiones (`EditorShell`, `ToolRail`, `CanvasWorkspace`, `TimelineDock`, `PropertiesPanel`, `ResizeHandle`) de la edición. El inspector muestra texto si hay un texto seleccionado y clip en caso contrario.
 
 Plantillas actuales en `TEMPLATES`: Opening Anime, Top Musical, Top Colaborativo, Descubre música. Aplicar una plantilla reemplaza los textos de los clips y puede activar ranking colaborativo o una secuencia intro/canción.
+
+Top Colaborativo tiene un editor «Datos del Top»: título y participantes compartidos, formato de archivos, artista predeterminado, tabla por canción y pegado TSV. `collaborativeProject.js` concentra autocompletado, campos vinculados y puestos dinámicos. Los textos guardan `collaborativeField` (`heading`, `position`, `song`, `artist`); el export elimina esa clave y las preferencias editoriales, enviando textos ya resueltos. Los proyectos anteriores se vinculan por las posiciones reconocibles de la plantilla, conservando contenido y puestos manuales.
 
 Capas de cada salida: fondo con blur (`gblur` + brillo/saturación), video principal con `transform`, textos `drawtext` vía `textfile=`, PIP y, si aplica, overlay PNG del ranking colaborativo.
 

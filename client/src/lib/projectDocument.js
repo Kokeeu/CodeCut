@@ -1,5 +1,6 @@
 import { DEFAULT_META, DEFAULT_TRANSITION } from './projectDefaults.js';
 import { sanitizeTransition } from './transitions.js';
+import { getCollaborativeFields, syncCollaborativeDocument, updateCollaborativeDocument } from './collaborativeProject.js';
 
 export function createEmptyDocument() {
   return {
@@ -24,7 +25,22 @@ function updateClip(clips, clipId, update) {
 }
 
 export function reduceProjectDocument(document, action) {
+  let next = reduceDocumentAction(document, action);
+  if (action.type === 'text/updated' && typeof action.patch.text === 'string' && next.meta?.collaborativeRanking?.enabled) {
+    const clip = document.clips.find((item) => item.id === action.clipId);
+    const fields = clip ? getCollaborativeFields(clip) : {};
+    const settings = fields.heading?.id === action.textId ? { title: action.patch.text }
+      : fields.position?.id === action.textId ? { rankOrder: 'manual' } : null;
+    if (settings) next = updateCollaborativeDocument(next, { settings });
+  }
+  return syncCollaborativeDocument(next);
+}
+
+function reduceDocumentAction(document, action) {
   switch (action.type) {
+    case 'ranking/updated':
+      return updateCollaborativeDocument(document, action.patch);
+
     case 'meta/replaced':
       return { ...document, meta: action.meta };
 

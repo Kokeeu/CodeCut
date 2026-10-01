@@ -31,7 +31,7 @@ export function buildExportClips(files, clips, ratingOverlayBlobs = []) {
     ratingOverlayFileIndex: ratingOverlayBlobs[clipIndex]
       ? ratingOverlayFileIndex++
       : null,
-    texts: (clip.texts || []).map((text) => ({
+    texts: (clip.texts || []).map(({ collaborativeField: _collaborativeField, ...text }) => ({
       ...text,
       animation: text.animation || null,
     })),
@@ -53,7 +53,7 @@ export function buildExportTransitions(clips, transitions) {
 export function sanitizeExportMeta(meta) {
   const collaborativeRanking = meta?.collaborativeRanking
     ? {
-        ...meta.collaborativeRanking,
+        enabled: meta.collaborativeRanking.enabled,
         participants: (meta.collaborativeRanking.participants || []).map(
           ({ image: _image, ...participant }) => participant
         ),

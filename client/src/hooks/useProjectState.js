@@ -7,11 +7,13 @@ import {
   DEFAULT_TEXT_STYLE,
   DEFAULT_TRANSFORM,
   PROJECT_VERSION,
+  TEMPLATES,
   makeDefaultParticipants,
   makeClip,
   nextId,
 } from '../lib/projectDefaults.js';
 import { applyClipTemplate, sliceClipTexts } from '../lib/clipTemplates.js';
+import { copyCollaborativeStyle, getCollaborativeFields } from '../lib/collaborativeProject.js';
 import {
   createEmptyDocument,
   normalizeTransitions,
@@ -109,13 +111,15 @@ export default function useProjectState() {
   const pendingFiles = useMemo(() => files.filter((f) => f._pending || !f.file), [files]);
 
   const dispatchDocument = useCallback((action, tag) => {
-    setDoc((previous) => reduceProjectDocument(previous, action), tag);
+    setDoc((previous) => reduceProjectDocument(previous, typeof action === 'function' ? action(previous) : action), tag);
   }, [setDoc]);
 
   const setMeta = useCallback((nextMeta, tag) => {
-    const resolved = typeof nextMeta === 'function' ? nextMeta(meta) : nextMeta;
-    dispatchDocument({ type: 'meta/replaced', meta: resolved }, tag);
-  }, [dispatchDocument, meta]);
+    dispatchDocument((previous) => ({
+      type: 'meta/replaced',
+      meta: typeof nextMeta === 'function' ? nextMeta(previous.meta) : nextMeta,
+    }), tag);
+  }, [dispatchDocument]);
 
   const handleFilesAdded = useCallback((metas) => {
     const currentFiles = filesRef.current;
@@ -171,14 +175,33 @@ export default function useProjectState() {
     return { added: newFiles.length, rejected: rejectedMetas.length };
   }, [clips.length, dispatchDocument]);
 
+  const prepareCollaborativeClip = useCallback((clip) => {
+    const ranking = meta.collaborativeRanking;
+    if (!ranking?.enabled) return clip;
+    const template = TEMPLATES.find((item) => item.collaborativeRanking);
+    const prepared = applyClipTemplate(clip, template, clips.length, ranking.participants || [], {
+      fileName: fileById[clip.fileId]?.name,
+      filenameFormat: ranking.filenameFormat,
+      defaultArtist: ranking.defaultArtist,
+    });
+    const source = clips.find((item) => item.collaborativeRating);
+    return source ? copyCollaborativeStyle(prepared, source) : prepared;
+  }, [meta, clips, fileById]);
+
   const handleAddClip = useCallback((fileId) => {
     const f = fileById[fileId];
     if (!f || !f.duration || f._pending) return;
-    const clip = makeClip(fileId, f.duration - 0.01);
+    const clip = prepareCollaborativeClip(makeClip(fileId, f.duration - 0.01));
     dispatchDocument({ type: 'clip/added', clip }, 'add-clip');
     setActiveClipId(clip.id);
     setCurrentOffset(0);
-  }, [fileById, dispatchDocument]);
+  }, [fileById, prepareCollaborativeClip, dispatchDocument]);
+
+  const handlePrepareCollaborativeClips = useCallback(() => {
+    if (!meta.collaborativeRanking?.enabled) return;
+    const nextClips = clips.map((clip) => clip.collaborativeRating ? clip : prepareCollaborativeClip(clip));
+    dispatchDocument({ type: 'template/applied', clips: nextClips, meta });
+  }, [meta, clips, prepareCollaborativeClip, dispatchDocument]);
 
   const handleDeleteClip = useCallback((clipId) => {
     const index = clips.findIndex((clip) => clip.id === clipId);
@@ -333,11 +356,22 @@ export default function useProjectState() {
       ? (currentParticipants.length >= 2 ? currentParticipants : makeDefaultParticipants())
       : currentParticipants;
     const collaborativeRanking = template.collaborativeRanking
-      ? { enabled: true, participants }
+      ? {
+          ...meta.collaborativeRanking,
+          enabled: true,
+          participants,
+          title: meta.collaborativeRanking?.title ?? getCollaborativeFields(clips[0]).heading?.text ?? 'TOP DE CANCIONES',
+          rankOrder: meta.collaborativeRanking?.rankOrder || 'descending',
+          filenameFormat: meta.collaborativeRanking?.filenameFormat || 'artist-song',
+        }
       : meta?.collaborativeRanking
         ? { ...meta.collaborativeRanking, enabled: false }
         : undefined;
-    const nextClips = clips.map((clip, index) => applyClipTemplate(clip, template, index, participants));
+    const nextClips = clips.map((clip, index) => applyClipTemplate(clip, template, index, participants, {
+      fileName: fileById[clip.fileId]?.name,
+      filenameFormat: collaborativeRanking?.filenameFormat,
+      defaultArtist: collaborativeRanking?.defaultArtist,
+    }));
     const nextMeta = {
       ...meta,
       blur: template.blur,
@@ -346,7 +380,11 @@ export default function useProjectState() {
     };
     dispatchDocument({ type: 'template/applied', clips: nextClips, meta: nextMeta }, 'apply-template');
     setSelectedTextId(null);
-  }, [clips, meta, dispatchDocument]);
+  }, [clips, meta, fileById, dispatchDocument]);
+
+  const handleUpdateCollaborativeTop = useCallback((patch, tag) => {
+    dispatchDocument({ type: 'ranking/updated', patch }, tag);
+  }, [dispatchDocument]);
 
   const handleReset = useCallback(() => {
     files.forEach((f) => { if (f.url) URL.revokeObjectURL(f.url); });
@@ -379,6 +417,7 @@ export default function useProjectState() {
           : null,
         texts: (c.texts || []).map((t) => ({
           text: t.text,
+          ...(t.collaborativeField ? { collaborativeField: t.collaborativeField } : {}),
           x: t.x,
           y: t.y,
           size: t.size,
@@ -429,6 +468,7 @@ export default function useProjectState() {
         texts: (c.texts || []).map((t) => ({
           id: nextId('text'),
           text: t.text,
+          ...(t.collaborativeField ? { collaborativeField: t.collaborativeField } : {}),
           x: t.x,
           y: t.y,
           size: t.size,
@@ -452,11 +492,11 @@ export default function useProjectState() {
       };
     });
     const newTransitions = normalizeTransitions(data.transitions, newClips.length);
-    undo.reset({
+    undo.reset(reduceProjectDocument(createEmptyDocument(), { type: 'document/replaced', document: {
       clips: newClips,
       transitions: newTransitions,
       meta: data.meta || { ...DEFAULT_META },
-    });
+    } }));
     if (newClips.length > 0) setActiveClipId(newClips[0].id);
     else setActiveClipId(null);
     setCurrentOffset(0);
@@ -541,11 +581,11 @@ export default function useProjectState() {
     setFiles(newFiles);
     const restoredClips = data.clips || [];
     const restoredTransitions = normalizeTransitions(data.transitions, restoredClips.length);
-    undo.reset({
+    undo.reset(reduceProjectDocument(createEmptyDocument(), { type: 'document/replaced', document: {
       clips: restoredClips,
       transitions: restoredTransitions,
       meta: data.meta || { ...DEFAULT_META },
-    });
+    } }));
     if ((data.clips || []).length > 0) setActiveClipId(data.clips[0].id);
     setCurrentOffset(0);
     setSelectedTextId(null);
@@ -587,6 +627,8 @@ export default function useProjectState() {
     handleTransitionChange,
     handleSelectClip,
     handleApplyTemplate,
+    handleUpdateCollaborativeTop,
+    handlePrepareCollaborativeClips,
     handleReset,
     handleSaveProject,
     handleLoadProject,

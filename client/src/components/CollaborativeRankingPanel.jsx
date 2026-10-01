@@ -11,7 +11,18 @@ import { PARTICIPANT_ACCENTS, nextId } from '../lib/projectDefaults.js';
 
 function ParticipantAvatar({ participant, onImageChange }) {
   return (
-    <label className="relative w-14 h-14 rounded-full shrink-0 cursor-pointer group">
+    <label
+      tabIndex={0}
+      role="button"
+      aria-label={`Cambiar foto de ${participant.name || 'participante'}`}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          event.currentTarget.querySelector('input')?.click();
+        }
+      }}
+      className="relative w-14 h-14 rounded-full shrink-0 cursor-pointer group focus-ring"
+    >
       <span
         className="absolute inset-0 rounded-full overflow-hidden flex items-center justify-center bg-editor-surface text-lg font-bold text-white"
         style={{ border: `2px solid ${participant.accent || '#1688ff'}` }}
@@ -28,6 +39,7 @@ function ParticipantAvatar({ participant, onImageChange }) {
       <input
         type="file"
         accept="image/*"
+        aria-label={`Foto de ${participant.name || 'participante'}`}
         className="hidden"
         onChange={(event) => {
           const file = event.target.files?.[0];
@@ -39,7 +51,7 @@ function ParticipantAvatar({ participant, onImageChange }) {
   );
 }
 
-export default function CollaborativeRankingPanel({ meta, activeClip, onMetaChange, onRatingChange }) {
+export default function CollaborativeRankingPanel({ meta, activeClip, onMetaChange, onRatingChange, participantsOnly = false }) {
   const [error, setError] = useState(null);
   const ranking = meta?.collaborativeRanking;
   const participants = ranking?.participants || [];
@@ -59,18 +71,22 @@ export default function CollaborativeRankingPanel({ meta, activeClip, onMetaChan
   }
 
   const updateRanking = (partial) => {
-    onMetaChange({
-      ...meta,
-      collaborativeRanking: { ...ranking, ...partial },
+    onMetaChange((currentMeta) => {
+      if (!currentMeta.collaborativeRanking?.enabled) return currentMeta;
+      const current = currentMeta.collaborativeRanking;
+      return {
+        ...currentMeta,
+        collaborativeRanking: { ...current, ...(typeof partial === 'function' ? partial(current) : partial) },
+      };
     }, 'collaborative-participants');
   };
 
   const updateParticipant = (id, partial) => {
-    updateRanking({
-      participants: participants.map((participant) => (
+    updateRanking((current) => ({
+      participants: current.participants.map((participant) => (
         participant.id === id ? { ...participant, ...partial } : participant
       )),
-    });
+    }));
   };
 
   const handleImageChange = async (participant, file) => {
@@ -145,6 +161,7 @@ export default function CollaborativeRankingPanel({ meta, activeClip, onMetaChan
                     type="text"
                     value={participant.name || ''}
                     maxLength={24}
+                    aria-label={`Nombre del participante ${index + 1}`}
                     onChange={(event) => updateParticipant(participant.id, { name: event.target.value })}
                     placeholder={`Participante ${index + 1}`}
                     className="w-full px-2 py-1.5 rounded-md text-[11px]"
@@ -173,7 +190,7 @@ export default function CollaborativeRankingPanel({ meta, activeClip, onMetaChan
                 </div>
               </div>
 
-              <label className="flex items-center gap-2 mt-2 text-[10px] text-neutral-400">
+              {!participantsOnly && <label className="flex items-center gap-2 mt-2 text-[10px] text-neutral-400">
                 Nota de este clip
                 <input
                   type="number"
@@ -185,7 +202,7 @@ export default function CollaborativeRankingPanel({ meta, activeClip, onMetaChan
                   onBlur={() => normalizeScore(participant.id)}
                   className="ml-auto w-20 px-2 py-1.5 rounded-md text-right font-mono text-[11px]"
                 />
-              </label>
+              </label>}
             </div>
           ))}
         </div>
@@ -194,7 +211,7 @@ export default function CollaborativeRankingPanel({ meta, activeClip, onMetaChan
         </div>
       </div>
 
-      <div className="p-2.5 rounded-xl bg-glass-panel border border-glass-border">
+      {!participantsOnly && <div className="p-2.5 rounded-xl bg-glass-panel border border-glass-border">
         <label className="flex items-center gap-2 text-[11px] text-neutral-300">
           Puntuación total de este clip
           <input
@@ -241,7 +258,7 @@ export default function CollaborativeRankingPanel({ meta, activeClip, onMetaChan
           />
           Mostrar calificaciones en este clip
         </label>
-      </div>
+      </div>}
 
       {error && <p className="text-[10px] text-red-400">{error}</p>}
     </div>

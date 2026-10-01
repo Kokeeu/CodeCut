@@ -218,6 +218,7 @@ export default function PropertiesPanel({
   onAudioChange,
   onPipChange,
   onCollaborativeRatingChange,
+  onOpenTopData,
   onTrimChange,
   onTransformChange,
   onSeek,
@@ -261,6 +262,14 @@ export default function PropertiesPanel({
       )}
 
       <div className="flex-1 overflow-y-auto p-3 scrollbar-thin">
+        {rankingEnabled && (
+          <div className="mb-3 rounded-xl border border-accent/20 bg-accent/5 p-3">
+            <button type="button" onClick={onOpenTopData} className="w-full rounded-lg bg-accent/15 px-3 py-2 text-xs font-semibold text-accent hover:bg-accent/25 focus-ring">Datos del Top · editar todas las canciones</button>
+            <p className="mt-2 text-[10px] text-neutral-400">Título, participantes, autocompletado y notas en una sola tabla.</p>
+            {selectedText?.collaborativeField === 'heading' && <p className="mt-2 text-[10px] text-signal">El contenido de este título se comparte entre todas las canciones.</p>}
+            {selectedText?.collaborativeField === 'position' && <p className="mt-2 text-[10px] text-signal">Editar este puesto activa la numeración manual. Puedes volver al modo automático en Datos del Top.</p>}
+          </div>
+        )}
         {!activeClip ? (
           <div className="h-full min-h-44 flex items-center justify-center text-center px-6">
             <div>
