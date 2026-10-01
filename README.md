@@ -72,6 +72,7 @@ La importación acepta videos públicos individuales de YouTube en 720p, 1080p, 
 - `Ctrl+Z` / `Ctrl+Y` — Undo / Redo (clips, transiciones y meta juntos)
 - `←` `→` — Frame anterior / siguiente (en pausa)
 - `J` `K` `L` — Shuttle
+- `Alt + rueda` (Windows) / `Option ⌥ + rueda` (Mac) — Zoom sobre la línea de tiempo: arriba amplía, abajo reduce, manteniendo la posición bajo el cursor dentro de los límites de desplazamiento. Comparte el zoom del slider.
 - `?` — Lista de atajos
 
 ## Export API

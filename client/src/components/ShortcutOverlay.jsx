@@ -16,6 +16,8 @@ const SHORTCUTS = [
     { keys: ['Ctrl', 'Shift', 'Z'], action: 'Rehacer' },
   ]},
   { category: 'Otros', shortcuts: [
+    { keys: ['Alt / ⌥', 'Rueda ↑'], action: 'Ampliar timeline' },
+    { keys: ['Alt / ⌥', 'Rueda ↓'], action: 'Reducir timeline' },
     { keys: ['?'], action: 'Mostrar esta ayuda' },
     { keys: ['Esc'], action: 'Cerrar diálogos' },
   ]},

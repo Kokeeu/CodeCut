@@ -521,7 +521,6 @@ export default function App() {
                 onTransitionChange: handleTransitionChange,
                 timelineZoom,
                 trackWidth,
-                onTimelineZoomChange: handleTimelineZoomChange,
                 currentGlobalTime,
                 isPlaying,
               }}

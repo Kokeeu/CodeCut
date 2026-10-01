@@ -129,6 +129,7 @@ export default function TransportBar({
             onChange={(event) => onTimelineZoomChange?.(Number(event.target.value))}
             className="flex-1"
             aria-label="Zoom de la línea de tiempo"
+            title="Zoom: Alt + rueda en Windows u Option ⌥ + rueda en Mac. Arriba amplía; abajo reduce."
           />
           <span className="text-[9px] font-mono text-neutral-500 w-7 text-right">{timelineZoom.toFixed(1)}×</span>
         </div>

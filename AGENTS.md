@@ -135,6 +135,8 @@ Tampoco abre un navegador ni lanza automatización para comprobar el cambio. Eso
 
 `Espacio` play/pausa. `S` divide el clip activo. `Ctrl+Z` deshace y `Ctrl+Y` o `Ctrl+Shift+Z` rehace el documento completo. `←` `→` avanzan un frame en pausa. `J` `K` `L` hacen shuttle. `?` abre la ayuda.
 
+`Alt + rueda` (Windows) / `Option ⌥ + rueda` (Mac) cambia el zoom horizontal sobre el panel del timeline: arriba amplía, abajo reduce. Usa el mismo estado y límites que el slider y conserva la posición bajo el cursor hasta donde permite el scroll.
+
 ## Problemas conocidos
 
 - El blur del preview (CSS) no es idéntico al `gblur` del export. Brillo y saturación sí usan los mismos coeficientes.

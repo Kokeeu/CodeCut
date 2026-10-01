@@ -7,7 +7,6 @@ import {
   getEffectivePxPerSec,
   getPlayheadLeft,
   MIN_CLIP_WIDTH,
-  WHEEL_ZOOM_STEP,
 } from '../lib/timelineScale.js';
 import { clipOutputDuration, transitionDuration } from '../lib/transitions.js';
 
@@ -24,7 +23,6 @@ const ClipTrack = forwardRef(function ClipTrack(
     onReorder,
     onTransitionChange,
     timelineZoom = 1,
-    onTimelineZoomChange,
     currentGlobalTime = 0,
     isPlaying = false,
   },
@@ -111,18 +109,13 @@ const ClipTrack = forwardRef(function ClipTrack(
     const container = containerRef.current;
     if (!container) return;
     const handler = (e) => {
-      if (e.ctrlKey && onTimelineZoomChange) {
-        e.preventDefault();
-        const delta = e.deltaY > 0 ? -WHEEL_ZOOM_STEP : WHEEL_ZOOM_STEP;
-        onTimelineZoomChange(timelineZoom + delta);
-        return;
-      }
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
       e.preventDefault();
       container.scrollLeft += e.deltaY + e.deltaX;
     };
     container.addEventListener('wheel', handler, { passive: false });
     return () => container.removeEventListener('wheel', handler);
-  }, [timelineZoom, onTimelineZoomChange]);
+  }, [clips.length]);
 
   useEffect(() => {
     if (!isPlaying) return;
