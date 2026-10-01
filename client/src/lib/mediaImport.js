@@ -5,9 +5,15 @@ export const MAX_MEDIA_FILE_MB = 1024;
 export const MAX_MEDIA_FILE_BYTES = MAX_MEDIA_FILE_MB * 1024 * 1024;
 export const PERSISTENT_MEDIA_MAX_BYTES = 200 * 1024 * 1024;
 
+export function isVideoFile(file) {
+  if (file?.type?.startsWith('video/')) return true;
+  return (!file?.type || file.type === 'application/octet-stream')
+    && /\.(mp4|mov|webm|mkv|m4v|avi|mpg|mpeg|ogv|3gp|mts|m2ts)$/i.test(file?.name || '');
+}
+
 export function validateMediaFile(file) {
   if (!file) return 'No se seleccionó ningún archivo.';
-  if (!file.type?.startsWith('video/')) return `"${file.name}" no es un video.`;
+  if (!isVideoFile(file)) return `"${file.name}" no es un video.`;
   if (file.size > MAX_MEDIA_FILE_BYTES) {
     const sizeMb = file.size / (1024 * 1024);
     return `"${file.name}" es demasiado grande (${sizeMb.toFixed(0)} MB). Máximo: ${MAX_MEDIA_FILE_MB} MB.`;

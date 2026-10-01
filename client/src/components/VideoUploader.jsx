@@ -6,41 +6,58 @@ import {
   validateMediaFile,
 } from '../lib/mediaImport.js';
 import FullscreenLoader from './FullscreenLoader.jsx';
+import { collectDroppedFiles, selectFolderVideos } from '../lib/mediaDrop.js';
 
 export default function VideoUploader({ onFilesAdded, compact, remainingSlots = MAX_MEDIA_FILES }) {
   const inputRef = useRef(null);
+  const folderInputRef = useRef(null);
+  const busyRef = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
 
-  const handleFiles = useCallback(async (fileList) => {
-    const incoming = Array.from(fileList || []);
-    if (remainingSlots <= 0) {
-      setError(`La biblioteca ya contiene el máximo de ${MAX_MEDIA_FILES} archivos.`);
-      return;
-    }
-    if (incoming.length > remainingSlots) {
-      setError(`Solo puedes añadir ${remainingSlots} video${remainingSlots === 1 ? '' : 's'} más.`);
-      return;
-    }
-    const list = incoming.slice(0, remainingSlots);
-    if (list.length === 0) return;
-    for (const f of list) {
-      const err = validateMediaFile(f);
-      if (err) {
-        setError(err);
-        return;
-      }
-    }
+  const handleFiles = useCallback(async (readFiles) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
     setError(null);
     setBusy(true);
     try {
-      const metas = (await Promise.all(list.map(extractMediaMetadata))).filter(Boolean);
+      if (remainingSlots <= 0) {
+        setError(`La biblioteca ya contiene el máximo de ${MAX_MEDIA_FILES} archivos.`);
+        return;
+      }
+      const list = Array.from(await readFiles());
+      if (list.length === 0) {
+        setError('No se encontraron videos. Prueba con otra carpeta o selecciona los archivos.');
+        return;
+      }
+      if (list.length > remainingSlots) {
+        setError(`Se encontraron ${list.length} videos. Solo puedes añadir ${remainingSlots} video${remainingSlots === 1 ? '' : 's'} más. Selecciona menos archivos o una carpeta más pequeña.`);
+        return;
+      }
+      for (const file of list) {
+        const err = validateMediaFile(file);
+        if (err) {
+          setError(err);
+          return;
+        }
+      }
+      const results = await Promise.all(list.map(extractMediaMetadata));
+      const metas = results.filter(Boolean);
+      if (metas.length !== list.length) {
+        metas.forEach(({ url }) => URL.revokeObjectURL(url));
+        const failedNames = list.filter((_, index) => !results[index]).map((file) => file.name);
+        setError(`No se pudo importar el lote. Comprueba el formato de: ${failedNames.join(', ')}.`);
+        return;
+      }
       if (metas.length > 0) {
         const result = onFilesAdded(metas);
         if (result?.rejected > 0) setError(`No se ${result.rejected === 1 ? 'pudo añadir' : 'pudieron añadir'} ${result.rejected} video${result.rejected === 1 ? '' : 's'} porque la biblioteca está llena.`);
       }
+    } catch (_) {
+      setError('No se pudieron leer los archivos o la carpeta. Prueba con Seleccionar carpeta o elige los videos directamente.');
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }, [onFilesAdded, remainingSlots]);
@@ -48,12 +65,19 @@ export default function VideoUploader({ onFilesAdded, compact, remainingSlots = 
   const onDrop = useCallback((e) => {
     e.preventDefault();
     setIsDragging(false);
-    handleFiles(e.dataTransfer.files);
+    handleFiles(() => collectDroppedFiles(e.dataTransfer));
   }, [handleFiles]);
 
   const onChange = (e) => {
-    handleFiles(e.target.files);
+    const files = Array.from(e.target.files || []);
     e.target.value = '';
+    if (files.length > 0) handleFiles(() => files);
+  };
+
+  const onFolderChange = (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (files.length > 0) handleFiles(() => selectFolderVideos(files));
   };
 
   if (compact) {
@@ -81,12 +105,22 @@ export default function VideoUploader({ onFilesAdded, compact, remainingSlots = 
   return (
     <div className="w-full max-w-xl mx-auto">
       <div
-        onClick={() => inputRef.current?.click()}
+        role="button"
+        tabIndex={busy ? -1 : 0}
+        aria-label="Seleccionar videos o arrastrar una carpeta"
+        aria-disabled={busy}
+        onClick={() => { if (!busyRef.current) inputRef.current?.click(); }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            if (!busyRef.current) inputRef.current?.click();
+          }
+        }}
         onDrop={onDrop}
         onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
         onDragLeave={() => setIsDragging(false)}
         className={[
-          'group relative cursor-pointer rounded-2xl border-2 border-dashed p-10 sm:p-12 text-center transition-all duration-200 overflow-hidden',
+          'group relative cursor-pointer rounded-2xl border-2 border-dashed p-10 sm:p-12 text-center transition-all duration-200 overflow-hidden focus-ring',
           isDragging
             ? 'border-accent bg-accent/10 shadow-glow-accent'
             : 'border-glass-border bg-glass-panel hover:border-accent/40 hover:bg-glass-strong',
@@ -102,10 +136,10 @@ export default function VideoUploader({ onFilesAdded, compact, remainingSlots = 
             </svg>
           </div>
           <p className="text-base sm:text-lg font-semibold text-neutral-100">
-            {busy ? 'Leyendo videos…' : 'Arrastra tus videos aquí'}
+            {busy ? 'Leyendo videos…' : 'Arrastra tus videos o una carpeta aquí'}
           </p>
           <p className="text-sm text-neutral-400 mt-1.5">
-            o haz clic para seleccionar · puedes elegir varios archivos
+            o haz clic para seleccionar videos · incluye videos de subcarpetas
           </p>
           <div className="flex items-center justify-center gap-1.5 mt-4 text-[10px] text-neutral-500">
             <span className="px-1.5 py-0.5 rounded bg-glass-panel border border-glass-border font-mono">MP4</span>
@@ -116,9 +150,20 @@ export default function VideoUploader({ onFilesAdded, compact, remainingSlots = 
             <span>hasta {MAX_MEDIA_FILES} archivos · {MAX_MEDIA_FILE_MB} MB por archivo</span>
           </div>
         </div>
-        <input ref={inputRef} type="file" accept="video/*" multiple onChange={onChange} className="hidden" />
       </div>
-      {error && <p className="mt-3 text-sm text-red-400 text-center">{error}</p>}
+      <input ref={inputRef} type="file" accept="video/*" multiple onChange={onChange} className="hidden" />
+      <input ref={folderInputRef} type="file" webkitdirectory="" multiple onChange={onFolderChange} className="hidden" />
+      <div className="mt-3 text-center">
+        <button
+          type="button"
+          disabled={busy || remainingSlots <= 0}
+          onClick={() => folderInputRef.current?.click()}
+          className="px-3 py-2 rounded-xl border border-glass-border text-sm text-accent hover:bg-accent/10 disabled:opacity-50 focus-ring"
+        >
+          Seleccionar carpeta
+        </button>
+      </div>
+      {error && <p role="alert" className="mt-3 text-sm text-flare text-center">{error}</p>}
       {busy && <FullscreenLoader message="Procesando videos…" />}
     </div>
   );

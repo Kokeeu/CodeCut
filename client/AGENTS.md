@@ -24,6 +24,7 @@ El cliente es ESM (`"type": "module"`). El desarrollador lo arranca en `:5173`. 
 | YouTube en el cliente | `src/lib/youtubeImport.js`, `src/components/YouTubeImporter.jsx` |
 | Ranking colaborativo | `src/lib/collaborativeRanking.js` |
 | Medios y restauración | `src/lib/mediaImport.js`, `src/lib/mediaStore.js`, `src/hooks/useProjectAutosave.js` |
+| Carpetas arrastradas o seleccionadas | `src/lib/mediaDrop.js`, `src/components/VideoUploader.jsx` |
 
 ## Estado
 
@@ -39,6 +40,7 @@ Reglas:
 - El reducer recibe datos ya construidos. `nextId` se llama fuera.
 - El primer archivo con duración crea el primer clip. Los siguientes entran al pool y el usuario los manda al timeline.
 - Máximo 10 archivos, 1 GB cada uno. IndexedDB persiste hasta 200 MB por archivo. Por encima no hay waveform.
+- La portada acepta carpetas y subcarpetas: filtra videos, ordena por ruta y nombre y rechaza el lote si supera el cupo. La lectura del drag-and-drop vive en `mediaDrop.js`.
 - Al reordenar, conserva la transición solo entre clips que ya eran vecinos.
 
 Clip de trabajo: `id`, `fileId`, `sourceStart`, `sourceEnd`, `speed`, `transform`, `audio`, `pip`, `texts`, y cuando aplica `introEnd`, `videoLayout`, `collaborativeRating`. Texto: `id`, `text`, `x`, `y`, `size`, `font`, `color`, `align`, `startOffset`, `endOffset`, `animation`, más estilo de `DEFAULT_TEXT_STYLE`.
@@ -56,7 +58,7 @@ Velocidades permitidas: `0.25`, `0.5`, `0.75`, `1`, `1.5`, `2`, `3`.
 - Animación de UI con opacidad y transform, y con `prefers-reduced-motion`.
 - Las dimensiones del workspace se validan en `workspaceLayout.js` antes de persistirse.
 
-`VideoPreview` es el único `<video>` de reproducción y expone `seekTo` por ref. Los clips del timeline usan `@dnd-kit/sortable`. Los textos se arrastran con eventos de puntero, no con dnd-kit.
+`VideoPreview` controla la reproducción del editor y expone `seekTo` por ref. `MediaPreviewModal` reproduce un archivo original desde la biblioteca con controles nativos; abrirlo pausa el editor y suspende sus atajos. Esta selección vive fuera del undo en `App.jsx`. Los clips del timeline usan `@dnd-kit/sortable`. Los textos se arrastran con eventos de puntero, no con dnd-kit.
 
 ## Cambios habituales
 

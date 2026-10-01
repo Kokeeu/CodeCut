@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import VideoUploader from './components/VideoUploader.jsx';
 import YouTubeImporter from './components/YouTubeImporter.jsx';
 import VideoPreview from './components/VideoPreview.jsx';
+import MediaPreviewModal from './components/MediaPreviewModal.jsx';
 import TopBar from './components/TopBar.jsx';
 import LeftSidebar from './components/LeftSidebar.jsx';
 import PropertiesPanel from './components/PropertiesPanel.jsx';
@@ -42,6 +43,8 @@ export default function App() {
   } = project;
 
   const [isPlaying, setIsPlaying] = useState(false);
+  const [mediaPreviewId, setMediaPreviewId] = useState(null);
+  const mediaPreviewFile = fileById[mediaPreviewId];
   const [timelineZoom, setTimelineZoom] = useState(1);
   const [showGuides, setShowGuides] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
@@ -55,6 +58,19 @@ export default function App() {
   const previewRef = useRef(null);
   const shuttleRef = useRef({ direction: 0, level: 0 });
   const advancingRef = useRef(false);
+
+  const handleOpenMediaPreview = useCallback((fileId) => {
+    if (!fileById[fileId]?.url || fileById[fileId]._pending) return;
+    shuttleRef.current = { direction: 0, level: 0 };
+    previewRef.current?.stopRewind();
+    previewRef.current?.setPlaybackSpeed(1);
+    setIsPlaying(false);
+    setMediaPreviewId(fileId);
+  }, [fileById]);
+
+  const handleCloseMediaPreview = useCallback(() => {
+    setMediaPreviewId(null);
+  }, []);
 
   const { totalDuration, snapPoints, currentGlobalTime: getGlobalTime } = useEditor(clips, transitions);
 
@@ -163,6 +179,7 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e) => {
+      if (mediaPreviewFile) return;
       if (e.target && e.target.closest && e.target.closest('input,select,textarea,[contenteditable]')) return;
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
@@ -224,7 +241,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleSplit, undo, isPlaying]);
+  }, [handleSplit, undo, isPlaying, mediaPreviewFile]);
 
   const hasFiles = files.length > 0;
   const { showConfirm, confirmExit, cancelExit } = useExitConfirmation(hasFiles);
@@ -419,6 +436,7 @@ export default function App() {
               files={files}
               onAddClip={handleAddClip}
               onFilesAdded={handleFilesAdded}
+              onPreviewFile={handleOpenMediaPreview}
               templates={TEMPLATES}
               onApplyTemplate={handleApplyTemplate}
               hasClips={clips.length > 0}
@@ -560,6 +578,7 @@ export default function App() {
               files={files}
               onAddClip={handleAddClip}
               onFilesAdded={handleFilesAdded}
+              onPreviewFile={handleOpenMediaPreview}
               templates={TEMPLATES}
               onApplyTemplate={handleApplyTemplate}
               hasClips={clips.length > 0}
@@ -619,6 +638,9 @@ export default function App() {
         onCancel={cancelExit}
         variant="danger"
       />
+      {mediaPreviewFile && (
+        <MediaPreviewModal key={`${mediaPreviewFile.id}:${mediaPreviewFile.url}`} file={mediaPreviewFile} onClose={handleCloseMediaPreview} />
+      )}
       <ShortcutOverlay isOpen={showShortcuts} onClose={() => setShowShortcuts(false)} />
       <ToastContainer />
     </div>

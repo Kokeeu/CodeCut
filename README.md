@@ -42,7 +42,7 @@ Vite hace proxy de `/api/*` a `http://localhost:4000`.
 
 ## Uso
 
-1. Arrastra archivos o usa **Importar desde YouTube** (hasta 10 videos, 1 GB c/u). El primero entra al timeline.
+1. Arrastra videos o una carpeta en la pantalla de inicio, usa **Seleccionar carpeta** o **Importar desde YouTube** (hasta 10 videos, 1 GB c/u). Las carpetas incluyen los videos de sus subcarpetas, ordenados por ruta y nombre; los demás archivos se ignoran. Si se supera el cupo, se muestra un aviso sin importar parcialmente la carpeta. El primer video entra al timeline y los demás quedan en la biblioteca.
 2. Desde el media pool, añade más clips con **Timeline**.
 3. Edita en el timeline: click para activar, arrastra para reordenar, `S` para split, transiciones en las costuras.
 4. Ajusta trim, textos (arrastrar/redimensionar), velocidad, audio, PIP y plantillas.

@@ -26,7 +26,24 @@ function VideoIcon() {
   );
 }
 
-export default function FilePool({ files, onAddClip, onFilesAdded, vertical }) {
+function PreviewButton({ file, onPreviewFile }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onPreviewFile(file.id)}
+      disabled={!!file._pending || !file.url}
+      aria-label={`Vista previa de ${file.name}`}
+      className="mt-1 inline-flex items-center justify-center gap-1 w-full px-2 py-1 rounded-md border border-glass-border text-neutral-300 text-[11px] font-medium hover:bg-glass-strong hover:text-neutral-100 disabled:opacity-40 disabled:cursor-not-allowed focus-ring"
+    >
+      <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+        <path d="M4 2.5L9 6l-5 3.5v-7z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+      </svg>
+      Vista previa
+    </button>
+  );
+}
+
+export default function FilePool({ files, onAddClip, onFilesAdded, onPreviewFile, vertical }) {
   if (vertical) {
     return (
       <div className="flex flex-col gap-1.5">
@@ -62,6 +79,7 @@ export default function FilePool({ files, onAddClip, onFilesAdded, vertical }) {
                   <PlusIcon />
                   {f._pending ? 'Volver a cargar' : 'Línea de tiempo'}
                 </button>
+                {onPreviewFile && <PreviewButton file={f} onPreviewFile={onPreviewFile} />}
               </div>
             </div>
           </div>
@@ -106,6 +124,7 @@ export default function FilePool({ files, onAddClip, onFilesAdded, vertical }) {
               <PlusIcon />
               {f._pending ? 'Volver a cargar' : 'Añadir a la línea de tiempo'}
             </button>
+            {onPreviewFile && <PreviewButton file={f} onPreviewFile={onPreviewFile} />}
           </div>
         </div>
       ))}

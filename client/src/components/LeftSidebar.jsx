@@ -56,7 +56,7 @@ function PlusIcon() {
 }
 
 export default function LeftSidebar({
-  files, onAddClip, onFilesAdded, templates, onApplyTemplate,
+  files, onAddClip, onFilesAdded, onPreviewFile, templates, onApplyTemplate,
   hasClips, onAddText, activeClip, collapsed, onToggleCollapse, embedded,
   activeTab = 'media', onTabChange, showTabs = true,
 }) {
@@ -155,7 +155,7 @@ export default function LeftSidebar({
       <div className="flex-1 overflow-y-auto p-2 scrollbar-thin">
         {activeTab === 'media' && (
           <div className="flex flex-col gap-2 animate-fade-in">
-            <FilePool files={files} onAddClip={onAddClip} onFilesAdded={onFilesAdded} vertical />
+            <FilePool files={files} onAddClip={onAddClip} onFilesAdded={onFilesAdded} onPreviewFile={onPreviewFile} vertical />
             <VideoUploader onFilesAdded={onFilesAdded} remainingSlots={MAX_MEDIA_FILES - files.length} compact />
             <YouTubeImporter onFilesAdded={onFilesAdded} currentFileCount={files.length} compact />
           </div>
